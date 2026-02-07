@@ -12,6 +12,24 @@ import {
 import { buildSystemPrompt } from "./system-prompt";
 import type { ChatMessage } from "./types";
 
+/* ------------------------------------------------------------------ */
+/*  Per-session concurrency lock                                       */
+/*  Sessions are ephemeral — a simple in-memory mutex is sufficient.   */
+/* ------------------------------------------------------------------ */
+
+const sessionLocks = new Map<string, Promise<unknown>>();
+
+function withSessionLock<T>(sid: string, fn: () => Promise<T>): Promise<T> {
+  const prev = sessionLocks.get(sid) ?? Promise.resolve();
+  const next = prev.then(fn, fn);          // run fn after previous settles
+  sessionLocks.set(sid, next);
+  void next.finally(() => {
+    // clean up if we're still the tail of the chain
+    if (sessionLocks.get(sid) === next) sessionLocks.delete(sid);
+  });
+  return next;
+}
+
 export interface AgentResponse {
   sessionId: string;
   reply: string;
@@ -34,7 +52,13 @@ export async function runAgent(
   await initMcp();
 
   const session = await getOrCreateSession(sessionId);
+  return withSessionLock(session.id, () => runAgentInner(userMessage, session));
+}
 
+async function runAgentInner(
+  userMessage: string,
+  session: { id: string; messages: ChatMessage[] },
+): Promise<AgentResponse> {
   // Build system prompt (fresh each turn to pick up new skills)
   const systemPrompt = await buildSystemPrompt();
 
