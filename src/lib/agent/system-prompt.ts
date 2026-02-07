@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { listSkills } from "@/lib/services/skill-service";
 
 const BASE_PROMPT = `You are Agent Forge, an AI assistant with access to tools provided by MCP (Model Context Protocol) servers.
 
@@ -12,12 +12,10 @@ You can manage skills (knowledge documents) and dynamic MCP servers. Use the ava
 /**
  * Build system prompt with skill index injected.
  * Only skill names + descriptions are included (progressive disclosure).
+ * Includes both DB skills and code-defined builtins.
  */
 export async function buildSystemPrompt(): Promise<string> {
-  const skills = await prisma.skill.findMany({
-    select: { name: true, description: true },
-    orderBy: { name: "asc" },
-  });
+  const skills = await listSkills();
 
   if (skills.length === 0) return BASE_PROMPT;
 

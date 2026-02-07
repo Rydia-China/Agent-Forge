@@ -2,6 +2,11 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import type { Prisma, Skill } from "@/generated/prisma";
 import matter from "gray-matter";
+import {
+  listBuiltinSkills,
+  getBuiltinSkill,
+  type BuiltinSkill,
+} from "@/lib/skills/builtins";
 
 /* ------------------------------------------------------------------ */
 /*  Zod schemas — single source of truth for input validation         */
@@ -78,18 +83,51 @@ export function toSkillMd(skill: Pick<Skill, "name" | "description" | "content" 
 /*  Service functions                                                 */
 /* ------------------------------------------------------------------ */
 
-type SkillSummary = Pick<Skill, "name" | "description" | "tags">;
+export type SkillSummary = Pick<Skill, "name" | "description" | "tags">;
 
 export async function listSkills(tag?: string): Promise<SkillSummary[]> {
-  return prisma.skill.findMany({
+  const dbSkills = await prisma.skill.findMany({
     where: tag ? { tags: { has: tag } } : undefined,
     select: { name: true, description: true, tags: true },
     orderBy: { name: "asc" },
   });
+
+  // Merge: DB skills take precedence over builtins with the same name
+  const seen = new Set(dbSkills.map((s) => s.name));
+  const builtins = listBuiltinSkills()
+    .filter((b) => !seen.has(b.name))
+    .filter((b) => !tag || b.tags.includes(tag))
+    .map((b): SkillSummary => ({
+      name: b.name,
+      description: b.description,
+      tags: [...b.tags],
+    }));
+
+  return [...dbSkills, ...builtins].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function getSkill(name: string): Promise<Skill | null> {
-  return prisma.skill.findUnique({ where: { name } });
+/** Resolve a skill by name: DB first, then builtins. */
+export async function getSkill(
+  name: string,
+): Promise<Pick<Skill, "name" | "description" | "content" | "tags" | "metadata"> | null> {
+  const dbSkill = await prisma.skill.findUnique({ where: { name } });
+  if (dbSkill) return dbSkill;
+
+  const builtin = getBuiltinSkill(name);
+  if (!builtin) return null;
+  return builtinToSkillShape(builtin);
+}
+
+function builtinToSkillShape(
+  b: BuiltinSkill,
+): Pick<Skill, "name" | "description" | "content" | "tags" | "metadata"> {
+  return {
+    name: b.name,
+    description: b.description,
+    content: b.content,
+    tags: [...b.tags],
+    metadata: null,
+  };
 }
 
 export async function createSkill(
@@ -147,7 +185,7 @@ export async function importSkill(
 }
 
 export async function exportSkill(name: string): Promise<string | null> {
-  const skill = await prisma.skill.findUnique({ where: { name } });
+  const skill = await getSkill(name);
   if (!skill) return null;
   return toSkillMd(skill);
 }
