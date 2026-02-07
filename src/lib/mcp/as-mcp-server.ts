@@ -118,3 +118,44 @@ export async function createAsMcpServer(): Promise<Server> {
 
   return server;
 }
+
+/**
+ * Create a scoped MCP Server that only exposes a single provider's tools.
+ * Tool names are unqualified (no provider prefix) since the server IS the provider.
+ */
+export async function createScopedMcpServer(
+  providerName: string,
+): Promise<Server | null> {
+  await initMcp();
+
+  const provider = registry.getProvider(providerName);
+  if (!provider) return null;
+
+  const server = new Server(
+    { name: providerName, version: "1.0.0" },
+    { capabilities: { tools: {} } },
+  );
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    const tools = await provider.listTools();
+    return { tools };
+  });
+
+  server.setRequestHandler(CallToolRequestSchema, async (req) => {
+    const { name, arguments: args } = req.params;
+    try {
+      return await provider.callTool(
+        name,
+        (args ?? {}) as Record<string, unknown>,
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        content: [{ type: "text" as const, text: `Tool error: ${message}` }],
+        isError: true,
+      };
+    }
+  });
+
+  return server;
+}
