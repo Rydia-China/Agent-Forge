@@ -37,8 +37,6 @@ MCP 初始化是 **惰性** 的——首次 API 请求触发 `initMcp()`。
 5. 若 LLM 返回 `tool_calls` → `registry.callTool()` 执行 → 结果追加到 messages → 回到步骤 4
 6. 若 LLM 返回纯文本 → 返回最终 reply
 
-**关键**：一次 chat 可能触发多轮 tool 调用（最多 20 轮）。每轮可调用多个 tools。
-
 ## 双入口等价性
 
 REST API (`/api/*`) 和 MCP tools（agent 内部 / `/mcp` 外部）**共享同一 service layer**。
@@ -46,97 +44,18 @@ REST API (`/api/*`) 和 MCP tools（agent 内部 / `/mcp` 外部）**共享同�
 
 示例：通过 `curl POST /api/skills` 创建的 skill，agent 下一轮 chat 即可使用。
 
-## 验证清单
+## Use Cases
 
-以下是端到端验证的 **推荐调用顺序**（每步验证上一步的副作用）：
+Chat 是用户核心入口，验证 chat 即验证 MCP 注册、skill 加载、tool dispatch 全链路。
+具体验证步骤见 `docs/useCase/`：
 
-### 1. Skill CRUD
-```bash
-# 创建
-curl -X POST http://localhost:8001/api/skills \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"test-skill","description":"A test skill","content":"# Test\nThis is test content."}'
-
-# 列表（应包含 test-skill）
-curl http://localhost:8001/api/skills
-
-# 读取
-curl http://localhost:8001/api/skills/test-skill
-
-# 导出为 SKILL.md
-curl -H 'Accept: text/markdown' http://localhost:8001/api/skills/test-skill
-
-# 更新
-curl -X PUT http://localhost:8001/api/skills/test-skill \
-  -H 'Content-Type: application/json' \
-  -d '{"description":"Updated description"}'
-
-# 删除（最后做，或跳过以保留给后续测试）
-curl -X DELETE http://localhost:8001/api/skills/test-skill
-```
-
-### 2. MCP CRUD
-```bash
-# 创建 dynamic MCP（注意 code 是 JS，必须导出 listTools/callTool）
-curl -X POST http://localhost:8001/api/mcps \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "name":"echo",
-    "description":"Echo tool for testing",
-    "code":"module.exports={listTools:async()=>[{name:\"echo\",description:\"Echo input\",inputSchema:{type:\"object\",properties:{text:{type:\"string\"}},required:[\"text\"]}}],callTool:async(name,args)=>({content:[{type:\"text\",text:args.text}]})}"
-  }'
-# 响应中检查 loadError 是否为空
-
-# 列表
-curl http://localhost:8001/api/mcps
-
-# 详情（含 code）
-curl http://localhost:8001/api/mcps/echo
-
-# 更新
-curl -X PUT http://localhost:8001/api/mcps/echo \
-  -H 'Content-Type: application/json' \
-  -d '{"description":"Updated echo"}'
-
-# 删除
-curl -X DELETE http://localhost:8001/api/mcps/echo
-```
-
-### 3. Agent Chat（依赖步骤 1/2 的数据）
-```bash
-# 基本对话
-curl -X POST http://localhost:8001/api/chat \
-  -H 'Content-Type: application/json' \
-  -d '{"message":"列出所有 skills"}'
-
-# 带 session 继续对话
-curl -X POST http://localhost:8001/api/chat \
-  -H 'Content-Type: application/json' \
-  -d '{"message":"读取第一个 skill 的全文","session_id":"<上一步返回的 session_id>"}'
-```
-
-### 4. asMCP（外部 agent 入口）
-```bash
-# 列出可用 tools（MCP protocol JSON-RPC）
-curl -X POST http://localhost:8001/mcp \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-
-# 列出 resources（skills）
-curl -X POST http://localhost:8001/mcp \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":2,"method":"resources/list"}'
-
-# 通过 MCP 调用 agent
-curl -X POST http://localhost:8001/mcp \
-  -H 'Content-Type: application/json' \
-  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"agent__chat","arguments":{"message":"hello"}}}'
-```
+- `llm-chat-create-skill.md` — 通过 chat 创建 skill，验证全链路（LLM 连通 → tool 调用 → DB 持久化 → system prompt 注入）
 
 ## Tool 命名规则
 
-Agent 内部的 tool name 格式为 `{provider}__{tool}`：
-- `skills__list`, `skills__get`, `skills__create` …
-- `mcp_manager__list`, `mcp_manager__create` …
-- Dynamic MCP: `{mcp_name}__{tool_name}`（如 `echo__echo`）
-- asMCP 额外暴露: `agent__chat`
+Agent 内部的 tool name 格式为 `{provider}__{tool}`。具体有哪些 tool 以运行时 `registry.listAllTools()` 为准，不在文档中维护列表。
+
+## 测试原则
+
+- **偏差优先矫正文档** — 当基于文档的测试结果与代码实际行为不一致时，优先假设文档未及时更新，矫正文档使其与代码行为对齐，而非修改代码适配文档。
+- **前后端契约审查** — 如前端已实现对应功能，测试时应同时验证前端调用与后端 API 的请求/响应契约是否匹配（字段名、类型、必填/可选）。
