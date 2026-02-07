@@ -3,6 +3,23 @@
 ## 强约束
 以下约束不可违反，任何变更必须继续满足这些条件。
 
+### 类型安全
+- **禁止 `any`** — 零容忍，无例外（第三方生成代码除外）
+- **禁止盲目 `as` 断言** — 外部输入（API body、MCP args）必须通过 Zod `.parse()` 校验后使用
+- Prisma 操作使用生成的类型（`Prisma.SkillCreateInput` 等），禁止 `Record<string, unknown>` 代替
+- tsconfig `strict: true` + `noUncheckedIndexedAccess: true`
+
+### 架构约定
+- **Service Layer** — 业务逻辑统一在 `src/lib/services/` 下实现
+- API routes 和 MCP providers 均调用 service，不允许重复实现 CRUD
+- API routes 职责：HTTP 协议转换 + Zod 输入校验 + 调用 service
+- MCP providers 职责：Tool 定义 + Zod args 校验 + 调用 service
+
+### 依赖原则
+- 能用成熟第三方库解决的不造轮子（前提：稳定、类型完备、社区活跃）
+- Zod 作为唯一输入校验方案（与 MCP SDK 保持一致）
+- 不维护自建的辅助脚本，能用 npm scripts / 现有 CLI 解决的优先
+
 ### Skills 标准
 - 遵循 **Agent Skills 开放标准** (agentskills.io)
 - Skill 格式为 SKILL.md: YAML frontmatter (`name`, `description`) + Markdown body
