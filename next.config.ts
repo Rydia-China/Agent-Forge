@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["isolated-vm"],
   allowedDevOrigins: ["*"],
   async headers() {
     return [

@@ -14,10 +14,3 @@ export interface ChatMessage {
   tool_calls?: ToolCall[];
   tool_call_id?: string;
 }
-
-export interface ChatSession {
-  id: string;
-  title?: string;
-  messages: ChatMessage[];
-  createdAt: Date;
-}

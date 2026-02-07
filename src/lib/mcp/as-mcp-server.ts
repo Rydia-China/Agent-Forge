@@ -1,19 +1,21 @@
 import { z } from "zod";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index";
 import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import { registry } from "./registry.js";
-import { initMcp } from "./init.js";
+} from "@modelcontextprotocol/sdk/types";
+import { registry } from "./registry";
+import { initMcp } from "./init";
 import { runAgent } from "@/lib/agent/agent";
+import { writeChatLog } from "@/lib/agent/chat-log";
 import { prisma } from "@/lib/db";
 
 const AgentChatArgs = z.object({
   message: z.string(),
   session_id: z.string().optional(),
+  logs: z.boolean().optional(),
 });
 
 /**
@@ -63,6 +65,9 @@ export async function createAsMcpServer(): Promise<Server> {
     if (name === "agent__chat") {
       const parsed = AgentChatArgs.parse(args ?? {});
       const result = await runAgent(parsed.message, parsed.session_id);
+      if (parsed.logs) {
+        await writeChatLog(result.sessionId, result.messages);
+      }
       return {
         content: [
           {

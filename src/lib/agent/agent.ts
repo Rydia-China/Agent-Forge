@@ -4,12 +4,13 @@ import {
   chatCompletion,
   mcpToolToOpenAI,
   type LlmMessage,
-} from "./llm-client.js";
-import { sessionStore } from "./session-store.js";
-import { buildSystemPrompt } from "./system-prompt.js";
-import type { ChatMessage } from "./types.js";
-
-const MAX_TOOL_ROUNDS = 20;
+} from "./llm-client";
+import {
+  getOrCreateSession,
+  pushMessages,
+} from "@/lib/services/chat-session-service";
+import { buildSystemPrompt } from "./system-prompt";
+import type { ChatMessage } from "./types";
 
 export interface AgentResponse {
   sessionId: string;
@@ -20,10 +21,11 @@ export interface AgentResponse {
 /**
  * Run the agent tool-use loop.
  *
- * 1. Build system prompt + gather tools
- * 2. Call LLM
- * 3. If tool_calls → execute via MCP Registry → append results → loop
- * 4. If text → return final reply
+ * 1. Load / create session from DB
+ * 2. Build system prompt + gather tools
+ * 3. Call LLM
+ * 4. If tool_calls → execute via MCP Registry → append results → loop
+ * 5. If text → persist new messages to DB → return final reply
  */
 export async function runAgent(
   userMessage: string,
@@ -31,29 +33,28 @@ export async function runAgent(
 ): Promise<AgentResponse> {
   await initMcp();
 
-  const session = sessionStore.getOrCreate(sessionId);
+  const session = await getOrCreateSession(sessionId);
 
   // Build system prompt (fresh each turn to pick up new skills)
   const systemPrompt = await buildSystemPrompt();
 
-  // Append user message
+  // User message (will be persisted at the end)
   const userMsg: ChatMessage = { role: "user", content: userMessage };
-  session.messages.push(userMsg);
+  const newMessages: ChatMessage[] = [userMsg];
 
   // Gather tools from registry
   const mcpTools = await registry.listAllTools();
   const openaiTools = mcpTools.map(mcpToolToOpenAI);
 
-  // Build messages for LLM
+  // Build messages for LLM (history from DB + new user message)
   const llmMessages: LlmMessage[] = [
     { role: "system", content: systemPrompt },
     ...(session.messages as LlmMessage[]),
+    userMsg as LlmMessage,
   ];
 
-  let rounds = 0;
-
-  while (rounds < MAX_TOOL_ROUNDS) {
-    rounds++;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
 
     const completion = await chatCompletion(llmMessages, openaiTools);
     const choice = completion.choices[0];
@@ -61,7 +62,7 @@ export async function runAgent(
 
     const assistantMsg = choice.message;
 
-    // Store assistant message
+    // Build storable assistant message
     const stored: ChatMessage = {
       role: "assistant",
       content: assistantMsg.content ?? null,
@@ -75,15 +76,17 @@ export async function runAgent(
           function: { name: tc.function.name, arguments: tc.function.arguments },
         }));
     }
-    session.messages.push(stored);
+    newMessages.push(stored);
     llmMessages.push(assistantMsg as LlmMessage);
 
-    // No tool calls → done
+    // No tool calls → persist & return
     if (!assistantMsg.tool_calls?.length) {
+      await pushMessages(session.id, newMessages);
+      const allMessages = [...session.messages, ...newMessages];
       return {
         sessionId: session.id,
         reply: assistantMsg.content ?? "",
-        messages: session.messages,
+        messages: allMessages,
       };
     }
 
@@ -102,7 +105,7 @@ export async function runAgent(
       const result = await registry.callTool(tc.function.name, args);
       const content =
         result.content
-          ?.map((c) => ("text" in c ? c.text : JSON.stringify(c)))
+          ?.map((c: Record<string, unknown>) => ("text" in c ? String(c.text) : JSON.stringify(c)))
           .join("\n") ?? "";
 
       const toolMsg: ChatMessage = {
@@ -110,15 +113,9 @@ export async function runAgent(
         tool_call_id: tc.id,
         content,
       };
-      session.messages.push(toolMsg);
+      newMessages.push(toolMsg);
       llmMessages.push(toolMsg as LlmMessage);
     }
   }
 
-  // Exceeded max rounds — return last assistant content
-  return {
-    sessionId: session.id,
-    reply: "[Agent reached max tool rounds]",
-    messages: session.messages,
-  };
 }

@@ -1,9 +1,9 @@
-import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import {
   type McpProvider,
   qualifyToolName,
   parseToolName,
-} from "./types.js";
+} from "./types";
 
 /**
  * MCP Registry — global singleton.
@@ -12,6 +12,7 @@ import {
  */
 class McpRegistry {
   private providers = new Map<string, McpProvider>();
+  initialized = false;
 
   register(provider: McpProvider): void {
     if (this.providers.has(provider.name)) {

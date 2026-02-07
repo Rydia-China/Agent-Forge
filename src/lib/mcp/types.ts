@@ -1,4 +1,4 @@
-import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 
 export type { Tool, CallToolResult };
 

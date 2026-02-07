@@ -1,6 +1,6 @@
-import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { McpProvider } from "../types.js";
-import { registry } from "../registry.js";
+import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
+import type { McpProvider } from "../types";
+import { registry } from "../registry";
 import * as svc from "@/lib/services/mcp-service";
 
 function text(t: string): CallToolResult {

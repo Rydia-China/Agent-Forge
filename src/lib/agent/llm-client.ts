@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import type { Tool } from "@modelcontextprotocol/sdk/types";
 
 /* ------------------------------------------------------------------ */
 /*  Singleton client                                                  */
@@ -19,7 +19,9 @@ function getClient(): OpenAI {
 }
 
 export function getModel(): string {
-  return process.env.LLM_MODEL ?? "gpt-4o";
+  const model = process.env.LLM_MODEL;
+  if (!model) throw new Error("LLM_MODEL environment variable is not set");
+  return model;
 }
 
 /* ------------------------------------------------------------------ */

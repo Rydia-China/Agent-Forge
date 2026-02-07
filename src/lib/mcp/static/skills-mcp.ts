@@ -1,13 +1,9 @@
-import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { McpProvider } from "../types.js";
+import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
+import type { McpProvider } from "../types";
 import * as svc from "@/lib/services/skill-service";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
-}
-
-function json(data: unknown): CallToolResult {
-  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
 
 export const skillsMcp: McpProvider = {
@@ -15,17 +11,6 @@ export const skillsMcp: McpProvider = {
 
   async listTools(): Promise<Tool[]> {
     return [
-      {
-        name: "list",
-        description:
-          "List all skills metadata (name + description). Use for progressive disclosure / discovery.",
-        inputSchema: {
-          type: "object" as const,
-          properties: {
-            tag: { type: "string", description: "Optional tag to filter skills" },
-          },
-        },
-      },
       {
         name: "get",
         description: "Get the full content of a skill by name (returns SKILL.md body).",
@@ -101,10 +86,6 @@ export const skillsMcp: McpProvider = {
     args: Record<string, unknown>,
   ): Promise<CallToolResult> {
     switch (name) {
-      case "list": {
-        const { tag } = svc.SkillListParams.parse(args);
-        return json(await svc.listSkills(tag));
-      }
       case "get": {
         const { name: n } = svc.SkillGetParams.parse(args);
         const skill = await svc.getSkill(n);

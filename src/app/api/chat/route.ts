@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAgent } from "@/lib/agent/agent";
+import { writeChatLog } from "@/lib/agent/chat-log";
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,7 +13,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const logs = body.logs === true;
     const result = await runAgent(message, body.session_id);
+
+    if (logs) {
+      await writeChatLog(result.sessionId, result.messages);
+    }
+
     return NextResponse.json({
       session_id: result.sessionId,
       reply: result.reply,

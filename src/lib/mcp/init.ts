@@ -1,18 +1,16 @@
-import { registry } from "./registry.js";
-import { sandboxManager } from "./sandbox.js";
-import { skillsMcp } from "./static/skills-mcp.js";
-import { mcpManagerMcp } from "./static/mcp-manager.js";
+import { registry } from "./registry";
+import { sandboxManager } from "./sandbox";
+import { skillsMcp } from "./static/skills-mcp";
+import { mcpManagerMcp } from "./static/mcp-manager";
 import { prisma } from "@/lib/db";
-
-let initialized = false;
 
 /**
  * Register static MCP providers + load all enabled dynamic MCPs from DB.
- * Safe to call multiple times — only runs once.
+ * Safe to call multiple times — only runs once (guarded by registry.initialized).
  */
 export async function initMcp(): Promise<void> {
-  if (initialized) return;
-  initialized = true;
+  if (registry.initialized) return;
+  registry.initialized = true;
 
   // Static providers
   registry.register(skillsMcp);

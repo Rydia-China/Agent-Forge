@@ -23,6 +23,28 @@ model Skill {
   updatedAt   DateTime @updatedAt
 }
 
+/// ChatSession — 对话会话，持久化多轮对话
+model ChatSession {
+  id        String        @id @default(cuid())
+  messages  ChatMessage[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+/// ChatMessage — 单条对话消息
+model ChatMessage {
+  id         String      @id @default(cuid())
+  sessionId  String
+  session    ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role       String      // "user" | "assistant" | "tool"
+  content    String?
+  toolCalls  Json?       // OpenAI tool_calls 数组
+  toolCallId String?
+  createdAt  DateTime    @default(now())
+
+  @@index([sessionId, createdAt])
+}
+
 /// McpServer — 动态 MCP，JS 代码存储于 DB，运行于 isolated-vm 沙盒
 model McpServer {
   id          String   @id @default(cuid())

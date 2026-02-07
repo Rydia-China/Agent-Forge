@@ -4,6 +4,19 @@
 
 > 验证系统状态时使用 `curl http://localhost:8001/...`
 
+## 多轮对话约定
+
+服务端通过 `session_id` 维护会话状态，对话历史持久化在 DB（`ChatSession` + `ChatMessage`）。
+
+- 首次请求不传 `session_id`，服务端自动创建新 session 并在响应中返回 `session_id`
+- 后续请求携带 `session_id` 即可延续上下文，服务端从 DB 加载历史消息
+- 进程重启不丢失会话
+
+### 调试日志
+
+请求 body 传 `"logs": true`，服务端会将当前 session 完整消息写入 `temp/chat-{sessionId}.{timestamp}.json`。
+`temp/` 已 gitignore，不会提交。
+
 ## 启动依赖
 
 MCP 初始化是 **惰性** 的——首次 API 请求触发 `initMcp()`。
@@ -31,11 +44,13 @@ MCP 初始化是 **惰性** 的——首次 API 请求触发 `initMcp()`。
 ### Agent Chat 完整链路
 `POST /api/chat` → `runAgent()`:
 1. `initMcp()`（首次）
-2. `buildSystemPrompt()` — 查 DB 注入 skill 索引
-3. `registry.listAllTools()` — 收集所有 provider 的 tools
-4. LLM 调用（OpenAI format）
-5. 若 LLM 返回 `tool_calls` → `registry.callTool()` 执行 → 结果追加到 messages → 回到步骤 4
-6. 若 LLM 返回纯文本 → 返回最终 reply
+2. `getOrCreateSession(session_id)` — 从 DB 加载/创建 session 及历史消息
+3. `buildSystemPrompt()` — 查 DB 注入 skill 索引
+4. `registry.listAllTools()` — 收集所有 provider 的 tools
+5. LLM 调用（OpenAI format，历史消息 + 当前 user message）
+6. 若 LLM 返回 `tool_calls` → `registry.callTool()` 执行 → 结果追加到 messages → 回到步骤 5
+7. 若 LLM 返回纯文本 → `pushMessages()` 持久化本轮所有新消息到 DB → 返回最终 reply
+8. 若请求传了 `logs=true` → 写 `temp/chat-{sessionId}.{timestamp}.json`
 
 ## 双入口等价性
 
@@ -59,3 +74,4 @@ Agent 内部的 tool name 格式为 `{provider}__{tool}`。具体有哪些 tool 
 
 - **偏差优先矫正文档** — 当基于文档的测试结果与代码实际行为不一致时，优先假设文档未及时更新，矫正文档使其与代码行为对齐，而非修改代码适配文档。
 - **前后端契约审查** — 如前端已实现对应功能，测试时应同时验证前端调用与后端 API 的请求/响应契约是否匹配（字段名、类型、必填/可选）。
+- **保留完整报文** — 测试时 curl 命令必须使用 `-v` 并将完整请求/响应（含 headers 和 body）存入 `temp/`，文件命名 `{功能}.{序号}.txt`（如 `skill-create.1.txt`）。便于事后回溯和对比。`temp/` 已 gitignore，不会提交。

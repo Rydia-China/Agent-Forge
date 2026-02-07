@@ -1,6 +1,6 @@
 import ivm from "isolated-vm";
-import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { McpProvider } from "./types.js";
+import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
+import type { McpProvider } from "./types";
 import { prisma } from "@/lib/db";
 
 /* ------------------------------------------------------------------ */

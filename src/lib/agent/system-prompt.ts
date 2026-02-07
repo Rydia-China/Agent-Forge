@@ -6,7 +6,7 @@ You can manage skills (knowledge documents) and dynamic MCP servers. Use the ava
 
 ## Behaviour
 - Call tools when the user's request requires it.
-- When listing skills, use skills__list first (progressive disclosure), then skills__get for full content only when needed.
+- Available Skills are listed below. Use \`skills__get\` to read full skill content when the user needs details.
 - Be concise and helpful.`;
 
 /**

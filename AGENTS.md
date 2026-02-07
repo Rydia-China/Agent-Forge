@@ -16,9 +16,11 @@
 - MCP providers 职责：Tool 定义 + Zod args 校验 + 调用 service
 
 ### 依赖原则
+- **始终使用 pnpm** 作为包管理器，禁止 npm / yarn
 - 能用成熟第三方库解决的不造轮子（前提：稳定、类型完备、社区活跃）
 - Zod 作为唯一输入校验方案（与 MCP SDK 保持一致）
-- 不维护自建的辅助脚本，能用 npm scripts / 现有 CLI 解决的优先
+- 不维护自建的辅助脚本，能用 pnpm scripts / 现有 CLI 解决的优先
+- Schema 变更优先使用 `npx prisma db push`；涉及删列、改类型等破坏性操作时必须明确警告并等待确认
 
 ### Skills 标准
 - 遵循 **Agent Skills 开放标准** (agentskills.io)
@@ -45,6 +47,11 @@
 - Agent 使用 OpenAI chat/completions 格式 (tool-use loop)
 - Dynamic MCP 统一使用 JS 编写，运行于 isolated-vm 沙盒
 - Skill 的 progressive disclosure: metadata 先行，全文按需加载
+
+## 测试流程
+- 测试前必须先阅读 `docs/api-playbook.md`，理解接口间的因果链和时序依赖
+- 根据要测试的功能，找到 `docs/useCase/` 下对应的 use case 文档，按其验证步骤逐步执行
+- 测试结果与文档描述不一致时，遵循 playbook 中的测试原则：优先假设文档过时，矫正文档而非改代码
 
 ## 开发纪律
 - `docs/ROADMAP.md` 是唯一的短期规划文件
