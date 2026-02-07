@@ -11,8 +11,7 @@
 - `docs/dataflow.md` — 跨边界数据流
 
 ## 端口
-- Web UI: 8001 (env `PORT`)
-- API Server: 8000 (后端独立服务)
+- 8001 (env `PORT`)
 
 ## 参照项目
 - `/Users/rydia/Project/mob.ai/git/noval.demo.2` — 后端参照
