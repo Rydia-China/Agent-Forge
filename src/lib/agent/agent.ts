@@ -48,10 +48,11 @@ export interface AgentResponse {
 export async function runAgent(
   userMessage: string,
   sessionId?: string,
+  userName?: string,
 ): Promise<AgentResponse> {
   await initMcp();
 
-  const session = await getOrCreateSession(sessionId);
+  const session = await getOrCreateSession(sessionId, userName);
   return withSessionLock(session.id, () => runAgentInner(userMessage, session));
 }
 

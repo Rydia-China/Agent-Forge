@@ -3,8 +3,32 @@ import type { Prisma } from "@/generated/prisma";
 import type { ChatMessage } from "@/lib/agent/types";
 
 /* ------------------------------------------------------------------ */
-/*  Service functions                                                  */
+/*  User                                                               */
 /* ------------------------------------------------------------------ */
+
+const DEFAULT_USER = "default";
+
+/** Get or auto-create a user by name. */
+async function resolveUser(name?: string): Promise<string> {
+  const userName = name?.trim() || DEFAULT_USER;
+  const user = await prisma.user.upsert({
+    where: { name: userName },
+    update: {},
+    create: { name: userName },
+  });
+  return user.id;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Session CRUD                                                       */
+/* ------------------------------------------------------------------ */
+
+export interface SessionSummary {
+  id: string;
+  title: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 /**
  * Get an existing session or create a new one.
@@ -12,6 +36,7 @@ import type { ChatMessage } from "@/lib/agent/types";
  */
 export async function getOrCreateSession(
   sessionId?: string,
+  userName?: string,
 ): Promise<{ id: string; messages: ChatMessage[] }> {
   if (sessionId) {
     const existing = await prisma.chatSession.findUnique({
@@ -28,12 +53,63 @@ export async function getOrCreateSession(
     }
   }
 
-  // Create new session (use provided id if given, otherwise auto-generate)
+  const userId = await resolveUser(userName);
   const created = await prisma.chatSession.create({
-    data: sessionId ? { id: sessionId } : {},
+    data: { userId },
   });
   return { id: created.id, messages: [] };
 }
+
+/** List sessions for a user (most recent first, metadata only). */
+export async function listSessions(
+  userName?: string,
+): Promise<SessionSummary[]> {
+  const userId = await resolveUser(userName);
+  const rows = await prisma.chatSession.findMany({
+    where: { userId },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, title: true, createdAt: true, updatedAt: true },
+  });
+  return rows;
+}
+
+/** Get a single session with its messages. */
+export async function getSession(
+  sessionId: string,
+): Promise<{ id: string; title: string | null; messages: ChatMessage[] } | null> {
+  const session = await prisma.chatSession.findUnique({
+    where: { id: sessionId },
+    include: {
+      messages: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+    },
+  });
+  if (!session) return null;
+  return {
+    id: session.id,
+    title: session.title,
+    messages: session.messages.map(dbMsgToChat),
+  };
+}
+
+/** Delete a session and all its messages. */
+export async function deleteSession(sessionId: string): Promise<void> {
+  await prisma.chatSession.delete({ where: { id: sessionId } });
+}
+
+/** Set / update session title. */
+export async function updateSessionTitle(
+  sessionId: string,
+  title: string,
+): Promise<void> {
+  await prisma.chatSession.update({
+    where: { id: sessionId },
+    data: { title },
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Messages                                                           */
+/* ------------------------------------------------------------------ */
 
 /**
  * Persist new messages to DB in a single transaction.

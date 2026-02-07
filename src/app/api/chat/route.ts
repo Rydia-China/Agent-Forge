@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
     }
 
     const logs = body.logs === true;
-    const result = await runAgent(message, body.session_id);
+    const user: string | undefined = body.user;
+    const result = await runAgent(message, body.session_id, user);
 
     if (logs) {
       await writeChatLog(result.sessionId, result.messages);

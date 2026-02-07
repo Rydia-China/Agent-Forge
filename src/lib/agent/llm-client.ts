@@ -56,3 +56,31 @@ export async function chatCompletion(
     tools: tools?.length ? tools : undefined,
   });
 }
+
+/* ------------------------------------------------------------------ */
+/*  Title generation (cheap model, fire-and-forget)                    */
+/* ------------------------------------------------------------------ */
+
+function getTitleModel(): string {
+  return process.env.LLM_TITLE_MODEL || getModel();
+}
+
+export async function generateTitle(userMessage: string): Promise<string> {
+  const client = getClient();
+  const model = getTitleModel();
+  const res = await client.chat.completions.create({
+    model,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You generate short titles for chat conversations. Max 20 chars. Output the title only. No quotes. No trailing punctuation.",
+      },
+      {
+        role: "user",
+        content: `Generate a title for this message:\n${userMessage}`,
+      },
+    ],
+  });
+  return res.choices[0]?.message.content?.trim() || "New Chat";
+}

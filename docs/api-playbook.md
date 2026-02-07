@@ -65,7 +65,9 @@ Chat 是用户核心入口，验证 chat 即验证 MCP 注册、skill 加载、t
 具体验证步骤见 `docs/useCase/`：
 
 - `llm-chat-create-skill.md` — 通过 chat 创建 skill，验证全链路（LLM 连通 → tool 调用 → DB 持久化 → system prompt 注入）
-- `llm-chat-create-mcp.md` — 通过 chat 创建 dynamic MCP，验证全链路（skill 指导 → 沙盒代码编写 → sandbox load → tool 注册 → 端到端调用）
+- `llm-chat-create-mcp.md` — 通过 chat 创建 dynamic MCP，验证全链路（skill 指导 → 沙箱代码编写 → sandbox load → tool 注册 → 端到端调用）
+- `chat-with-title.md` — 发起会话 + 并行生成 title，验证 title 生成、持久化、列表可见
+- `session-crud.md` — Session 完整生命周期（创建、列出、查看、改名、删除）+ 用户隔离验证
 
 ## Tool 命名规则
 
