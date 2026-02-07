@@ -45,7 +45,7 @@ model ChatMessage {
   @@index([sessionId, createdAt])
 }
 
-/// McpServer — 动态 MCP，JS 代码存储于 DB，运行于 isolated-vm 沙盒
+/// McpServer — 动态 MCP，JS 代码存储于 DB，运行于 QuickJS WebAssembly 沙盒
 model McpServer {
   id          String   @id @default(cuid())
   name        String   @unique

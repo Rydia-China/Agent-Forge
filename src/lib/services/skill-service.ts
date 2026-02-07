@@ -92,30 +92,29 @@ export async function listSkills(tag?: string): Promise<SkillSummary[]> {
     orderBy: { name: "asc" },
   });
 
-  // Merge: DB skills take precedence over builtins with the same name
-  const seen = new Set(dbSkills.map((s) => s.name));
-  const builtins = listBuiltinSkills()
-    .filter((b) => !seen.has(b.name))
+  // Merge: builtins take precedence over DB skills with the same name
+  const builtinList = listBuiltinSkills()
     .filter((b) => !tag || b.tags.includes(tag))
     .map((b): SkillSummary => ({
       name: b.name,
       description: b.description,
       tags: [...b.tags],
     }));
+  const builtinNames = new Set(builtinList.map((b) => b.name));
+  const userSkills = dbSkills.filter((s) => !builtinNames.has(s.name));
 
-  return [...dbSkills, ...builtins].sort((a, b) => a.name.localeCompare(b.name));
+  return [...builtinList, ...userSkills].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Resolve a skill by name: DB first, then builtins. */
+/** Resolve a skill by name: builtins first, then DB. */
 export async function getSkill(
   name: string,
 ): Promise<Pick<Skill, "name" | "description" | "content" | "tags" | "metadata"> | null> {
-  const dbSkill = await prisma.skill.findUnique({ where: { name } });
-  if (dbSkill) return dbSkill;
-
   const builtin = getBuiltinSkill(name);
-  if (!builtin) return null;
-  return builtinToSkillShape(builtin);
+  if (builtin) return builtinToSkillShape(builtin);
+
+  const dbSkill = await prisma.skill.findUnique({ where: { name } });
+  return dbSkill;
 }
 
 function builtinToSkillShape(

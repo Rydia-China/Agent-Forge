@@ -17,7 +17,7 @@ export async function getOrCreateSession(
     const existing = await prisma.chatSession.findUnique({
       where: { id: sessionId },
       include: {
-        messages: { orderBy: { createdAt: "asc" } },
+        messages: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
       },
     });
     if (existing) {
@@ -56,14 +56,16 @@ export async function pushMessages(
 }
 
 /**
- * Get all messages for a session (ordered by createdAt).
+ * Get all messages for a session (ordered by createdAt + id).
+ * Using id as tiebreaker because createMany assigns the same createdAt
+ * to all rows in a batch; CUID ids are monotonically sortable.
  */
 export async function getMessages(
   sessionId: string,
 ): Promise<ChatMessage[]> {
   const rows = await prisma.chatMessage.findMany({
     where: { sessionId },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   });
   return rows.map(dbMsgToChat);
 }

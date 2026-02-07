@@ -45,7 +45,7 @@
 
 ### 兼容性
 - Agent 使用 OpenAI chat/completions 格式 (tool-use loop)
-- Dynamic MCP 统一使用 JS 编写，运行于 isolated-vm 沙盒
+- Dynamic MCP 统一使用 JS 编写，运行于 QuickJS WebAssembly 沙盒
 - Skill 的 progressive disclosure: metadata 先行，全文按需加载
 
 ## 测试流程

@@ -1,4 +1,4 @@
-import ivm from "isolated-vm";
+import { newAsyncContext, type QuickJSAsyncContext, type QuickJSHandle } from "quickjs-emscripten";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "./types";
 import { prisma } from "@/lib/db";
@@ -10,14 +10,25 @@ import { prisma } from "@/lib/db";
 const WRAPPER_PREFIX = `
 const module = { exports: {} };
 const exports = module.exports;
-const bridge = {
-  log: (...args) => __bridge_log(args.map(String).join(' ')),
-  fetch: async (url, options) => {
-    const raw = await __bridge_fetch(url, JSON.stringify(options || {}));
-    return JSON.parse(raw);
-  },
-  getSkill: async (name) => __bridge_getSkill(name),
+
+var console = {
+  log:   (...a) => __bridge_log(a.map(String).join(' ')),
+  warn:  (...a) => __bridge_log(a.map(String).join(' ')),
+  error: (...a) => __bridge_log(a.map(String).join(' ')),
 };
+
+function fetch(url, options) {
+  var raw = __bridge_fetch(url, JSON.stringify(options || {}));
+  var r = JSON.parse(raw);
+  r.ok   = r.status >= 200 && r.status < 300;
+  r.json = function() { return JSON.parse(this.body); };
+  r.text = function() { return this.body; };
+  return r;
+}
+
+function getSkill(name) {
+  return __bridge_getSkill(name);
+}
 `;
 
 const WRAPPER_SUFFIX = `
@@ -29,9 +40,20 @@ globalThis.__mcp_exports = module.exports;
 /* ------------------------------------------------------------------ */
 
 interface SandboxInstance {
-  isolate: ivm.Isolate;
-  context: ivm.Context;
+  context: QuickJSAsyncContext;
   name: string;
+  /** Mutable deadline (epoch ms) for the interrupt handler. */
+  deadline: number;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                           */
+/* ------------------------------------------------------------------ */
+
+/** Set a global property from a handle, disposing the handle after. */
+function setGlobal(ctx: QuickJSAsyncContext, name: string, handle: QuickJSHandle): void {
+  ctx.setProp(ctx.global, name, handle);
+  handle.dispose();
 }
 
 /* ------------------------------------------------------------------ */
@@ -40,95 +62,125 @@ interface SandboxInstance {
 
 export class SandboxManager {
   private instances = new Map<string, SandboxInstance>();
-  private memoryLimitMb: number;
+  private memoryLimitBytes: number;
   private timeoutMs: number;
 
   constructor(opts?: { memoryLimitMb?: number; timeoutMs?: number }) {
-    this.memoryLimitMb = opts?.memoryLimitMb ?? 128;
+    this.memoryLimitBytes = (opts?.memoryLimitMb ?? 128) * 1024 * 1024;
     this.timeoutMs = opts?.timeoutMs ?? 30_000;
   }
 
   /* ---------- load / unload ---------------------------------------- */
 
   /**
-   * Load JS code into a new isolate and return an McpProvider.
-   * If already loaded, the old instance is disposed first.
+   * Load JS code into a new QuickJS sandbox and return an McpProvider.
+   * Each sandbox gets its own WASM module (via newAsyncContext) so that
+   * asyncified host functions in different sandboxes are independent.
    */
   async load(name: string, code: string): Promise<McpProvider> {
     this.unload(name);
 
-    const isolate = new ivm.Isolate({ memoryLimit: this.memoryLimitMb });
-    const context = await isolate.createContext();
-    const jail = context.global;
+    const context = await newAsyncContext();
+    const runtime = context.runtime;
 
-    // self-reference
-    await jail.set("global", jail.derefInto());
+    runtime.setMemoryLimit(this.memoryLimitBytes);
+    runtime.setMaxStackSize(1024 * 1024); // 1 MB stack
+
+    const inst: SandboxInstance = { context, name, deadline: Infinity };
+
+    // Interrupt handler: checked periodically by QuickJS during execution
+    runtime.setInterruptHandler(() => Date.now() > inst.deadline);
 
     // --- bridge functions ---
-    await jail.set(
+
+    setGlobal(
+      context,
       "__bridge_log",
-      new ivm.Callback((msg: string) => {
+      context.newFunction("__bridge_log", (msgHandle) => {
+        const msg = context.getString(msgHandle);
         console.log(`[sandbox:${name}]`, msg);
       }),
     );
 
-    await jail.set(
+    // bridge.fetch — asyncified: suspends WASM while host fetch() resolves
+    setGlobal(
+      context,
       "__bridge_fetch",
-      new ivm.Callback(
-        async (url: string, optionsJson: string) => {
+      context.newAsyncifiedFunction(
+        "__bridge_fetch",
+        async (urlHandle, optionsJsonHandle) => {
+          const url = context.getString(urlHandle);
+          const optionsJson = context.getString(optionsJsonHandle);
+          const opts: RequestInit = JSON.parse(optionsJson);
+
           try {
-            const opts = JSON.parse(optionsJson);
             const resp = await fetch(url, opts);
             const body = await resp.text();
-            return JSON.stringify({
-              status: resp.status,
-              body,
-            });
+            return context.newString(
+              JSON.stringify({ status: resp.status, body }),
+            );
           } catch (err: unknown) {
-            return JSON.stringify({
-              status: 0,
-              body: err instanceof Error ? err.message : String(err),
-            });
+            return context.newString(
+              JSON.stringify({
+                status: 0,
+                body: err instanceof Error ? err.message : String(err),
+              }),
+            );
           }
         },
-        { async: true },
       ),
     );
 
-    await jail.set(
+    // bridge.getSkill — asyncified
+    setGlobal(
+      context,
       "__bridge_getSkill",
-      new ivm.Callback(
-        async (skillName: string) => {
+      context.newAsyncifiedFunction(
+        "__bridge_getSkill",
+        async (nameHandle) => {
+          const skillName = context.getString(nameHandle);
           const skill = await prisma.skill.findUnique({
             where: { name: skillName },
           });
-          return skill?.content ?? null;
+          if (skill?.content != null) {
+            return context.newString(skill.content);
+          }
+          return context.null;
         },
-        { async: true },
       ),
     );
 
     // --- compile & run user code ---
+
     const wrappedCode = WRAPPER_PREFIX + code + WRAPPER_SUFFIX;
-    const script = await isolate.compileScript(wrappedCode, {
-      filename: `mcp:${name}`,
-    });
-    await script.run(context, { timeout: this.timeoutMs });
-    script.release();
 
-    this.instances.set(name, { isolate, context, name });
+    inst.deadline = Date.now() + this.timeoutMs;
+    const result = context.evalCode(wrappedCode, `mcp:${name}`);
+    inst.deadline = Infinity;
 
+    if (result.error) {
+      const err: unknown = context.dump(result.error);
+      result.error.dispose();
+      context.dispose();
+      runtime.dispose();
+      throw new Error(
+        `Failed to load sandbox "${name}": ${String(err)}`,
+      );
+    }
+    result.value.dispose();
+
+    this.instances.set(name, inst);
     return this.createProvider(name);
   }
 
-  /** Dispose an isolate and remove it from the map. */
+  /** Dispose a sandbox and remove it from the map. */
   unload(name: string): void {
     const inst = this.instances.get(name);
     if (!inst) return;
     try {
-      if (!inst.isolate.isDisposed) {
-        inst.context.release();
-        inst.isolate.dispose();
+      if (inst.context.alive) {
+        inst.context.dispose();
+        inst.context.runtime.dispose();
       }
     } catch {
       /* already disposed */
@@ -157,12 +209,21 @@ export class SandboxManager {
       async listTools(): Promise<Tool[]> {
         const inst = self.instances.get(mcpName);
         if (!inst) throw new Error(`Sandbox "${mcpName}" not loaded`);
-        const tools = await inst.context.evalClosure(
-          "return globalThis.__mcp_exports.tools || [];",
-          [],
-          { result: { copy: true }, timeout: 5_000 },
+
+        inst.deadline = Date.now() + 5_000;
+        const result = inst.context.evalCode(
+          "JSON.stringify(globalThis.__mcp_exports.tools || [])",
         );
-        return tools as Tool[];
+        inst.deadline = Infinity;
+
+        if (result.error) {
+          const err: unknown = inst.context.dump(result.error);
+          result.error.dispose();
+          throw new Error(`listTools failed: ${String(err)}`);
+        }
+        const json = inst.context.getString(result.value);
+        result.value.dispose();
+        return JSON.parse(json) as Tool[];
       },
 
       async callTool(
@@ -172,20 +233,81 @@ export class SandboxManager {
         const inst = self.instances.get(mcpName);
         if (!inst) throw new Error(`Sandbox "${mcpName}" not loaded`);
 
-        const result = await inst.context.evalClosure(
-          "return globalThis.__mcp_exports.callTool($0, $1);",
-          [toolName, new ivm.ExternalCopy(args).copyInto()],
-          {
-            result: { copy: true, promise: true },
-            timeout: self.timeoutMs,
-          },
+        const argsJson = JSON.stringify(args);
+
+        // evalCodeAsync handles asyncified bridge functions.
+        // callTool may be sync or async; we detect Promises and
+        // pump the microtask queue with executePendingJobs() as a
+        // fallback for async callTool.
+        inst.deadline = Date.now() + self.timeoutMs;
+        const result = await inst.context.evalCodeAsync(
+          `(function() {
+            var __args = JSON.parse(${JSON.stringify(argsJson)});
+            var __r = globalThis.__mcp_exports.callTool(
+              ${JSON.stringify(toolName)}, __args
+            );
+            if (__r && typeof __r.then === 'function') {
+              globalThis.__callToolOk = undefined;
+              globalThis.__callToolErr = undefined;
+              __r.then(function(v) { globalThis.__callToolOk = JSON.stringify(v); })
+                .catch(function(e) { globalThis.__callToolErr = String(e); });
+              return null;
+            }
+            return JSON.stringify(__r);
+          })()`,
+          `mcp:${mcpName}:callTool`,
         );
+        inst.deadline = Infinity;
+
+        if (result.error) {
+          const err: unknown = inst.context.dump(result.error);
+          result.error.dispose();
+          throw new Error(`callTool("${toolName}") failed: ${String(err)}`);
+        }
+
+        const raw: unknown = inst.context.dump(result.value);
+        result.value.dispose();
+
+        let json: string;
+        if (raw === null) {
+          // callTool returned a Promise — resolve via microtask queue
+          inst.context.runtime.executePendingJobs();
+
+          const readResult = inst.context.evalCode(
+            `globalThis.__callToolErr || globalThis.__callToolOk`,
+          );
+          if (readResult.error) {
+            const err: unknown = inst.context.dump(readResult.error);
+            readResult.error.dispose();
+            throw new Error(`callTool("${toolName}") async resolution failed: ${String(err)}`);
+          }
+          const resolved = inst.context.getString(readResult.value);
+          readResult.value.dispose();
+
+          // Check if it was an error
+          const errCheck = inst.context.evalCode(`globalThis.__callToolErr`);
+          if (errCheck.error) {
+            errCheck.error.dispose();
+          } else {
+            const errVal: unknown = inst.context.dump(errCheck.value);
+            errCheck.value.dispose();
+            if (typeof errVal === "string") {
+              throw new Error(errVal);
+            }
+          }
+
+          json = resolved;
+        } else {
+          json = String(raw);
+        }
+
+        const parsed: unknown = JSON.parse(json);
 
         // Normalise: if user returned a plain string, wrap it
-        if (typeof result === "string") {
-          return { content: [{ type: "text", text: result }] };
+        if (typeof parsed === "string") {
+          return { content: [{ type: "text", text: parsed }] };
         }
-        return result as CallToolResult;
+        return parsed as CallToolResult;
       },
     };
   }
