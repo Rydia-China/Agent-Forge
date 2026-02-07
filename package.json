@@ -11,10 +11,15 @@
     "db:push": "prisma db push"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@prisma/client": "^6.6.0",
+    "gray-matter": "^4.0.3",
+    "isolated-vm": "^6.0.2",
     "next": "16.1.6",
+    "openai": "^6.18.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

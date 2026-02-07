@@ -8,9 +8,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// placeholder — 按需替换为业务模型
-model Config {
-  key       String   @id
-  value     String
-  updatedAt DateTime @updatedAt
+/// Skill — 遵循 Agent Skills 开放标准 (agentskills.io)
+/// name + description 对应 SKILL.md YAML frontmatter
+/// content 对应 Markdown body
+model Skill {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  content     String
+  tags        String[]
+  metadata    Json?
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// McpServer — 动态 MCP，JS 代码存储于 DB，运行于 isolated-vm 沙盒
+model McpServer {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  code        String
+  enabled     Boolean  @default(true)
+  config      Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
