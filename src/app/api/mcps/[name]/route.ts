@@ -13,14 +13,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
   return NextResponse.json(mcp);
 }
 
-/** PUT /api/mcps/:name — update MCP server (code/description/enabled) */
+/** PUT /api/mcps/:name — push a new version (auto-promote + reload by default) */
 export async function PUT(req: NextRequest, { params }: Params) {
   const { name } = await params;
   try {
     const body: unknown = await req.json();
     const parsed = svc.McpUpdateParams.omit({ name: true }).parse(body);
-    const { record, loadError } = await svc.updateMcpServer({ name, ...parsed });
-    return NextResponse.json({ ...record, loadError });
+    const { record, version, loadError } = await svc.updateMcpServer({ name, ...parsed });
+    return NextResponse.json({ record, version, loadError });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 400 });

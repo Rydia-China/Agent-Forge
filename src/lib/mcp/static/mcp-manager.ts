@@ -11,9 +11,6 @@ function json(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
 
-/** Zod schema for update_code (subset of McpUpdateParams with code required) */
-const McpUpdateCodeParams = svc.McpUpdateParams.required({ code: true });
-
 export const mcpManagerMcp: McpProvider = {
   name: "mcp_manager",
 
@@ -26,7 +23,7 @@ export const mcpManagerMcp: McpProvider = {
       },
       {
         name: "get_code",
-        description: "Get the JavaScript source code of a dynamic MCP server.",
+        description: "Get the JavaScript source code of a dynamic MCP server (production version).",
         inputSchema: {
           type: "object" as const,
           properties: { name: { type: "string", description: "MCP server name" } },
@@ -35,7 +32,7 @@ export const mcpManagerMcp: McpProvider = {
       },
       {
         name: "create",
-        description: "Create a new dynamic MCP server. The code must be JavaScript and will run in a sandboxed environment.",
+        description: "Create a new dynamic MCP server (v1). The code must be JavaScript and will run in a sandboxed environment.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -49,13 +46,14 @@ export const mcpManagerMcp: McpProvider = {
       },
       {
         name: "update_code",
-        description: "Update the code (and optionally description) of an existing dynamic MCP server.",
+        description: "Push a new version of a dynamic MCP server. Auto-promotes to production and reloads sandbox by default.",
         inputSchema: {
           type: "object" as const,
           properties: {
             name: { type: "string" },
             code: { type: "string" },
             description: { type: "string" },
+            promote: { type: "boolean", description: "Set new version as production + reload (default: true)" },
           },
           required: ["name", "code"],
         },
@@ -71,7 +69,7 @@ export const mcpManagerMcp: McpProvider = {
       },
       {
         name: "delete",
-        description: "Delete a dynamic MCP server from DB and unregister it from the runtime registry.",
+        description: "Delete a dynamic MCP server and all its versions from DB, unregister from runtime.",
         inputSchema: {
           type: "object" as const,
           properties: { name: { type: "string" } },
@@ -80,11 +78,32 @@ export const mcpManagerMcp: McpProvider = {
       },
       {
         name: "reload",
-        description: "Reload a dynamic MCP server — re-reads code from DB and re-registers in sandbox.",
+        description: "Reload a dynamic MCP server — re-reads production version code from DB and re-registers in sandbox.",
         inputSchema: {
           type: "object" as const,
           properties: { name: { type: "string" } },
           required: ["name"],
+        },
+      },
+      {
+        name: "list_versions",
+        description: "List all versions of a dynamic MCP server, showing which is production.",
+        inputSchema: {
+          type: "object" as const,
+          properties: { name: { type: "string" } },
+          required: ["name"],
+        },
+      },
+      {
+        name: "set_production",
+        description: "Set a specific version as production (rollback/promote). Auto-reloads sandbox if enabled.",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            name: { type: "string" },
+            version: { type: "number", description: "Version number to set as production" },
+          },
+          required: ["name", "version"],
         },
       },
     ];
@@ -109,14 +128,17 @@ export const mcpManagerMcp: McpProvider = {
       case "create": {
         const params = svc.McpCreateParams.parse(args);
         const { record, loadError } = await svc.createMcpServer(params);
-        if (loadError) return text(`Created MCP server "${record.name}" but sandbox load failed: ${loadError}`);
-        if (!record.enabled) return text(`Created MCP server "${record.name}" (disabled)`);
-        return text(`Created and loaded MCP server "${record.name}"`);
+        if (loadError) return text(`Created MCP server "${record.name}" (v1) but sandbox load failed: ${loadError}`);
+        if (!record.enabled) return text(`Created MCP server "${record.name}" (v1, disabled)`);
+        return text(`Created and loaded MCP server "${record.name}" (v1)`);
       }
       case "update_code": {
-        const params = McpUpdateCodeParams.parse(args);
-        const { record } = await svc.updateMcpServer(params);
-        return text(`Updated MCP server "${record.name}". Use reload to apply changes.`);
+        const params = svc.McpUpdateParams.parse(args);
+        const { record, version, loadError } = await svc.updateMcpServer(params);
+        const promoted = params.promote ? " (promoted to production)" : "";
+        let msg = `Pushed MCP server "${record.name}" v${version.version}${promoted}`;
+        if (loadError) msg += ` — sandbox load failed: ${loadError}`;
+        return text(msg);
       }
       case "toggle": {
         const params = svc.McpToggleParams.parse(args);
@@ -126,11 +148,23 @@ export const mcpManagerMcp: McpProvider = {
       case "delete": {
         const { name: n } = svc.McpNameParams.parse(args);
         await svc.deleteMcpServer(n);
-        return text(`Deleted MCP server "${n}"`);
+        return text(`Deleted MCP server "${n}" and all versions`);
       }
       case "reload": {
         const { name: n } = svc.McpNameParams.parse(args);
         const msg = await svc.reloadMcpServer(n);
+        return text(msg);
+      }
+      case "list_versions": {
+        const { name: n } = svc.McpNameParams.parse(args);
+        const versions = await svc.listMcpServerVersions(n);
+        return json(versions);
+      }
+      case "set_production": {
+        const { name: n, version } = svc.McpSetProductionParams.parse(args);
+        const { record, loadError } = await svc.setMcpProduction(n, version);
+        let msg = `MCP server "${record.name}" production set to v${record.productionVersion}`;
+        if (loadError) msg += ` — sandbox load failed: ${loadError}`;
         return text(msg);
       }
       default:

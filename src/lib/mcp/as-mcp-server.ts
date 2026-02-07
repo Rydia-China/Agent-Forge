@@ -84,22 +84,27 @@ export async function createAsMcpServer(): Promise<Server> {
     return registry.callTool(name, (args ?? {}) as Record<string, unknown>);
   });
 
-  // --- resources/list ---
+  // --- resources/list (skills as MCP resources, using production version) ---
   server.setRequestHandler(ListResourcesRequestSchema, async () => {
     const skills = await prisma.skill.findMany({
-      select: { name: true, description: true },
+      include: { versions: { orderBy: { version: "desc" as const }, take: 1 } },
     });
     return {
-      resources: skills.map((s) => ({
-        uri: `skill://${s.name}`,
-        name: s.name,
-        description: s.description,
-        mimeType: "text/markdown",
-      })),
+      resources: skills
+        .filter((s) => s.versions.length > 0)
+        .map((s) => {
+          const prodVer = s.versions.find((v) => v.version === s.productionVersion) ?? s.versions[0]!;
+          return {
+            uri: `skill://${s.name}`,
+            name: s.name,
+            description: prodVer.description,
+            mimeType: "text/markdown",
+          };
+        }),
     };
   });
 
-  // --- resources/read ---
+  // --- resources/read (returns production version content) ---
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
     const uri = req.params.uri;
     const match = uri.match(/^skill:\/\/(.+)$/);
@@ -109,9 +114,13 @@ export async function createAsMcpServer(): Promise<Server> {
       where: { name: skillName },
     });
     if (!skill) throw new Error(`Skill "${skillName}" not found`);
+    const ver = await prisma.skillVersion.findUnique({
+      where: { skillId_version: { skillId: skill.id, version: skill.productionVersion } },
+    });
+    if (!ver) throw new Error(`Skill "${skillName}" has no production version`);
     return {
       contents: [
-        { uri, mimeType: "text/markdown", text: skill.content },
+        { uri, mimeType: "text/markdown", text: ver.content },
       ],
     };
   });

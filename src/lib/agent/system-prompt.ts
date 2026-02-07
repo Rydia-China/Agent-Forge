@@ -20,7 +20,10 @@ export async function buildSystemPrompt(): Promise<string> {
   if (skills.length === 0) return BASE_PROMPT;
 
   const index = skills
-    .map((s) => `- **${s.name}**: ${s.description}`)
+    .map((s) => {
+      const ver = s.productionVersion > 0 ? ` (v${s.productionVersion})` : "";
+      return `- **${s.name}**${ver}: ${s.description}`;
+    })
     .join("\n");
 
   return `${BASE_PROMPT}

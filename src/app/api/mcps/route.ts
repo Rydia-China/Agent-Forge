@@ -12,8 +12,8 @@ export async function POST(req: NextRequest) {
   try {
     const body: unknown = await req.json();
     const params = svc.McpCreateParams.parse(body);
-    const { record, loadError } = await svc.createMcpServer(params);
-    return NextResponse.json({ ...record, loadError }, { status: 201 });
+    const { record, version, loadError } = await svc.createMcpServer(params);
+    return NextResponse.json({ record, version, loadError }, { status: 201 });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 400 });

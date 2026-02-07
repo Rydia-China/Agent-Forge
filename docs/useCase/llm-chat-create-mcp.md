@@ -32,11 +32,11 @@ curl -s -X POST http://localhost:8001/api/chat \
 ```
 期望行为链（检查 `temp/` 日志确认）：
 1. agent 看到 system prompt 中 `dynamic-mcp-builder` 的 description，判断相关
-2. agent 调用 `skills__get` 读取 `dynamic-mcp-builder` 全文，获取沙盒规范和代码结构
+2. agent 调用 `skills__get` 读取 `dynamic-mcp-builder` 全文（返回 production version），获取沙盒规范和代码结构
 3. agent 按规范编写 JS 代码：`module.exports = { tools: [...], async callTool(name, args) {...} }`
 4. agent 使用沙盒全局 `fetch()` 调用外部 API（非 `require` / `http`）
 5. agent 调用 `mcp_manager__create` 提交代码
-6. reply 中确认创建成功，且无 loadError
+6. reply 中确认创建成功（v1，自动提升为 production），且无 loadError
 
 ### 3. 验证 MCP 已注册（多轮）
 继续使用同一 `session_id`：
@@ -45,7 +45,7 @@ curl -s -X POST http://localhost:8001/api/chat \
   -H 'Content-Type: application/json' \
   -d '{"message":"列出所有 MCP servers", "session_id":"<同一 session_id>", "logs": true}'
 ```
-期望：agent 调用 `mcp_manager__list`，返回结果中包含步骤 2 创建的 MCP（runtime + database 均有记录）。
+期望：agent 调用 `mcp_manager__list`，返回结果中包含步骤 2 创建的 MCP（runtime + database 均有记录），database 记录包含 `productionVersion: 1`。
 
 ### 4. 端到端验证：触发 tool 调用（多轮）
 继续使用同一 `session_id`：
@@ -64,20 +64,36 @@ curl -s -X POST http://localhost:8001/api/chat \
 - inputSchema 中参数有 description
 - 错误处理返回人类可读信息
 
-## 异常场景
-
-### loadError 修复流程
+### 6. loadError 修复流程
 如果步骤 2 返回中出现 loadError，继续对话要求修复：
 ```bash
 curl -s -X POST http://localhost:8001/api/chat \
   -H 'Content-Type: application/json' \
   -d '{"message":"创建失败了，请修复代码并重新加载", "session_id":"<同一 session_id>", "logs": true}'
 ```
-期望：agent 调用 `mcp_manager__update_code` 修复代码，然后调用 `mcp_manager__reload` 重新加载。
+期望：agent 调用 `mcp_manager__update_code` 推送修复后的新版本（v2），auto-promote 到 production 并自动 reload sandbox。无需再单独调用 `mcp_manager__reload`。
 
-## 清理
+### 7. 版本更新
+要求 agent 对已创建的 MCP 做一次优化，产生 v2（若步骤 6 已产生 v2 则此步产生 v3）：
+```bash
+curl -s -X POST http://localhost:8001/api/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"帮我优化一下这个 IP 地理位置 MCP，给返回结果加上 ISP 和时区信息", "session_id":"<同一 session_id>", "logs": true}'
+```
+期望：agent 调用 `mcp_manager__update_code` 推送新版本，auto-promote 到 production 并 reload sandbox。
+
+### 8. 版本回滚
+```bash
+curl -s -X POST http://localhost:8001/api/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"回滚到上一个版本", "session_id":"<同一 session_id>", "logs": true}'
+```
+期望：agent 调用 `mcp_manager__list_versions` 查看版本列表，然后调用 `mcp_manager__set_production` 将 production 切回上一版本，sandbox 自动 reload。
+
+### 9. 清理
 ```bash
 curl -s -X POST http://localhost:8001/api/chat \
   -H 'Content-Type: application/json' \
   -d '{"message":"删除刚才创建的 IP 地理位置 MCP", "session_id":"<同一 session_id>"}'
 ```
+期望：agent 调用 `mcp_manager__delete`，删除 MCP server 及其所有版本。

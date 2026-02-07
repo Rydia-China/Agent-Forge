@@ -131,7 +131,7 @@ export class SandboxManager {
       ),
     );
 
-    // bridge.getSkill — asyncified
+    // bridge.getSkill — asyncified (returns production version content)
     setGlobal(
       context,
       "__bridge_getSkill",
@@ -142,8 +142,18 @@ export class SandboxManager {
           const skill = await prisma.skill.findUnique({
             where: { name: skillName },
           });
-          if (skill?.content != null) {
-            return context.newString(skill.content);
+          if (!skill) return context.null;
+
+          const ver = await prisma.skillVersion.findUnique({
+            where: {
+              skillId_version: {
+                skillId: skill.id,
+                version: skill.productionVersion,
+              },
+            },
+          });
+          if (ver?.content != null) {
+            return context.newString(ver.content);
           }
           return context.null;
         },

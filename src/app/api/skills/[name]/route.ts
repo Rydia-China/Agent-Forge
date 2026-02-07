@@ -22,14 +22,14 @@ export async function GET(req: NextRequest, { params }: Params) {
   return NextResponse.json(skill);
 }
 
-/** PUT /api/skills/:name — update skill */
+/** PUT /api/skills/:name — push a new version (auto-promote by default) */
 export async function PUT(req: NextRequest, { params }: Params) {
   const { name } = await params;
   try {
     const body: unknown = await req.json();
     const parsed = svc.SkillUpdateParams.omit({ name: true }).parse(body);
-    const skill = await svc.updateSkill({ name, ...parsed });
-    return NextResponse.json(skill);
+    const result = await svc.updateSkill({ name, ...parsed });
+    return NextResponse.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 400 });

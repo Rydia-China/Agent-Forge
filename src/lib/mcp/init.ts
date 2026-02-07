@@ -16,14 +16,22 @@ export async function initMcp(): Promise<void> {
   registry.register(skillsMcp);
   registry.register(mcpManagerMcp);
 
-  // Dynamic providers from DB
-  const records = await prisma.mcpServer.findMany({ where: { enabled: true } });
+  // Dynamic providers from DB — load production version code
+  const records = await prisma.mcpServer.findMany({
+    where: { enabled: true },
+    include: { versions: true },
+  });
   for (const record of records) {
+    const prodVer = record.versions.find((v) => v.version === record.productionVersion);
+    if (!prodVer) {
+      console.error(`[initMcp] MCP "${record.name}" has no production version ${record.productionVersion}`);
+      continue;
+    }
     try {
-      const provider = await sandboxManager.load(record.name, record.code);
+      const provider = await sandboxManager.load(record.name, prodVer.code);
       registry.replace(provider);
     } catch (err) {
-      console.error(`[initMcp] Failed to load dynamic MCP "${record.name}":`, err);
+      console.error(`[initMcp] Failed to load dynamic MCP "${record.name}" v${prodVer.version}:`, err);
     }
   }
 }

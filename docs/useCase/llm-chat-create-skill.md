@@ -29,10 +29,10 @@ curl -s -X POST http://localhost:8001/api/chat \
 ```
 期望行为链（检查 `temp/` 日志确认）：
 1. agent 看到 system prompt 中 `skill-creator` 的 description，判断相关
-2. agent 调用 `skills__get` 读取 `skill-creator` 全文，获取创建规范
-3. agent 按规范组织 name（kebab-case）、description（回答“做什么”和“何时用”）、content（结构化 Markdown）
+2. agent 调用 `skills__get` 读取 `skill-creator` 全文（返回 production version），获取创建规范
+3. agent 按规范组织 name（kebab-case）、description（回答"做什么"和"何时用"）、content（结构化 Markdown）
 4. agent 调用 `skills__create` 写入数据库
-5. reply 中确认创建成功
+5. reply 中确认创建成功（v1，自动提升为 production）
 
 记录响应中的 `session_id`。
 
@@ -43,7 +43,7 @@ curl -s -X POST http://localhost:8001/api/chat \
   -H 'Content-Type: application/json' \
   -d '{"message":"列出所有 skills", "session_id":"<步骤 2 的 session_id>", "logs": true}'
 ```
-期望：agent 能列出步骤 2 创建的 skill + 两个内置 skill。
+期望：agent 能列出步骤 2 创建的 skill + 两个内置 skill，每个 skill 包含 `productionVersion` 信息。
 
 ### 4. 验证 skill 内容可读取（多轮）
 继续使用同一 `session_id`：
@@ -52,7 +52,7 @@ curl -s -X POST http://localhost:8001/api/chat \
   -H 'Content-Type: application/json' \
   -d '{"message":"我想看看关于 Git commit 规范的 skill 全文", "session_id":"<同一 session_id>", "logs": true}'
 ```
-期望：agent 根据上下文匹配到之前创建的 skill，调用 `skills__get`，返回其 content。
+期望：agent 根据上下文匹配到之前创建的 skill，调用 `skills__get`，返回其 production version 的 content。
 
 ### 5. 验证创建质量
 检查步骤 4 返回的 content 是否符合 `skill-creator` 中定义的规范：
@@ -60,9 +60,27 @@ curl -s -X POST http://localhost:8001/api/chat \
 - description 是否回答了“做什么”和“何时用”
 - content 是否有清晰的标题层级和具体示例
 
-## 清理
+### 6. 版本更新
+要求 agent 对已创建的 skill 做一次优化，产生 v2：
+```bash
+curl -s -X POST http://localhost:8001/api/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"帮我优化一下 Git commit 规范 skill，补充 breaking change 的提交格式说明", "session_id":"<同一 session_id>", "logs": true}'
+```
+期望：agent 调用 `skills__get` 读取当前内容，然后调用 `skills__update` 推送 v2，auto-promote 到 production。
+
+### 7. 版本回滚
+```bash
+curl -s -X POST http://localhost:8001/api/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"回滚到上一个版本", "session_id":"<同一 session_id>", "logs": true}'
+```
+期望：agent 调用 `skills__list_versions` 查看版本列表，然后调用 `skills__set_production` 将 production 切回 v1。
+
+### 8. 清理
 ```bash
 curl -s -X POST http://localhost:8001/api/chat \
   -H 'Content-Type: application/json' \
   -d '{"message":"删除刚才创建的 Git commit 规范 skill", "session_id":"<同一 session_id>"}'
 ```
+期望：agent 调用 `skills__delete`，删除 skill 及其所有版本。
