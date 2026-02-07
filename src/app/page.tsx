@@ -217,6 +217,9 @@ export default function Home() {
   const [isDeletingResource, setIsDeletingResource] = useState(false);
   const [isPublishingVersion, setIsPublishingVersion] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingReply, setStreamingReply] = useState<string | null>(null);
+  const [streamingTools, setStreamingTools] = useState<string[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const selectedResourceRef = useRef<string | null>(null);
@@ -543,13 +546,16 @@ export default function Home() {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, streamingReply, streamingTools]);
 
   const startNewChat = useCallback(() => {
     setActiveSession(null);
     setMessages([]);
     setInput("");
     setError(null);
+    setIsStreaming(false);
+    setStreamingReply(null);
+    setStreamingTools([]);
   }, []);
 
   const generateTitle = useCallback(async (id: string, seed: string) => {
@@ -582,11 +588,18 @@ export default function Home() {
     const text = input.trim();
     if (!text || isSending) return;
     setError(null);
+    setNotice(null);
     setIsSending(true);
+    setIsStreaming(true);
     setInput("");
     const wasNewSession = !activeSession;
     const sessionId = activeSession?.id ?? undefined;
+    let streamSessionId: string | null = sessionId ?? null;
+    let doneSessionId: string | null = null;
+    let streamError: string | null = null;
     setMessages((prev) => [...prev, { role: "user", content: text }]);
+    setStreamingReply("");
+    setStreamingTools([]);
 
     try {
       const payload: Record<string, unknown> = {
@@ -595,31 +608,108 @@ export default function Home() {
       };
       if (sessionId) payload.session_id = sessionId;
 
-      const result = await fetchJson<{ session_id: string; reply: string }>(
-        "/api/chat",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-      );
+      const res = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      const nextSessionId = result.session_id;
-      setActiveSession((prev) =>
-        prev ? { ...prev, id: nextSessionId } : { id: nextSessionId, title: null },
-      );
+      if (!res.ok || !res.body) {
+        throw new Error(`Stream failed (${res.status})`);
+      }
 
-      setMessages((prev) => [...prev, { role: "assistant", content: result.reply }]);
-      await refreshSessions();
-      await loadSession(nextSessionId);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-      if (wasNewSession) {
-        void generateTitle(nextSessionId, text);
+      const handleEvent = (raw: string) => {
+        const lines = raw.split(/\r?\n/);
+        let event = "message";
+        const dataLines: string[] = [];
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            event = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            dataLines.push(line.slice(5).trim());
+          }
+        }
+        if (dataLines.length === 0) return;
+        const dataStr = dataLines.join("\n");
+        let payloadData: unknown;
+        try {
+          payloadData = JSON.parse(dataStr);
+        } catch {
+          return;
+        }
+
+        if (!isRecord(payloadData)) return;
+
+        if (event === "session") {
+          const sid = payloadData.session_id;
+          if (typeof sid === "string") {
+            streamSessionId = sid;
+            setActiveSession((prev) =>
+              prev ? { ...prev, id: sid } : { id: sid, title: null },
+            );
+          }
+        } else if (event === "delta") {
+          const delta = payloadData.text;
+          if (typeof delta === "string") {
+            setStreamingReply((prev) => (prev ?? "") + delta);
+          }
+        } else if (event === "tool") {
+          const summary = payloadData.summary;
+          if (typeof summary === "string") {
+            setStreamingTools((prev) =>
+              prev.includes(summary) ? prev : [...prev, summary],
+            );
+          }
+        } else if (event === "done") {
+          const sid = payloadData.session_id;
+          if (typeof sid === "string") {
+            doneSessionId = sid;
+          }
+        } else if (event === "error") {
+          const errMsg = payloadData.error;
+          if (typeof errMsg === "string") {
+            streamError = errMsg;
+          }
+        }
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary !== -1) {
+          const chunk = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          handleEvent(chunk);
+          boundary = buffer.indexOf("\n\n");
+        }
+      }
+
+      if (streamError) {
+        setError(streamError);
+        return;
+      }
+
+      const finalSessionId = doneSessionId ?? streamSessionId;
+      if (finalSessionId) {
+        await refreshSessions();
+        await loadSession(finalSessionId);
+        if (wasNewSession) {
+          void generateTitle(finalSessionId, text);
+        }
       }
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to send message."));
+      setError(getErrorMessage(err, "Failed to stream message."));
     } finally {
       setIsSending(false);
+      setIsStreaming(false);
+      setStreamingReply(null);
+      setStreamingTools([]);
     }
   }, [
     activeSession,
@@ -676,6 +766,9 @@ export default function Home() {
     setActiveSession(null);
     setMessages([]);
     setError(null);
+    setIsStreaming(false);
+    setStreamingReply(null);
+    setStreamingTools([]);
   }, [userDraft]);
 
   return (
@@ -854,7 +947,7 @@ export default function Home() {
                 return (
                   <div
                     key={`${message.role}-${index}`}
-                    className={`rounded border px-4 py-3 ${style.tone}`}
+                    className={`rounded border px-4 py-3 ${style.tone} fade-in`}
                   >
                     <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-200">
                       <span
@@ -905,6 +998,35 @@ export default function Home() {
                   </div>
                 );
               })}
+              {streamingReply !== null && (
+                <div className="rounded border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 fade-in">
+                  <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-200">
+                    <span className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-emerald-50">
+                      Assistant
+                    </span>
+                  </div>
+                  <div className="mb-2 text-[11px] text-slate-400">思考中…</div>
+                  {streamingReply.length > 0 ? (
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-100">
+                      {streamingReply}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-slate-400">Streaming…</p>
+                  )}
+                  {streamingTools.length > 0 ? (
+                    <div className="mt-3 space-y-2">
+                      {streamingTools.map((summary) => (
+                        <div
+                          key={summary}
+                          className="rounded border border-slate-800 bg-slate-950/70 p-3 text-xs text-slate-200"
+                        >
+                          {summary}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              )}
               <div ref={endRef} />
             </div>
           )}
@@ -935,7 +1057,7 @@ export default function Home() {
                 disabled={isSending || input.trim().length === 0}
                 type="button"
               >
-                {isSending ? "Sending..." : "Send"}
+                {isStreaming ? "Streaming..." : isSending ? "Sending..." : "Send"}
               </button>
             </div>
           </div>

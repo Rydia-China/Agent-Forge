@@ -52,6 +52,14 @@ MCP 初始化是 **惰性** 的——首次 API 请求触发 `initMcp()`。
 7. 若 LLM 返回纯文本 → `pushMessages()` 持久化本轮所有新消息到 DB → 返回最终 reply
 8. 若请求传了 `logs=true` → 写 `temp/chat-{sessionId}.{timestamp}.json`
 
+### Agent Chat Streaming
+`POST /api/chat/stream` 使用同一 `runAgent()` 逻辑，但以 SSE 形式增量返回：
+- `event: session` → `{ session_id }`
+- `event: delta` → `{ text }`（assistant 增量文本）
+- `event: tool` → `{ summary }`（工具/skill 摘要）
+- `event: done` → `{ session_id, reply }`
+- `event: error` → `{ error }`
+
 ## 双入口等价性
 
 REST API (`/api/*`) 和 MCP tools（agent 内部 / `/mcp` 外部）**共享同一 service layer**。

@@ -2,6 +2,7 @@ import { registry } from "@/lib/mcp/registry";
 import { initMcp } from "@/lib/mcp/init";
 import {
   chatCompletion,
+  chatCompletionStream,
   mcpToolToOpenAI,
   type LlmMessage,
 } from "./llm-client";
@@ -10,7 +11,7 @@ import {
   pushMessages,
 } from "@/lib/services/chat-session-service";
 import { buildSystemPrompt } from "./system-prompt";
-import type { ChatMessage } from "./types";
+import type { ChatMessage, ToolCall } from "./types";
 
 /* ------------------------------------------------------------------ */
 /*  Per-session concurrency lock                                       */
@@ -36,6 +37,12 @@ export interface AgentResponse {
   messages: ChatMessage[];
 }
 
+export interface StreamCallbacks {
+  onSession?: (sessionId: string) => void;
+  onDelta?: (text: string) => void;
+  onToolCall?: (call: ToolCall) => void;
+}
+
 /**
  * Run the agent tool-use loop.
  *
@@ -54,6 +61,20 @@ export async function runAgent(
 
   const session = await getOrCreateSession(sessionId, userName);
   return withSessionLock(session.id, () => runAgentInner(userMessage, session));
+}
+
+export async function runAgentStream(
+  userMessage: string,
+  sessionId: string | undefined,
+  userName: string | undefined,
+  callbacks: StreamCallbacks,
+): Promise<AgentResponse> {
+  await initMcp();
+  const session = await getOrCreateSession(sessionId, userName);
+  callbacks.onSession?.(session.id);
+  return withSessionLock(session.id, () =>
+    runAgentStreamInner(userMessage, session, callbacks),
+  );
 }
 
 async function runAgentInner(
@@ -143,4 +164,153 @@ async function runAgentInner(
     }
   }
 
+}
+
+interface ToolCallDelta {
+  index?: number;
+  id?: string;
+  function?: {
+    name?: string;
+    arguments?: string;
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function upsertToolCall(
+  map: Map<number, ToolCall>,
+  delta: ToolCallDelta,
+): void {
+  const index = delta.index;
+  if (typeof index !== "number") return;
+
+  const existing: ToolCall = map.get(index) ?? {
+    id: delta.id ?? `call_${index}`,
+    type: "function",
+    function: { name: "", arguments: "" },
+  };
+
+  if (delta.id) existing.id = delta.id;
+  if (delta.function?.name) existing.function.name = delta.function.name;
+  if (delta.function?.arguments) {
+    existing.function.arguments += delta.function.arguments;
+  }
+
+  map.set(index, existing);
+}
+
+async function runAgentStreamInner(
+  userMessage: string,
+  session: { id: string; messages: ChatMessage[] },
+  callbacks: StreamCallbacks,
+): Promise<AgentResponse> {
+  const systemPrompt = await buildSystemPrompt();
+
+  const userMsg: ChatMessage = { role: "user", content: userMessage };
+  const newMessages: ChatMessage[] = [userMsg];
+
+  const mcpTools = await registry.listAllTools();
+  const openaiTools = mcpTools.map(mcpToolToOpenAI);
+
+  const llmMessages: LlmMessage[] = [
+    { role: "system", content: systemPrompt },
+    ...(session.messages as LlmMessage[]),
+    userMsg as LlmMessage,
+  ];
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const stream = await chatCompletionStream(llmMessages, openaiTools);
+    let assistantContent = "";
+    const toolCallsByIndex = new Map<number, ToolCall>();
+
+    for await (const chunk of stream) {
+      const choice = chunk.choices[0];
+      if (!choice) continue;
+      const delta = choice.delta;
+      if (delta.content) {
+        assistantContent += delta.content;
+        callbacks.onDelta?.(delta.content);
+      }
+      if (delta.tool_calls?.length) {
+        for (const tcDelta of delta.tool_calls) {
+          upsertToolCall(toolCallsByIndex, tcDelta);
+        }
+      }
+    }
+
+    const toolCalls = Array.from(toolCallsByIndex.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map((entry) => entry[1]);
+
+    const stored: ChatMessage = {
+      role: "assistant",
+      content: assistantContent ? assistantContent : null,
+    };
+    if (toolCalls.length > 0) {
+      stored.tool_calls = toolCalls;
+    }
+    newMessages.push(stored);
+
+    const assistantMsg: LlmMessage =
+      toolCalls.length > 0
+        ? {
+            role: "assistant",
+            content: assistantContent ? assistantContent : null,
+            tool_calls: toolCalls.map((tc) => ({
+              id: tc.id,
+              type: "function",
+              function: {
+                name: tc.function.name,
+                arguments: tc.function.arguments,
+              },
+            })),
+          }
+        : { role: "assistant", content: assistantContent };
+
+    llmMessages.push(assistantMsg);
+
+    if (toolCalls.length === 0) {
+      await pushMessages(session.id, newMessages);
+      const allMessages = [...session.messages, ...newMessages];
+      return {
+        sessionId: session.id,
+        reply: assistantContent,
+        messages: allMessages,
+      };
+    }
+
+    for (const tc of toolCalls) {
+      callbacks.onToolCall?.(tc);
+      let args: Record<string, unknown> = {};
+      try {
+        const parsed: unknown = JSON.parse(tc.function.arguments);
+        if (isRecord(parsed)) args = parsed;
+      } catch {
+        /* invalid JSON, pass empty */
+      }
+
+      const result = await registry.callTool(tc.function.name, args);
+      const content =
+        result.content
+          ?.map((c: Record<string, unknown>) =>
+            "text" in c ? String(c.text) : JSON.stringify(c),
+          )
+          .join("\n") ?? "";
+
+      const toolMsg: ChatMessage = {
+        role: "tool",
+        tool_call_id: tc.id,
+        content,
+      };
+      newMessages.push(toolMsg);
+      llmMessages.push({
+        role: "tool",
+        content,
+        tool_call_id: tc.id,
+      });
+    }
+  }
 }

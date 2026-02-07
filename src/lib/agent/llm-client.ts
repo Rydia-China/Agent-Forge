@@ -1,5 +1,8 @@
 import OpenAI from "openai";
-import type { ChatCompletionTool } from "openai/resources/chat/completions";
+import type {
+  ChatCompletionTool,
+  ChatCompletionChunk,
+} from "openai/resources/chat/completions";
 import type { Tool } from "@modelcontextprotocol/sdk/types";
 
 /* ------------------------------------------------------------------ */
@@ -54,6 +57,19 @@ export async function chatCompletion(
     model: getModel(),
     messages,
     tools: tools?.length ? tools : undefined,
+  });
+}
+
+export async function chatCompletionStream(
+  messages: LlmMessage[],
+  tools?: ChatCompletionTool[],
+): Promise<AsyncIterable<ChatCompletionChunk>> {
+  const client = getClient();
+  return client.chat.completions.create({
+    model: getModel(),
+    messages,
+    tools: tools?.length ? tools : undefined,
+    stream: true,
   });
 }
 
