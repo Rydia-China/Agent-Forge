@@ -1,0 +1,56 @@
+# =============================================================================
+# 生产环境 Docker Compose
+#
+# 使用方式:
+#   构建: docker compose -f docker-compose.prod.yml build
+#   启动: docker compose -f docker-compose.prod.yml up -d
+#
+# 镜像分发:
+#   docker save agent-forge-app:latest | gzip > agent-forge.tar.gz
+#   # 目标机器:
+#   docker load < agent-forge.tar.gz
+#   docker compose -f docker-compose.prod.yml up -d
+# =============================================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-12345678}
+      POSTGRES_DB: ${POSTGRES_DB:-agent_forge}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  app:
+    image: agent-forge-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8001}:8001"
+    env_file: .env
+    environment:
+      # 覆盖 DATABASE_URL 指向容器内 db 服务
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-12345678}@db:5432/${POSTGRES_DB:-agent_forge}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
