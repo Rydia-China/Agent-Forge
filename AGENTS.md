@@ -36,6 +36,11 @@
 - 第三方 agent 可通过 `{ "url": "http://host:8001/mcp" }` 直接对接
 - 暴露内容: 所有内部 tools + skills 作为 resources + agent 对话能力
 
+### AI 可观测性
+- AI agent 可通过 `curl` 调用本系统 REST API 和 MCP 端点，观测系统运行状态
+- `docs/api-playbook.md` 记录接口间的因果关系、调用次序、验证方法——这些信息无法从代码推断
+- 任何新增/变更 API 时，同步更新 playbook 中的时序依赖和验证清单
+
 ### 兼容性
 - Agent 使用 OpenAI chat/completions 格式 (tool-use loop)
 - Dynamic MCP 统一使用 JS 编写，运行于 isolated-vm 沙盒
@@ -59,9 +64,14 @@
 ## 索引
 - `docs/ROADMAP.md` — 短期目标（唯一规划文件）
 - `docs/dataflow.md` — 跨边界数据流（仅记录跨系统边界）
+- `docs/api-playbook.md` — 接口调用次序与验证手册（给 AI agent）
 
 ## 端口
 - 8001 (env `PORT`)
+
+## 环境变量
+- `.env.example` 是环境变量的唯一源，提交到 Git
+- 新增 `process.env.XXX` 时，必须同步更新 `.env.example` 和 `.env`（实际值留空或填默认值）
 
 ## Git 协作
 - 功能完成后提交，删除代码前也先提交，保留完整历史可恢复
