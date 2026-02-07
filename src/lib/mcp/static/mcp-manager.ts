@@ -1,6 +1,7 @@
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpProvider } from "../types.js";
 import { registry } from "../registry.js";
+import { sandboxManager } from "../sandbox.js";
 import { prisma } from "@/lib/db";
 
 function text(t: string): CallToolResult {
@@ -146,10 +147,19 @@ export const mcpManagerMcp: McpProvider = {
             enabled: (args.enabled as boolean) ?? true,
           },
         });
-        // Phase 3 will auto-load into sandbox here
-        return text(
-          `Created MCP server "${record.name}". Use reload to load it into the runtime.`,
-        );
+        if (record.enabled) {
+          try {
+            const provider = await sandboxManager.load(record.name, record.code);
+            registry.replace(provider);
+            return text(`Created and loaded MCP server "${record.name}"`);
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return text(
+              `Created MCP server "${record.name}" but sandbox load failed: ${msg}`,
+            );
+          }
+        }
+        return text(`Created MCP server "${record.name}" (disabled)`);
       }
 
       case "update_code": {
@@ -171,6 +181,7 @@ export const mcpManagerMcp: McpProvider = {
         });
         const state = record.enabled ? "enabled" : "disabled";
         if (!record.enabled) {
+          sandboxManager.unload(record.name);
           registry.unregister(record.name);
         }
         return text(`MCP server "${record.name}" is now ${state}`);
@@ -178,6 +189,7 @@ export const mcpManagerMcp: McpProvider = {
 
       case "delete": {
         const n = args.name as string;
+        sandboxManager.unload(n);
         registry.unregister(n);
         await prisma.mcpServer.delete({ where: { name: n } });
         return text(`Deleted MCP server "${n}"`);
@@ -193,11 +205,14 @@ export const mcpManagerMcp: McpProvider = {
           return text(
             `MCP server "${record.name}" is disabled. Enable it first.`,
           );
-        // TODO: Phase 3 — load code into isolated-vm sandbox and register provider
-        // For now, just acknowledge
-        return text(
-          `Reload requested for "${record.name}". Sandbox loading will be available after Phase 3.`,
-        );
+        try {
+          const provider = await sandboxManager.load(record.name, record.code);
+          registry.replace(provider);
+          return text(`Reloaded MCP server "${record.name}"`);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return text(`Failed to reload "${record.name}": ${msg}`);
+        }
       }
 
       default:
