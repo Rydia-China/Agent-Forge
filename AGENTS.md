@@ -14,6 +14,7 @@
 - Web UI: 8001 (env `PORT`)
 - API Server: 8000 (后端独立服务)
 
-## 关联系统
-- 后端: `/Users/rydia/Project/mob.ai/git/noval.demo.2`
-- 前端 (cocos): 独立项目，与本系统联合开发
+## 参照项目
+- `/Users/rydia/Project/mob.ai/git/noval.demo.2` — 后端参照
+- cocos 前端 — 游戏客户端参照
+- 本系统功能独立，不依赖上述项目运行
