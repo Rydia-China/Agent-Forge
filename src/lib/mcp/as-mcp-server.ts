@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   ListToolsRequestSchema,
@@ -9,6 +10,11 @@ import { registry } from "./registry.js";
 import { initMcp } from "./init.js";
 import { runAgent } from "@/lib/agent/agent";
 import { prisma } from "@/lib/db";
+
+const AgentChatArgs = z.object({
+  message: z.string(),
+  session_id: z.string().optional(),
+});
 
 /**
  * Create a low-level MCP Server instance wired to our MCP Registry.
@@ -55,10 +61,8 @@ export async function createAsMcpServer(): Promise<Server> {
     const { name, arguments: args } = req.params;
 
     if (name === "agent__chat") {
-      const result = await runAgent(
-        (args?.message as string) ?? "",
-        args?.session_id as string | undefined,
-      );
+      const parsed = AgentChatArgs.parse(args ?? {});
+      const result = await runAgent(parsed.message, parsed.session_id);
       return {
         content: [
           {
@@ -94,11 +98,12 @@ export async function createAsMcpServer(): Promise<Server> {
   server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
     const uri = req.params.uri;
     const match = uri.match(/^skill:\/\/(.+)$/);
-    if (!match) throw new Error(`Unknown resource URI: ${uri}`);
+    const skillName = match?.[1];
+    if (!skillName) throw new Error(`Unknown resource URI: ${uri}`);
     const skill = await prisma.skill.findUnique({
-      where: { name: match[1] },
+      where: { name: skillName },
     });
-    if (!skill) throw new Error(`Skill "${match[1]}" not found`);
+    if (!skill) throw new Error(`Skill "${skillName}" not found`);
     return {
       contents: [
         { uri, mimeType: "text/markdown", text: skill.content },
