@@ -137,17 +137,25 @@ function parseTags(input: string): string[] {
 function joinTags(tags: string[]): string {
   return tags.join(", ");
 }
-function getToolSummary(call: ToolCall): { title: string; subtitle?: string } {
-  const name = call.function.name;
-  if (name.startsWith("skills__")) {
-    const args = parseJsonObject(call.function.arguments);
-    const skillName = args && typeof args.name === "string" ? args.name : null;
-    return {
-      title: skillName ? `使用了 skill：${skillName}` : "使用了 skill",
-      subtitle: `调用了工具：${name}`,
-    };
+function extractToolInfo(calls: ToolCall[] | undefined): {
+  tools: string[];
+  skills: string[];
+} {
+  if (!calls || calls.length === 0) return { tools: [], skills: [] };
+  const toolNames = new Set<string>();
+  const skillNames = new Set<string>();
+  for (const call of calls) {
+    const name = call.function.name;
+    toolNames.add(name);
+    if (name.startsWith("skills__")) {
+      const args = parseJsonObject(call.function.arguments);
+      const skillName = args && typeof args.name === "string" ? args.name : null;
+      if (skillName && skillName.trim().length > 0) {
+        skillNames.add(skillName.trim());
+      }
+    }
   }
-  return { title: `调用了工具：${name}` };
+  return { tools: [...toolNames], skills: [...skillNames] };
 }
 
 const roleStyles: Record<
@@ -175,6 +183,7 @@ const roleStyles: Record<
     chip: "bg-sky-600 text-sky-50",
   },
 };
+const USER_STORAGE_KEY = "agentForge.user";
 
 export default function Home() {
   const [userName, setUserName] = useState<string>("default");
@@ -191,8 +200,6 @@ export default function Home() {
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState<string>("");
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [mcps, setMcps] = useState<McpSummary[]>([]);
   const [isLoadingResources, setIsLoadingResources] = useState(false);
@@ -220,6 +227,7 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingReply, setStreamingReply] = useState<string | null>(null);
   const [streamingTools, setStreamingTools] = useState<string[]>([]);
+  const [isComposing, setIsComposing] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const selectedResourceRef = useRef<string | null>(null);
@@ -227,6 +235,24 @@ export default function Home() {
   useEffect(() => {
     activeSessionIdRef.current = activeSession?.id ?? null;
   }, [activeSession?.id]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem(USER_STORAGE_KEY);
+    if (saved && saved.trim().length > 0) {
+      setUserName(saved);
+      setUserDraft(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const next = userDraft.trim();
+    if (next.length > 0) {
+      window.localStorage.setItem(USER_STORAGE_KEY, next);
+    } else {
+      window.localStorage.removeItem(USER_STORAGE_KEY);
+    }
+  }, [userDraft]);
 
   useEffect(() => {
     selectedResourceRef.current = selectedResource
@@ -535,14 +561,6 @@ export default function Home() {
     }
   }, [dbSkills, mcps, selectedResource]);
 
-  useEffect(() => {
-    if (!activeSession) {
-      setTitleDraft("");
-      setIsEditingTitle(false);
-      return;
-    }
-    setTitleDraft(activeSession.title ?? "");
-  }, [activeSession]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -721,30 +739,6 @@ export default function Home() {
     userName,
   ]);
 
-  const renameSession = useCallback(async () => {
-    const nextTitle = titleDraft.trim();
-    if (!activeSession || nextTitle.length === 0) return;
-    setError(null);
-    try {
-      const result = await fetchJson<{ id: string; title: string }>(
-        `/api/sessions/${activeSession.id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: nextTitle }),
-        },
-      );
-      setActiveSession((prev) =>
-        prev && prev.id === result.id ? { ...prev, title: result.title } : prev,
-      );
-      setSessions((prev) =>
-        prev.map((s) => (s.id === result.id ? { ...s, title: result.title } : s)),
-      );
-      setIsEditingTitle(false);
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to update title."));
-    }
-  }, [activeSession, titleDraft]);
 
   const deleteSession = useCallback(async () => {
     if (!activeSession) return;
@@ -873,49 +867,13 @@ export default function Home() {
           </div>
           {activeSession && (
             <div className="flex flex-wrap items-center gap-2">
-              {isEditingTitle ? (
-                <>
-                  <input
-                    className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-                    value={titleDraft}
-                    onChange={(event) => setTitleDraft(event.target.value)}
-                  />
-                  <button
-                    className="rounded border border-emerald-500 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/20"
-                    onClick={renameSession}
-                    type="button"
-                  >
-                    Save
-                  </button>
-                  <button
-                    className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-100 hover:border-slate-500"
-                    onClick={() => {
-                      setTitleDraft(activeSession.title ?? "");
-                      setIsEditingTitle(false);
-                    }}
-                    type="button"
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    className="rounded border border-slate-700 px-3 py-2 text-sm text-slate-100 hover:border-slate-500"
-                    onClick={() => setIsEditingTitle(true)}
-                    type="button"
-                  >
-                    Rename
-                  </button>
-                  <button
-                    className="rounded border border-rose-500/60 px-3 py-2 text-sm text-rose-100 hover:bg-rose-500/10"
-                    onClick={deleteSession}
-                    type="button"
-                  >
-                    Delete
-                  </button>
-                </>
-              )}
+              <button
+                className="rounded border border-rose-500/60 px-3 py-2 text-sm text-rose-100 hover:bg-rose-500/10"
+                onClick={deleteSession}
+                type="button"
+              >
+                Delete
+              </button>
             </div>
           )}
         </header>
@@ -936,14 +894,20 @@ export default function Home() {
             <div className="rounded border border-slate-800 bg-slate-900/40 px-4 py-3 text-sm text-slate-400">
               Loading session...
             </div>
-          ) : messages.length === 0 ? (
+          ) : messages.filter((message) => message.role !== "tool").length === 0 ? (
             <div className="rounded border border-dashed border-slate-800 p-6 text-sm text-slate-500">
               Start a conversation to see messages here.
             </div>
           ) : (
             <div className="space-y-4">
-              {messages.map((message, index) => {
+              {messages
+                .filter((message) => message.role !== "tool")
+                .map((message, index) => {
                 const style = roleStyles[message.role];
+                const toolInfo =
+                  message.role === "assistant"
+                    ? extractToolInfo(message.tool_calls)
+                    : { tools: [], skills: [] };
                 return (
                   <div
                     key={`${message.role}-${index}`}
@@ -955,17 +919,7 @@ export default function Home() {
                       >
                         {style.label}
                       </span>
-                      {message.tool_call_id ? (
-                        <span className="text-[10px] text-slate-400">
-                          tool_call_id: {message.tool_call_id}
-                        </span>
-                      ) : null}
                     </div>
-                    {message.role === "assistant" ? (
-                      <div className="mb-2 text-[11px] text-slate-400">
-                        思考中…
-                      </div>
-                    ) : null}
                     {message.content ? (
                       <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-100">
                         {message.content}
@@ -973,26 +927,25 @@ export default function Home() {
                     ) : (
                       <p className="text-sm text-slate-400">No content</p>
                     )}
-                    {message.tool_calls && message.tool_calls.length > 0 ? (
-                      <div className="mt-3 space-y-2">
-                        {message.tool_calls.map((call) => {
-                          const summary = getToolSummary(call);
-                          return (
-                            <div
-                              key={call.id}
-                              className="rounded border border-slate-800 bg-slate-950/70 p-3 text-xs text-slate-200"
-                            >
-                              <div className="text-[11px] font-semibold text-slate-200">
-                                {summary.title}
-                              </div>
-                              {summary.subtitle ? (
-                                <div className="mt-1 text-[11px] text-slate-400">
-                                  {summary.subtitle}
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
+                    {message.role === "assistant" &&
+                    (toolInfo.tools.length > 0 || toolInfo.skills.length > 0) ? (
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-300">
+                        {toolInfo.tools.map((tool) => (
+                          <span
+                            key={`tool-${tool}`}
+                            className="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5"
+                          >
+                            tool: {tool}
+                          </span>
+                        ))}
+                        {toolInfo.skills.map((skill) => (
+                          <span
+                            key={`skill-${skill}`}
+                            className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-emerald-100"
+                          >
+                            skill: {skill}
+                          </span>
+                        ))}
                       </div>
                     ) : null}
                   </div>
@@ -1005,7 +958,6 @@ export default function Home() {
                       Assistant
                     </span>
                   </div>
-                  <div className="mb-2 text-[11px] text-slate-400">思考中…</div>
                   {streamingReply.length > 0 ? (
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-100">
                       {streamingReply}
@@ -1040,11 +992,21 @@ export default function Home() {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
+                if (isComposing) return;
+                const nativeEvent = event.nativeEvent;
+                const composing =
+                  typeof nativeEvent === "object" &&
+                  nativeEvent !== null &&
+                  "isComposing" in nativeEvent &&
+                  (nativeEvent as { isComposing?: boolean }).isComposing === true;
+                if (composing) return;
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
                   void sendMessage();
                 }
               }}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
               disabled={isSending}
             />
             <div className="flex items-center justify-between">
@@ -1158,7 +1120,7 @@ export default function Home() {
             type="button"
             aria-label="Close"
           />
-          <section className="relative z-10 h-full w-[90vw] max-w-[1400px] overflow-y-auto border-l border-slate-800 bg-slate-950 p-6 shadow-2xl">
+          <section className="relative z-10 h-full w-[90vw] max-w-[1400px] overflow-y-auto border-l border-slate-800 bg-slate-950 p-6 shadow-2xl drawer-in">
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="text-xs uppercase tracking-wide text-slate-400">
@@ -1170,13 +1132,6 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  className="rounded border border-slate-700 px-3 py-1 text-xs text-slate-200 hover:border-slate-500"
-                  onClick={() => setSelectedResource(null)}
-                  type="button"
-                >
-                  Close
-                </button>
                 <button
                   className="rounded border border-rose-500/70 px-3 py-1 text-xs text-rose-100 hover:bg-rose-500/10"
                   onClick={deleteSelectedResource}
