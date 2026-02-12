@@ -26,7 +26,7 @@ export const skillsMcp: McpProvider = {
       },
       {
         name: "create",
-        description: "Create a new skill (v1).",
+        description: "Create a new skill (v1). Only use when the user EXPLICITLY asks to create a skill. NEVER call this to save notes, summaries, or information on your own initiative.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -40,7 +40,7 @@ export const skillsMcp: McpProvider = {
       },
       {
         name: "update",
-        description: "Push a new version of an existing skill. Auto-promotes to production by default.",
+        description: "Push a new version of an existing skill. Auto-promotes to production by default. Only use when the user EXPLICITLY asks to update a skill. NEVER call this to save notes, summaries, or information on your own initiative.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -64,7 +64,7 @@ export const skillsMcp: McpProvider = {
       },
       {
         name: "import",
-        description: "Import a skill from standard SKILL.md content. Creates v1 if new, pushes new version if exists.",
+        description: "Import a skill from standard SKILL.md content. Creates v1 if new, pushes new version if exists. Only use when the user EXPLICITLY asks to import a skill.",
         inputSchema: {
           type: "object" as const,
           properties: {

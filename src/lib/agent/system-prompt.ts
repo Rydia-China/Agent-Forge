@@ -7,7 +7,8 @@ You can manage skills (knowledge documents) and dynamic MCP servers. Use the ava
 ## Behaviour
 - Call tools when the user's request requires it.
 - Available Skills are listed below. Use \`skills__get\` to read full skill content when the user needs details.
-- Be concise and helpful.`;
+- Be concise and helpful.
+- **NEVER create, update or import skills on your own initiative.** Skills are curated knowledge managed by the user. Do not write skills to store notes, summaries, or information you cannot find elsewhere.`
 
 /**
  * Build system prompt with skill index injected.
