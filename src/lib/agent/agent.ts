@@ -68,12 +68,13 @@ export async function runAgentStream(
   sessionId: string | undefined,
   userName: string | undefined,
   callbacks: StreamCallbacks,
+  signal?: AbortSignal,
 ): Promise<AgentResponse> {
   await initMcp();
   const session = await getOrCreateSession(sessionId, userName);
   callbacks.onSession?.(session.id);
   return withSessionLock(session.id, () =>
-    runAgentStreamInner(userMessage, session, callbacks),
+    runAgentStreamInner(userMessage, session, callbacks, signal),
   );
 }
 
@@ -205,6 +206,7 @@ async function runAgentStreamInner(
   userMessage: string,
   session: { id: string; messages: ChatMessage[] },
   callbacks: StreamCallbacks,
+  signal?: AbortSignal,
 ): Promise<AgentResponse> {
   const systemPrompt = await buildSystemPrompt();
 
@@ -220,97 +222,128 @@ async function runAgentStreamInner(
     userMsg as LlmMessage,
   ];
 
+  let lastReply = "";
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const stream = await chatCompletionStream(llmMessages, openaiTools);
-    let assistantContent = "";
-    const toolCallsByIndex = new Map<number, ToolCall>();
+    if (signal?.aborted) break;
 
-    for await (const chunk of stream) {
-      const choice = chunk.choices[0];
-      if (!choice) continue;
-      const delta = choice.delta;
-      if (delta.content) {
-        assistantContent += delta.content;
-        callbacks.onDelta?.(delta.content);
-      }
-      if (delta.tool_calls?.length) {
-        for (const tcDelta of delta.tool_calls) {
-          upsertToolCall(toolCallsByIndex, tcDelta);
+    let currentContent = "";
+
+    try {
+      const stream = await chatCompletionStream(llmMessages, openaiTools, signal);
+      const toolCallsByIndex = new Map<number, ToolCall>();
+
+      for await (const chunk of stream) {
+        const choice = chunk.choices[0];
+        if (!choice) continue;
+        const delta = choice.delta;
+        if (delta.content) {
+          currentContent += delta.content;
+          callbacks.onDelta?.(delta.content);
+        }
+        if (delta.tool_calls?.length) {
+          for (const tcDelta of delta.tool_calls) {
+            upsertToolCall(toolCallsByIndex, tcDelta);
+          }
         }
       }
-    }
 
-    const toolCalls = Array.from(toolCallsByIndex.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map((entry) => entry[1]);
+      lastReply = currentContent;
 
-    const stored: ChatMessage = {
-      role: "assistant",
-      content: assistantContent ? assistantContent : null,
-    };
-    if (toolCalls.length > 0) {
-      stored.tool_calls = toolCalls;
-    }
-    newMessages.push(stored);
+      const toolCalls = Array.from(toolCallsByIndex.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map((entry) => entry[1]);
 
-    const assistantMsg: LlmMessage =
-      toolCalls.length > 0
-        ? {
-            role: "assistant",
-            content: assistantContent ? assistantContent : null,
-            tool_calls: toolCalls.map((tc) => ({
-              id: tc.id,
-              type: "function",
-              function: {
-                name: tc.function.name,
-                arguments: tc.function.arguments,
-              },
-            })),
-          }
-        : { role: "assistant", content: assistantContent };
-
-    llmMessages.push(assistantMsg);
-
-    if (toolCalls.length === 0) {
-      await pushMessages(session.id, newMessages);
-      const allMessages = [...session.messages, ...newMessages];
-      return {
-        sessionId: session.id,
-        reply: assistantContent,
-        messages: allMessages,
+      const stored: ChatMessage = {
+        role: "assistant",
+        content: currentContent ? currentContent : null,
       };
-    }
+      if (toolCalls.length > 0) {
+        stored.tool_calls = toolCalls;
+      }
+      newMessages.push(stored);
 
-    for (const tc of toolCalls) {
-      callbacks.onToolCall?.(tc);
-      let args: Record<string, unknown> = {};
-      try {
-        const parsed: unknown = JSON.parse(tc.function.arguments);
-        if (isRecord(parsed)) args = parsed;
-      } catch {
-        /* invalid JSON, pass empty */
+      const assistantMsg: LlmMessage =
+        toolCalls.length > 0
+          ? {
+              role: "assistant",
+              content: currentContent ? currentContent : null,
+              tool_calls: toolCalls.map((tc) => ({
+                id: tc.id,
+                type: "function",
+                function: {
+                  name: tc.function.name,
+                  arguments: tc.function.arguments,
+                },
+              })),
+            }
+          : { role: "assistant", content: currentContent };
+
+      llmMessages.push(assistantMsg);
+
+      if (toolCalls.length === 0) {
+        await pushMessages(session.id, newMessages);
+        const allMessages = [...session.messages, ...newMessages];
+        return {
+          sessionId: session.id,
+          reply: currentContent,
+          messages: allMessages,
+        };
       }
 
-      const result = await registry.callTool(tc.function.name, args);
-      const content =
-        result.content
-          ?.map((c: Record<string, unknown>) =>
-            "text" in c ? String(c.text) : JSON.stringify(c),
-          )
-          .join("\n") ?? "";
+      for (const tc of toolCalls) {
+        if (signal?.aborted) break;
+        callbacks.onToolCall?.(tc);
+        let args: Record<string, unknown> = {};
+        try {
+          const parsed: unknown = JSON.parse(tc.function.arguments);
+          if (isRecord(parsed)) args = parsed;
+        } catch {
+          /* invalid JSON, pass empty */
+        }
 
-      const toolMsg: ChatMessage = {
-        role: "tool",
-        tool_call_id: tc.id,
-        content,
-      };
-      newMessages.push(toolMsg);
-      llmMessages.push({
-        role: "tool",
-        content,
-        tool_call_id: tc.id,
-      });
+        const result = await registry.callTool(tc.function.name, args);
+        const content =
+          result.content
+            ?.map((c: Record<string, unknown>) =>
+              "text" in c ? String(c.text) : JSON.stringify(c),
+            )
+            .join("\n") ?? "";
+
+        const toolMsg: ChatMessage = {
+          role: "tool",
+          tool_call_id: tc.id,
+          content,
+        };
+        newMessages.push(toolMsg);
+        llmMessages.push({
+          role: "tool",
+          content,
+          tool_call_id: tc.id,
+        });
+      }
+    } catch (err: unknown) {
+      if (signal?.aborted) {
+        // Save partial streaming content before breaking
+        if (currentContent) {
+          lastReply = currentContent;
+          newMessages.push({ role: "assistant", content: currentContent });
+        }
+        break;
+      }
+      throw err;
     }
   }
+
+  // Abort path: persist whatever we accumulated
+  if (newMessages.length > 1) {
+    await pushMessages(session.id, newMessages);
+  }
+  const allMessages = [...session.messages, ...newMessages];
+  return {
+    sessionId: session.id,
+    reply: lastReply,
+    messages: allMessages,
+  };
 }

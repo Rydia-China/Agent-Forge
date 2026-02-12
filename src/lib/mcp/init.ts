@@ -2,6 +2,7 @@ import { registry } from "./registry";
 import { sandboxManager } from "./sandbox";
 import { skillsMcp } from "./static/skills-mcp";
 import { mcpManagerMcp } from "./static/mcp-manager";
+import { bizDbMcp } from "./static/biz-db";
 import { prisma } from "@/lib/db";
 
 /**
@@ -15,6 +16,7 @@ export async function initMcp(): Promise<void> {
   // Static providers
   registry.register(skillsMcp);
   registry.register(mcpManagerMcp);
+  registry.register(bizDbMcp);
 
   // Dynamic providers from DB — load production version code
   const records = await prisma.mcpServer.findMany({

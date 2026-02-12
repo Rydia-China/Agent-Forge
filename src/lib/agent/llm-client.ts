@@ -63,14 +63,18 @@ export async function chatCompletion(
 export async function chatCompletionStream(
   messages: LlmMessage[],
   tools?: ChatCompletionTool[],
+  signal?: AbortSignal,
 ): Promise<AsyncIterable<ChatCompletionChunk>> {
   const client = getClient();
-  return client.chat.completions.create({
-    model: getModel(),
-    messages,
-    tools: tools?.length ? tools : undefined,
-    stream: true,
-  });
+  return client.chat.completions.create(
+    {
+      model: getModel(),
+      messages,
+      tools: tools?.length ? tools : undefined,
+      stream: true,
+    },
+    signal ? { signal } : undefined,
+  );
 }
 
 /* ------------------------------------------------------------------ */

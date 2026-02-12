@@ -137,25 +137,21 @@ function parseTags(input: string): string[] {
 function joinTags(tags: string[]): string {
   return tags.join(", ");
 }
-function extractToolInfo(calls: ToolCall[] | undefined): {
-  tools: string[];
-  skills: string[];
-} {
-  if (!calls || calls.length === 0) return { tools: [], skills: [] };
-  const toolNames = new Set<string>();
-  const skillNames = new Set<string>();
-  for (const call of calls) {
-    const name = call.function.name;
-    toolNames.add(name);
-    if (name.startsWith("skills__")) {
-      const args = parseJsonObject(call.function.arguments);
-      const skillName = args && typeof args.name === "string" ? args.name : null;
-      if (skillName && skillName.trim().length > 0) {
-        skillNames.add(skillName.trim());
-      }
-    }
-  }
-  return { tools: [...toolNames], skills: [...skillNames] };
+function formatToolCallSummary(call: ToolCall): string {
+  const name = call.function.name;
+  const parsed = parseJsonObject(call.function.arguments);
+  if (!parsed) return `Called ${name}`;
+  const keys = Object.keys(parsed);
+  if (keys.length === 0) return `Called ${name}`;
+  const preview = keys
+    .map((k) => {
+      const v = JSON.stringify(parsed[k]);
+      return `${k}: ${v.length > 60 ? v.slice(0, 60) + "…" : v}`;
+    })
+    .join(", ");
+  const truncated =
+    preview.length > 200 ? preview.slice(0, 200) + "…" : preview;
+  return `Called ${name}(${truncated})`;
 }
 
 const roleStyles: Record<
@@ -231,6 +227,7 @@ export default function Home() {
   const endRef = useRef<HTMLDivElement | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const selectedResourceRef = useRef<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     activeSessionIdRef.current = activeSession?.id ?? null;
@@ -567,6 +564,8 @@ export default function Home() {
   }, [messages, streamingReply, streamingTools]);
 
   const startNewChat = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
     setActiveSession(null);
     setMessages([]);
     setInput("");
@@ -574,6 +573,11 @@ export default function Home() {
     setIsStreaming(false);
     setStreamingReply(null);
     setStreamingTools([]);
+  }, []);
+
+  const stopStreaming = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
   }, []);
 
   const generateTitle = useCallback(async (id: string, seed: string) => {
@@ -619,6 +623,9 @@ export default function Home() {
     setStreamingReply("");
     setStreamingTools([]);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const payload: Record<string, unknown> = {
         message: text,
@@ -630,6 +637,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
       if (!res.ok || !res.body) {
@@ -722,8 +730,22 @@ export default function Home() {
         }
       }
     } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to stream message."));
+      if (err instanceof DOMException && err.name === "AbortError") {
+        // User clicked Stop — try loading persisted state
+        const sid = streamSessionId;
+        if (sid) {
+          try {
+            await refreshSessions();
+            await loadSession(sid);
+          } catch {
+            /* best effort */
+          }
+        }
+      } else {
+        setError(getErrorMessage(err, "Failed to stream message."));
+      }
     } finally {
+      abortRef.current = null;
       setIsSending(false);
       setIsStreaming(false);
       setStreamingReply(null);
@@ -904,10 +926,6 @@ export default function Home() {
                 .filter((message) => message.role !== "tool")
                 .map((message, index) => {
                 const style = roleStyles[message.role];
-                const toolInfo =
-                  message.role === "assistant"
-                    ? extractToolInfo(message.tool_calls)
-                    : { tools: [], skills: [] };
                 return (
                   <div
                     key={`${message.role}-${index}`}
@@ -928,23 +946,16 @@ export default function Home() {
                       <p className="text-sm text-slate-400">No content</p>
                     )}
                     {message.role === "assistant" &&
-                    (toolInfo.tools.length > 0 || toolInfo.skills.length > 0) ? (
-                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-300">
-                        {toolInfo.tools.map((tool) => (
-                          <span
-                            key={`tool-${tool}`}
-                            className="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5"
+                    message.tool_calls &&
+                    message.tool_calls.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        {message.tool_calls.map((call) => (
+                          <div
+                            key={call.id}
+                            className="rounded border border-slate-800 bg-slate-950/70 p-3 text-xs text-slate-200"
                           >
-                            tool: {tool}
-                          </span>
-                        ))}
-                        {toolInfo.skills.map((skill) => (
-                          <span
-                            key={`skill-${skill}`}
-                            className="rounded-full border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-emerald-100"
-                          >
-                            skill: {skill}
-                          </span>
+                            {formatToolCallSummary(call)}
+                          </div>
                         ))}
                       </div>
                     ) : null}
@@ -1013,14 +1024,24 @@ export default function Home() {
               <div className="text-xs text-slate-400">
                 {activeSession ? "Active session" : "New session"}
               </div>
-              <button
-                className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 disabled:opacity-60"
-                onClick={() => void sendMessage()}
-                disabled={isSending || input.trim().length === 0}
-                type="button"
-              >
-                {isStreaming ? "Streaming..." : isSending ? "Sending..." : "Send"}
-              </button>
+              {isStreaming ? (
+                <button
+                  className="rounded bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-600"
+                  onClick={stopStreaming}
+                  type="button"
+                >
+                  Stop
+                </button>
+              ) : (
+                <button
+                  className="rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-950 disabled:opacity-60"
+                  onClick={() => void sendMessage()}
+                  disabled={isSending || input.trim().length === 0}
+                  type="button"
+                >
+                  {isSending ? "Sending..." : "Send"}
+                </button>
+              )}
             </div>
           </div>
         </footer>

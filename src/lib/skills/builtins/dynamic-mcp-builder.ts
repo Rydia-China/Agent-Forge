@@ -31,9 +31,7 @@ tags:
 
 发起 HTTP 请求。同步返回简化 Response 对象（沙盒通过 WASM asyncify 透明挂起/恢复）。
 
-> **仅支持 HTTPS** — 沙盒 fetch 不支持明文 \`http://\`（会返回 status 0）。外部 API 必须使用 \`https://\` 地址。
-
-返回值：\`{ status: number, ok: boolean, body: string, json(): object, text(): string }\`
+返回值
 
 \`\`\`js
 // GET + JSON 解析

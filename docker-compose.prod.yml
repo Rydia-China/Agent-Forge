@@ -30,6 +30,20 @@ services:
     networks:
       - app-network
 
+  biz-db:
+    image: ghcr.io/xtdb/xtdb
+    restart: unless-stopped
+    volumes:
+      - xtdb_data:/var/lib/xtdb
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/healthz/alive || exit 1"]
+      start_period: 15s
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
   app:
     image: agent-forge-app:latest
     build:
@@ -42,14 +56,18 @@ services:
     environment:
       # 覆盖 DATABASE_URL 指向容器内 db 服务
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-12345678}@db:5432/${POSTGRES_DB:-agent_forge}
+      BUSINESS_DATABASE_URL: postgresql://biz-db:5432/xtdb
     depends_on:
       db:
+        condition: service_healthy
+      biz-db:
         condition: service_healthy
     networks:
       - app-network
 
 volumes:
   postgres_data:
+  xtdb_data:
 
 networks:
   app-network:

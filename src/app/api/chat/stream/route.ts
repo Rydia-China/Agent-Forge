@@ -49,27 +49,43 @@ export async function POST(req: NextRequest) {
 
   const { message, session_id, user } = parsed.data;
   const encoder = new TextEncoder();
+  const ac = new AbortController();
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const send = (event: string, data: unknown) => {
-        controller.enqueue(encoder.encode(toSse(event, data)));
+        try {
+          controller.enqueue(encoder.encode(toSse(event, data)));
+        } catch {
+          // Controller already closed (client disconnected)
+        }
+      };
+
+      const close = () => {
+        try { controller.close(); } catch { /* already closed */ }
       };
 
       runAgentStream(message, session_id, user, {
         onSession: (id) => send("session", { session_id: id }),
         onDelta: (text) => send("delta", { text }),
         onToolCall: (call) => send("tool", { summary: summarizeTool(call) }),
-      })
+      }, ac.signal)
         .then((result) => {
-          send("done", { session_id: result.sessionId, reply: result.reply });
-          controller.close();
+          if (!ac.signal.aborted) {
+            send("done", { session_id: result.sessionId, reply: result.reply });
+          }
+          close();
         })
         .catch((err: unknown) => {
-          const error = err instanceof Error ? err.message : String(err);
-          send("error", { error });
-          controller.close();
+          if (!ac.signal.aborted) {
+            const error = err instanceof Error ? err.message : String(err);
+            send("error", { error });
+          }
+          close();
         });
+    },
+    cancel() {
+      ac.abort();
     },
   });
 

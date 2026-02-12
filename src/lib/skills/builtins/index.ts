@@ -6,10 +6,12 @@ import matter from "gray-matter";
 
 import { raw as skillCreator } from "./skill-creator";
 import { raw as dynamicMcpBuilder } from "./dynamic-mcp-builder";
+import { raw as businessDatabase } from "./business-database";
 
 const RAW_SKILLS: readonly string[] = [
   skillCreator,
   dynamicMcpBuilder,
+  businessDatabase,
 ];
 
 /* ------------------------------------------------------------------ */

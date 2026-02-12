@@ -17,5 +17,22 @@ services:
       timeout: 5s
       retries: 5
 
+  biz-db:
+    image: ghcr.io/xtdb/xtdb
+    container_name: agent-forge-biz-db-dev
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+      - "8090:8080"
+    volumes:
+      - agent_forge_xtdb_data:/var/lib/xtdb
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/healthz/alive || exit 1"]
+      start_period: 15s
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   agent_forge_postgres_data:
+  agent_forge_xtdb_data:
