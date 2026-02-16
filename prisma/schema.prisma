@@ -95,3 +95,31 @@ model McpServerVersion {
   @@unique([mcpServerId, version])
   @@index([mcpServerId])
 }
+
+/// Api — 对外 CRUD 接口，声明式 SQL 操作绑定 biz-db 数据
+/// 实体表保留身份 + 启用状态 + production 指针，内容存在 ApiVersion
+model Api {
+  id                String       @id @default(cuid())
+  name              String       @unique
+  description       String
+  enabled           Boolean      @default(true)
+  productionVersion Int          @default(1)
+  versions          ApiVersion[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+/// ApiVersion — 不可变的版本快照
+model ApiVersion {
+  id          String   @id @default(cuid())
+  apiId       String
+  api         Api      @relation(fields: [apiId], references: [id], onDelete: Cascade)
+  version     Int
+  description String?
+  schema      Json     /// 数据模型定义（表、字段、类型）
+  operations  Json     /// 操作定义数组（声明式 SQL + 参数定义）
+  createdAt   DateTime @default(now())
+
+  @@unique([apiId, version])
+  @@index([apiId])
+}

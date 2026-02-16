@@ -79,6 +79,10 @@ type McpVersionSummary = {
   createdAt: string;
 };
 
+type BuiltinMcpSummary = {
+  name: string;
+};
+
 type ResourceSelection =
   | { type: "skill"; name: string }
   | { type: "mcp"; name: string };
@@ -198,6 +202,7 @@ export default function Home() {
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [mcps, setMcps] = useState<McpSummary[]>([]);
+  const [builtinMcps, setBuiltinMcps] = useState<BuiltinMcpSummary[]>([]);
   const [isLoadingResources, setIsLoadingResources] = useState(false);
   const [selectedResource, setSelectedResource] = useState<ResourceSelection | null>(
     null,
@@ -264,6 +269,11 @@ export default function Home() {
     return fallback?.title ?? null;
   }, [activeSession, sessions]);
 
+  const builtinSkills = useMemo(
+    () => skills.filter((skill) => skill.productionVersion === 0),
+    [skills],
+  );
+
   const dbSkills = useMemo(
     () => skills.filter((skill) => skill.productionVersion > 0),
     [skills],
@@ -306,12 +316,14 @@ export default function Home() {
   const loadResources = useCallback(async () => {
     setIsLoadingResources(true);
     try {
-      const [skillsData, mcpsData] = await Promise.all([
+      const [skillsData, mcpsData, builtinMcpsData] = await Promise.all([
         fetchJson<SkillSummary[]>("/api/skills"),
         fetchJson<McpSummary[]>("/api/mcps"),
+        fetchJson<BuiltinMcpSummary[]>("/api/mcps/builtins"),
       ]);
       setSkills(skillsData);
       setMcps(mcpsData);
+      setBuiltinMcps(builtinMcpsData);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to load resources."));
     } finally {
@@ -1061,7 +1073,50 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="space-y-6 overflow-y-auto">
+        <div className="flex-1 space-y-6 overflow-y-auto">
+          <section>
+            <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">内置 Skills</div>
+            {builtinSkills.length === 0 ? (
+              <div className="rounded border border-dashed border-slate-800 p-3 text-xs text-slate-500">
+                No built-in skills.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {builtinSkills.map((skill) => (
+                  <span
+                    key={skill.name}
+                    className="rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1 text-xs text-slate-400"
+                    title={skill.description}
+                  >
+                    {skill.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <div className="mb-2 text-xs uppercase tracking-wide text-slate-500">内置 MCPs</div>
+            {builtinMcps.length === 0 ? (
+              <div className="rounded border border-dashed border-slate-800 p-3 text-xs text-slate-500">
+                No built-in MCPs.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {builtinMcps.map((mcp) => (
+                  <span
+                    key={mcp.name}
+                    className="rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1 text-xs text-slate-400"
+                  >
+                    {mcp.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <hr className="border-slate-800" />
+
           <section>
             <div className="mb-2 text-sm font-semibold text-slate-100">Skills</div>
             {dbSkills.length === 0 ? (

@@ -78,6 +78,25 @@ export interface McpVersionSummary {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Static (built-in) MCP providers                                   */
+/* ------------------------------------------------------------------ */
+
+export interface StaticMcpSummary {
+  name: string;
+}
+
+/** Return provider names that are in the runtime registry but NOT in the DB. */
+export async function listStaticMcpProviders(): Promise<StaticMcpSummary[]> {
+  const dbNames = new Set(
+    (await prisma.mcpServer.findMany({ select: { name: true } })).map((s) => s.name),
+  );
+  return registry
+    .listProviders()
+    .filter((p) => !dbNames.has(p.name))
+    .map((p) => ({ name: p.name }));
+}
+
+/* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
