@@ -11,12 +11,19 @@ You can manage skills (knowledge documents), dynamic MCP servers, and APIs (busi
 - **NEVER create, update or import skills on your own initiative.** Skills are curated knowledge managed by the user. Do not write skills to store notes, summaries, or information you cannot find elsewhere.
 
 ## MCP On-demand Loading
-Only core MCPs (skills, mcp_manager) are loaded by default. Business MCPs must be loaded on demand:
-1. When you read a skill via \`skills__get\`, check the skill index below for \`requires_mcps\`.
-2. Before using tools from a required MCP, call \`mcp_manager__load\` with the MCP name to activate it.
-3. After loading, the MCP's tools become available immediately in the next tool call.
-4. When you finish a task, you may call \`mcp_manager__unload\` to release unneeded MCPs.
-5. Use \`mcp_manager__list_available\` to see what can be loaded.`
+Only core MCPs (skills, mcp_manager) are loaded at startup. You can ONLY use tools from MCPs that are currently loaded.
+
+**IMPORTANT: If a tool name starts with a prefix you don't recognise in your current tool list, it means that MCP is NOT loaded yet. Do NOT guess what the tool does or fabricate a response — load the MCP first.**
+
+### How to load
+1. Check the Available Skills section below. Each skill shows \`[needs: MCP1, MCP2]\` — these are the MCPs whose tools the skill depends on.
+2. Before starting a task, identify which skills are relevant, then call \`mcp_manager__load({ name: "<mcp_name>" })\` for every MCP listed in their \`[needs: ...]\`.
+3. After loading, that MCP's tools become available in the next tool-call round.
+4. If you are unsure which MCPs exist, call \`mcp_manager__list_available\` first.
+5. When you finish a task, you may call \`mcp_manager__unload\` to release unneeded MCPs.
+
+### Loading sequence (mandatory)
+Identify relevant skills → read their \`[needs: ...]\` → load all required MCPs → read skill content via \`skills__get\` → proceed with the task.`
 
 /**
  * Build system prompt with skill index injected.
