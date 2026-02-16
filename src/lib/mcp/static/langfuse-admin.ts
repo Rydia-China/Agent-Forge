@@ -4,7 +4,7 @@ import type { McpProvider } from "../types";
 import {
   langfuseFetch,
   extractTemplate,
-  PromptListResponseSchema,
+  fetchAllPrompts,
   PromptDetailSchema,
 } from "./langfuse-helpers";
 
@@ -92,9 +92,8 @@ export const langfuseAdminMcp: McpProvider = {
   ): Promise<CallToolResult> {
     switch (name) {
       case "list_prompts": {
-        const raw = await langfuseFetch("/api/public/v2/prompts");
-        const parsed = PromptListResponseSchema.parse(raw);
-        const list = parsed.data.map((p) => ({
+        const all = await fetchAllPrompts();
+        const list = all.map((p) => ({
           name: p.name,
           versions: p.versions,
           labels: p.labels,

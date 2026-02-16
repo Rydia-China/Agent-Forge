@@ -60,7 +60,31 @@ export const PromptListItemSchema = z.object({
 
 export const PromptListResponseSchema = z.object({
   data: z.array(PromptListItemSchema),
+  meta: z.object({
+    page: z.number(),
+    totalPages: z.number(),
+    totalItems: z.number(),
+  }).optional(),
 });
+
+/**
+ * Fetch ALL prompts from Langfuse, auto-paginating if totalPages > 1.
+ * Langfuse defaults to 10 per page; we request 100 per page (API max).
+ */
+export async function fetchAllPrompts(): Promise<z.infer<typeof PromptListItemSchema>[]> {
+  const firstRaw = await langfuseFetch("/api/public/v2/prompts?limit=100&page=1");
+  const first = PromptListResponseSchema.parse(firstRaw);
+  const all = [...first.data];
+
+  const totalPages = first.meta?.totalPages ?? 1;
+  for (let page = 2; page <= totalPages; page++) {
+    const raw = await langfuseFetch(`/api/public/v2/prompts?limit=100&page=${page}`);
+    const parsed = PromptListResponseSchema.parse(raw);
+    all.push(...parsed.data);
+  }
+
+  return all;
+}
 
 export const PromptDetailSchema = z.object({
   name: z.string(),

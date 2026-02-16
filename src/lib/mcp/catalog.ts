@@ -6,6 +6,7 @@ import { videoMgrMcp } from "./static/video-mgr";
 import { langfuseMcp } from "./static/langfuse";
 import { langfuseAdminMcp } from "./static/langfuse-admin";
 import { subagentMcp } from "./static/subagent";
+import { ossMcp } from "./static/oss";
 
 /* ------------------------------------------------------------------ */
 /*  Catalog entry                                                      */
@@ -53,6 +54,16 @@ const CATALOG: readonly McpCatalogEntry[] = [
     name: "subagent",
     provider: subagentMcp,
     available: !!process.env.LLM_API_KEY,
+  },
+  {
+    name: "oss",
+    provider: ossMcp,
+    available: !!(
+      process.env.OSS_REGION &&
+      process.env.OSS_BUCKET &&
+      process.env.OSS_ACCESS_KEY_ID &&
+      process.env.OSS_ACCESS_KEY_SECRET
+    ),
   },
 ];
 

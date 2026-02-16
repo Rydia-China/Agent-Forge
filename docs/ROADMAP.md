@@ -5,4 +5,5 @@
 
 - biz-db SQL 安全加固：ERASE 拦截加固、系统表访问阻断、多语句注入防护、语句类型白名单
 - API 一等公民：声明式 SQL 操作绑定 biz-db，版本管理 + HTTP 公开端点 + MCP tools + 自动生成文档
+- OSS 通用上传能力：oss-service + MCP provider + HTTP 上传端点 + builtin skill
 
