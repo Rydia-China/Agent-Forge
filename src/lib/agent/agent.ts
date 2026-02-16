@@ -89,10 +89,6 @@ async function runAgentInner(
   const userMsg: ChatMessage = { role: "user", content: userMessage };
   const newMessages: ChatMessage[] = [userMsg];
 
-  // Gather tools from registry
-  const mcpTools = await registry.listAllTools();
-  const openaiTools = mcpTools.map(mcpToolToOpenAI);
-
   // Build messages for LLM (history from DB + new user message)
   const llmMessages: LlmMessage[] = [
     { role: "system", content: systemPrompt },
@@ -102,6 +98,9 @@ async function runAgentInner(
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
+    // Refresh tools each iteration — MCP load/unload mid-conversation
+    const mcpTools = await registry.listAllTools();
+    const openaiTools = mcpTools.map(mcpToolToOpenAI);
 
     const completion = await chatCompletion(llmMessages, openaiTools);
     const choice = completion.choices[0];
@@ -213,9 +212,6 @@ async function runAgentStreamInner(
   const userMsg: ChatMessage = { role: "user", content: userMessage };
   const newMessages: ChatMessage[] = [userMsg];
 
-  const mcpTools = await registry.listAllTools();
-  const openaiTools = mcpTools.map(mcpToolToOpenAI);
-
   const llmMessages: LlmMessage[] = [
     { role: "system", content: systemPrompt },
     ...(session.messages as LlmMessage[]),
@@ -227,6 +223,10 @@ async function runAgentStreamInner(
   // eslint-disable-next-line no-constant-condition
   while (true) {
     if (signal?.aborted) break;
+
+    // Refresh tools each iteration — MCP load/unload mid-conversation
+    const mcpTools = await registry.listAllTools();
+    const openaiTools = mcpTools.map(mcpToolToOpenAI);
 
     let currentContent = "";
 

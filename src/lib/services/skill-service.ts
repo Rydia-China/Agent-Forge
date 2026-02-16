@@ -98,6 +98,7 @@ export interface SkillSummary {
   name: string;
   description: string;
   tags: string[];
+  requiresMcps: string[];
   productionVersion: number;
 }
 
@@ -117,6 +118,7 @@ export async function listSkills(tag?: string): Promise<SkillSummary[]> {
         name: s.name,
         description: prodVer.description,
         tags: s.tags,
+        requiresMcps: [],
         productionVersion: s.productionVersion,
       };
     });
@@ -128,6 +130,7 @@ export async function listSkills(tag?: string): Promise<SkillSummary[]> {
       name: b.name,
       description: b.description,
       tags: [...b.tags],
+      requiresMcps: [...b.requiresMcps],
       productionVersion: 0,
     }));
   const builtinNames = new Set(builtinList.map((b) => b.name));
@@ -306,7 +309,7 @@ export interface SkillVersionSummary {
 
 export async function listSkillVersions(name: string): Promise<SkillVersionSummary[]> {
   const skill = await prisma.skill.findUnique({ where: { name } });
-  if (!skill) throw new Error(`Skill "${name}" not found`);
+  if (!skill) return []; // builtins have no DB versions
 
   const versions = await prisma.skillVersion.findMany({
     where: { skillId: skill.id },

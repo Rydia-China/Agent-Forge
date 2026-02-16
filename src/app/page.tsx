@@ -81,6 +81,8 @@ type McpVersionSummary = {
 
 type BuiltinMcpSummary = {
   name: string;
+  available: boolean;
+  active: boolean;
 };
 
 type ResourceSelection =
@@ -554,7 +556,9 @@ export default function Home() {
   useEffect(() => {
     if (!selectedResource) return;
     if (selectedResource.type === "skill") {
-      const exists = dbSkills.some((skill) => skill.name === selectedResource.name);
+      const exists =
+        builtinSkills.some((s) => s.name === selectedResource.name) ||
+        dbSkills.some((s) => s.name === selectedResource.name);
       if (!exists) {
         setSelectedResource(null);
         setSkillDetail(null);
@@ -562,13 +566,15 @@ export default function Home() {
       }
       return;
     }
-    const exists = mcps.some((mcp) => mcp.name === selectedResource.name);
+    const exists =
+      builtinMcps.some((m) => m.name === selectedResource.name) ||
+      mcps.some((m) => m.name === selectedResource.name);
     if (!exists) {
       setSelectedResource(null);
       setMcpDetail(null);
       setMcpVersions([]);
     }
-  }, [dbSkills, mcps, selectedResource]);
+  }, [builtinSkills, builtinMcps, dbSkills, mcps, selectedResource]);
 
 
   useEffect(() => {
@@ -707,6 +713,7 @@ export default function Home() {
           if (typeof sid === "string") {
             doneSessionId = sid;
           }
+          void loadResources();
         } else if (event === "error") {
           const errMsg = payloadData.error;
           if (typeof errMsg === "string") {
@@ -768,6 +775,7 @@ export default function Home() {
     generateTitle,
     input,
     isSending,
+    loadResources,
     loadSession,
     refreshSessions,
     userName,
@@ -1082,15 +1090,28 @@ export default function Home() {
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {builtinSkills.map((skill) => (
-                  <span
-                    key={skill.name}
-                    className="rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1 text-xs text-slate-400"
-                    title={skill.description}
-                  >
-                    {skill.name}
-                  </span>
-                ))}
+                {builtinSkills.map((skill) => {
+                  const isSelected =
+                    selectedResource?.type === "skill" &&
+                    selectedResource.name === skill.name;
+                  return (
+                    <button
+                      key={skill.name}
+                      className={`rounded-full border px-3 py-1 text-xs ${
+                        isSelected
+                          ? "border-emerald-400 bg-emerald-500/20 text-emerald-100"
+                          : "border-emerald-400/60 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+                      }`}
+                      title={skill.description}
+                      onClick={() =>
+                        loadResourceDetail({ type: "skill", name: skill.name })
+                      }
+                      type="button"
+                    >
+                      {skill.name}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -1103,14 +1124,32 @@ export default function Home() {
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {builtinMcps.map((mcp) => (
-                  <span
-                    key={mcp.name}
-                    className="rounded-full border border-slate-700/60 bg-slate-900/40 px-3 py-1 text-xs text-slate-400"
-                  >
-                    {mcp.name}
-                  </span>
-                ))}
+                {builtinMcps.map((mcp) => {
+                  const isSelected =
+                    selectedResource?.type === "mcp" &&
+                    selectedResource.name === mcp.name;
+                  return (
+                    <button
+                      key={mcp.name}
+                      className={`rounded-full border px-3 py-1 text-xs ${
+                        isSelected
+                          ? "border-emerald-400 bg-emerald-500/20 text-emerald-100"
+                          : mcp.active
+                            ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+                            : mcp.available
+                              ? "border-slate-700/60 bg-slate-900/40 text-slate-400 hover:bg-slate-900/60"
+                              : "border-slate-800/40 bg-slate-950/40 text-slate-600 line-through"
+                      }`}
+                      title={mcp.active ? `${mcp.name} (active)` : mcp.available ? `${mcp.name} (available)` : `${mcp.name} (unavailable — missing env)`}
+                      onClick={() =>
+                        loadResourceDetail({ type: "mcp", name: mcp.name })
+                      }
+                      type="button"
+                    >
+                      {mcp.name}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -1126,16 +1165,16 @@ export default function Home() {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {dbSkills.map((skill) => {
-                  const isActive =
+                  const isSelected =
                     selectedResource?.type === "skill" &&
                     selectedResource.name === skill.name;
                   return (
                     <button
                       key={skill.name}
                       className={`rounded-full border px-3 py-1 text-xs ${
-                        isActive
+                        isSelected
                           ? "border-emerald-400 bg-emerald-500/20 text-emerald-100"
-                          : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500"
+                          : "border-emerald-400/60 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
                       }`}
                       title={skill.description}
                       onClick={() =>
@@ -1208,14 +1247,17 @@ export default function Home() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  className="rounded border border-rose-500/70 px-3 py-1 text-xs text-rose-100 hover:bg-rose-500/10"
-                  onClick={deleteSelectedResource}
-                  type="button"
-                  disabled={isDeletingResource}
-                >
-                  {isDeletingResource ? "Deleting..." : "Delete"}
-                </button>
+                {((selectedResource.type === "skill" && skillDetail && skillDetail.productionVersion > 0) ||
+                  (selectedResource.type === "mcp" && mcpDetail && mcpDetail.productionVersion > 0)) && (
+                  <button
+                    className="rounded border border-rose-500/70 px-3 py-1 text-xs text-rose-100 hover:bg-rose-500/10"
+                    onClick={deleteSelectedResource}
+                    type="button"
+                    disabled={isDeletingResource}
+                  >
+                    {isDeletingResource ? "Deleting..." : "Delete"}
+                  </button>
+                )}
               </div>
             </div>
 

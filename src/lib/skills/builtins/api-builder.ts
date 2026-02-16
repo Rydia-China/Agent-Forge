@@ -11,6 +11,9 @@ tags:
   - core
   - api
   - database
+requires_mcps:
+  - apis
+  - biz_db
 ---
 # API Builder
 

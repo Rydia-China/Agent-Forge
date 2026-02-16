@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import type { Prisma, McpServer, McpServerVersion } from "@/generated/prisma";
 import { sandboxManager } from "@/lib/mcp/sandbox";
 import { registry } from "@/lib/mcp/registry";
+import { getCatalogEntries, isCatalogEntry } from "@/lib/mcp/catalog";
 
 /* ------------------------------------------------------------------ */
 /*  Zod schemas                                                       */
@@ -83,17 +84,29 @@ export interface McpVersionSummary {
 
 export interface StaticMcpSummary {
   name: string;
+  available: boolean;
+  active: boolean;
 }
 
-/** Return provider names that are in the runtime registry but NOT in the DB. */
-export async function listStaticMcpProviders(): Promise<StaticMcpSummary[]> {
-  const dbNames = new Set(
-    (await prisma.mcpServer.findMany({ select: { name: true } })).map((s) => s.name),
-  );
-  return registry
-    .listProviders()
-    .filter((p) => !dbNames.has(p.name))
-    .map((p) => ({ name: p.name }));
+/** Core MCPs — always registered, cannot be unloaded. */
+const CORE_MCPS: readonly string[] = ["skills", "mcp_manager"];
+
+/**
+ * Return all built-in MCPs (core + catalog) with availability and
+ * active (loaded in registry) status.
+ */
+export function listStaticMcpProviders(): StaticMcpSummary[] {
+  const core: StaticMcpSummary[] = CORE_MCPS.map((name) => ({
+    name,
+    available: true,
+    active: true, // core MCPs are always active
+  }));
+  const catalog: StaticMcpSummary[] = getCatalogEntries().map((e) => ({
+    name: e.name,
+    available: e.available,
+    active: !!registry.getProvider(e.name),
+  }));
+  return [...core, ...catalog];
 }
 
 /* ------------------------------------------------------------------ */
@@ -151,6 +164,19 @@ export async function listMcpServers(): Promise<McpSummary[]> {
 }
 
 export async function getMcpServer(name: string): Promise<McpDetail | null> {
+  // Resolve built-in (core / catalog) MCPs first
+  if (CORE_MCPS.includes(name) || isCatalogEntry(name)) {
+    return {
+      name,
+      description: "Built-in MCP provider",
+      code: "",
+      enabled: true,
+      config: null,
+      version: 0,
+      productionVersion: 0,
+    };
+  }
+
   const server = await prisma.mcpServer.findUnique({ where: { name } });
   if (!server) return null;
 
@@ -293,7 +319,7 @@ export async function reloadMcpServer(name: string): Promise<string> {
 
 export async function listMcpServerVersions(name: string): Promise<McpVersionSummary[]> {
   const server = await prisma.mcpServer.findUnique({ where: { name } });
-  if (!server) throw new Error(`MCP server "${name}" not found`);
+  if (!server) return []; // builtins have no DB versions
 
   const versions = await prisma.mcpServerVersion.findMany({
     where: { mcpServerId: server.id },

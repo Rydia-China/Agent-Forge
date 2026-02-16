@@ -11,6 +11,8 @@ tags:
   - core
   - database
   - business
+requires_mcps:
+  - biz_db
 ---
 # Business Database (XTDB)
 

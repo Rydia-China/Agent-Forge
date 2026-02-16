@@ -11,6 +11,8 @@ tags:
   - core
   - subagent
   - delegation
+requires_mcps:
+  - subagent
 ---
 # Subagent 委托执行
 

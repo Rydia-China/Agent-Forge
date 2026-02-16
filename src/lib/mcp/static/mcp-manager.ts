@@ -1,6 +1,8 @@
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
 import { registry } from "../registry";
+import { getCatalogEntries, isCatalogEntry, loadFromCatalog } from "../catalog";
+import { sandboxManager } from "../sandbox";
 import * as svc from "@/lib/services/mcp-service";
 
 function text(t: string): CallToolResult {
@@ -18,8 +20,31 @@ export const mcpManagerMcp: McpProvider = {
     return [
       {
         name: "list",
-        description: "List all registered MCP servers (both static in-memory and dynamic from DB).",
+        description: "List active (loaded) MCPs and available (unloaded) MCPs. Use to see what is currently loaded and what can be loaded.",
         inputSchema: { type: "object" as const, properties: {} },
+      },
+      {
+        name: "list_available",
+        description: "List MCP servers that can be loaded but are not currently active. Includes catalog (built-in) and DB dynamic servers.",
+        inputSchema: { type: "object" as const, properties: {} },
+      },
+      {
+        name: "load",
+        description: "Load an MCP server into the active runtime so its tools become available. Works for both catalog (built-in) and DB dynamic servers. Call this when a skill's requires_mcps lists MCPs that are not yet active.",
+        inputSchema: {
+          type: "object" as const,
+          properties: { name: { type: "string", description: "MCP server name to load" } },
+          required: ["name"],
+        },
+      },
+      {
+        name: "unload",
+        description: "Unload an MCP server from the active runtime. Cannot unload core MCPs (skills, mcp_manager). Use after finishing a task to reduce active tool count.",
+        inputSchema: {
+          type: "object" as const,
+          properties: { name: { type: "string", description: "MCP server name to unload" } },
+          required: ["name"],
+        },
       },
       {
         name: "get_code",
@@ -115,9 +140,58 @@ export const mcpManagerMcp: McpProvider = {
   ): Promise<CallToolResult> {
     switch (name) {
       case "list": {
-        const runtime = registry.listProviders().map((p) => ({ name: p.name, source: "runtime" }));
-        const database = await svc.listMcpServers();
-        return json({ runtime, database });
+        const active = registry.listProviders().map((p) => p.name);
+        const catalog = getCatalogEntries().map((e) => ({
+          name: e.name,
+          available: e.available,
+          active: active.includes(e.name),
+        }));
+        const database = (await svc.listMcpServers()).map((m) => ({
+          name: m.name,
+          enabled: m.enabled,
+          active: active.includes(m.name),
+        }));
+        return json({ active, catalog, database });
+      }
+      case "list_available": {
+        const activeNames = new Set(registry.listProviders().map((p) => p.name));
+        const catalogAvailable = getCatalogEntries()
+          .filter((e) => e.available && !activeNames.has(e.name))
+          .map((e) => ({ name: e.name, source: "catalog" as const }));
+        const dbAvailable = (await svc.listMcpServers())
+          .filter((m) => m.enabled && !activeNames.has(m.name))
+          .map((m) => ({ name: m.name, source: "database" as const }));
+        return json([...catalogAvailable, ...dbAvailable]);
+      }
+      case "load": {
+        const { name: n } = svc.McpNameParams.parse(args);
+        // Try catalog first
+        if (isCatalogEntry(n)) {
+          loadFromCatalog(n);
+          return text(`Loaded catalog MCP "${n}" — its tools are now available`);
+        }
+        // Try DB dynamic
+        const server = await svc.getMcpServer(n);
+        if (!server) return text(`MCP "${n}" not found in catalog or database`);
+        const code = await svc.getMcpCode(n);
+        if (!code) return text(`MCP "${n}" has no production code`);
+        try {
+          const provider = await sandboxManager.load(n, code);
+          registry.replace(provider);
+          return text(`Loaded dynamic MCP "${n}" — its tools are now available`);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return text(`Failed to load MCP "${n}": ${msg}`);
+        }
+      }
+      case "unload": {
+        const { name: n } = svc.McpNameParams.parse(args);
+        const CORE = new Set(["skills", "mcp_manager"]);
+        if (CORE.has(n)) return text(`Cannot unload core MCP "${n}"`);
+        if (!registry.getProvider(n)) return text(`MCP "${n}" is not currently loaded`);
+        registry.unregister(n);
+        if (!isCatalogEntry(n)) sandboxManager.unload(n);
+        return text(`Unloaded MCP "${n}"`);
       }
       case "get_code": {
         const { name: n } = svc.McpNameParams.parse(args);

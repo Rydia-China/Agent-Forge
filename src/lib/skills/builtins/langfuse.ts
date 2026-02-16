@@ -11,6 +11,9 @@ tags:
   - core
   - prompt
   - langfuse
+requires_mcps:
+  - langfuse
+  - langfuse_admin
 ---
 # Langfuse Prompt 管理
 

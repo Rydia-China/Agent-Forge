@@ -12,6 +12,8 @@ tags:
   - multimodal
   - image
   - video
+requires_mcps:
+  - video_mgr
 ---
 # 多模态生成服务（video-mgr）
 

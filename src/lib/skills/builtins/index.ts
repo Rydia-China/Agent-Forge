@@ -31,6 +31,7 @@ export interface BuiltinSkill {
   readonly description: string;
   readonly content: string;
   readonly tags: readonly string[];
+  readonly requiresMcps: readonly string[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -46,6 +47,7 @@ function parse(raw: string): BuiltinSkill {
     description: String(data.description ?? ""),
     content: content.trim(),
     tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
+    requiresMcps: Array.isArray(data.requires_mcps) ? (data.requires_mcps as string[]) : [],
   };
 }
 
