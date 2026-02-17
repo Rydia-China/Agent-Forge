@@ -14,6 +14,7 @@ type ToolCall = {
 type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content?: string | null;
+  images?: string[];
   tool_calls?: ToolCall[];
   tool_call_id?: string;
 };
@@ -231,10 +232,14 @@ export default function Home() {
   const [streamingReply, setStreamingReply] = useState<string | null>(null);
   const [streamingTools, setStreamingTools] = useState<string[]>([]);
   const [isComposing, setIsComposing] = useState(false);
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const selectedResourceRef = useRef<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     activeSessionIdRef.current = activeSession?.id ?? null;
@@ -581,6 +586,37 @@ export default function Home() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingReply, streamingTools]);
 
+  const uploadImage = useCallback(async (file: File): Promise<string | null> => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("folder", "chat-images");
+    try {
+      const result = await fetchJson<{ url: string }>("/api/oss/upload", {
+        method: "POST",
+        body: form,
+      });
+      return result.url;
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Failed to upload image."));
+      return null;
+    }
+  }, []);
+
+  const handleImageFiles = useCallback(async (files: File[]) => {
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    if (imageFiles.length === 0) return;
+    setIsUploading(true);
+    try {
+      const urls = await Promise.all(imageFiles.map(uploadImage));
+      const valid = urls.filter((u): u is string => u !== null);
+      if (valid.length > 0) {
+        setPendingImages((prev) => [...prev, ...valid]);
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  }, [uploadImage]);
+
   const startNewChat = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -591,6 +627,7 @@ export default function Home() {
     setIsStreaming(false);
     setStreamingReply(null);
     setStreamingTools([]);
+    setPendingImages([]);
   }, []);
 
   const stopStreaming = useCallback(() => {
@@ -632,12 +669,16 @@ export default function Home() {
     setIsSending(true);
     setIsStreaming(true);
     setInput("");
+    const imagesToSend = [...pendingImages];
+    setPendingImages([]);
     const wasNewSession = !activeSession;
     const sessionId = activeSession?.id ?? undefined;
     let streamSessionId: string | null = sessionId ?? null;
     let doneSessionId: string | null = null;
     let streamError: string | null = null;
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    const userMsg: ChatMessage = { role: "user", content: text };
+    if (imagesToSend.length > 0) userMsg.images = imagesToSend;
+    setMessages((prev) => [...prev, userMsg]);
     setStreamingReply("");
     setStreamingTools([]);
 
@@ -650,6 +691,7 @@ export default function Home() {
         user: userName,
       };
       if (sessionId) payload.session_id = sessionId;
+      if (imagesToSend.length > 0) payload.images = imagesToSend;
 
       const res = await fetch("/api/chat/stream", {
         method: "POST",
@@ -777,6 +819,7 @@ export default function Home() {
     isSending,
     loadResources,
     loadSession,
+    pendingImages,
     refreshSessions,
     userName,
   ]);
@@ -805,6 +848,7 @@ export default function Home() {
     setIsStreaming(false);
     setStreamingReply(null);
     setStreamingTools([]);
+    setPendingImages([]);
   }, [userDraft]);
 
   return (
@@ -965,6 +1009,19 @@ export default function Home() {
                     ) : (
                       <p className="text-sm text-slate-400">No content</p>
                     )}
+                    {message.images && message.images.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {message.images.map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={url}
+                              alt={`Image ${i + 1}`}
+                              className="h-32 max-w-[200px] rounded border border-slate-700 object-cover hover:border-slate-500"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     {message.role === "assistant" &&
                     message.tool_calls &&
                     message.tool_calls.length > 0 ? (
@@ -1017,32 +1074,110 @@ export default function Home() {
 
         <footer className="border-t border-slate-800 px-6 py-4">
           <div className="flex flex-col gap-3">
-            <textarea
-              className="h-28 w-full resize-none rounded border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-              placeholder="Type your message… (Enter to send, Shift+Enter for newline)"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (isComposing) return;
-                const nativeEvent = event.nativeEvent;
-                const composing =
-                  typeof nativeEvent === "object" &&
-                  nativeEvent !== null &&
-                  "isComposing" in nativeEvent &&
-                  (nativeEvent as { isComposing?: boolean }).isComposing === true;
-                if (composing) return;
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void sendMessage();
-                }
+            {pendingImages.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {pendingImages.map((url, i) => (
+                  <div key={url} className="group relative">
+                    <img
+                      src={url}
+                      alt={`Pending ${i + 1}`}
+                      className="h-16 w-16 rounded border border-slate-700 object-cover"
+                    />
+                    <button
+                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-[10px] text-slate-200 opacity-0 transition group-hover:opacity-100 hover:bg-rose-500"
+                      onClick={() => setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
+                      type="button"
+                      aria-label="Remove image"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                {isUploading && (
+                  <div className="flex h-16 w-16 items-center justify-center rounded border border-dashed border-slate-600 text-xs text-slate-400">
+                    …
+                  </div>
+                )}
+              </div>
+            )}
+            <div
+              className={`relative rounded border transition ${
+                isDragOver
+                  ? "border-emerald-400 bg-emerald-500/10"
+                  : "border-slate-700"
+              }`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragOver(true);
               }}
-              onCompositionStart={() => setIsComposing(true)}
-              onCompositionEnd={() => setIsComposing(false)}
-              disabled={isSending}
-            />
+              onDragLeave={() => setIsDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragOver(false);
+                const files = Array.from(e.dataTransfer.files);
+                void handleImageFiles(files);
+              }}
+            >
+              <textarea
+                className="h-28 w-full resize-none rounded bg-slate-900 px-4 py-3 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                placeholder={isDragOver ? "松开以上传图片…" : "Type your message… (Enter to send, Shift+Enter for newline)"}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (isComposing) return;
+                  const nativeEvent = event.nativeEvent;
+                  const composing =
+                    typeof nativeEvent === "object" &&
+                    nativeEvent !== null &&
+                    "isComposing" in nativeEvent &&
+                    (nativeEvent as { isComposing?: boolean }).isComposing === true;
+                  if (composing) return;
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void sendMessage();
+                  }
+                }}
+                onPaste={(e) => {
+                  const files = Array.from(e.clipboardData.files);
+                  if (files.some((f) => f.type.startsWith("image/"))) {
+                    e.preventDefault();
+                    void handleImageFiles(files);
+                  }
+                }}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={() => setIsComposing(false)}
+                disabled={isSending}
+              />
+            </div>
             <div className="flex items-center justify-between">
-              <div className="text-xs text-slate-400">
-                {activeSession ? "Active session" : "New session"}
+              <div className="flex items-center gap-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    void handleImageFiles(files);
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  className="flex items-center gap-1 rounded border border-slate-700 px-2 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100 disabled:opacity-40"
+                  onClick={() => fileInputRef.current?.click()}
+                  type="button"
+                  disabled={isSending || isUploading}
+                  title="上传图片"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                    <path fillRule="evenodd" d="M1 5.25A2.25 2.25 0 0 1 3.25 3h13.5A2.25 2.25 0 0 1 19 5.25v9.5A2.25 2.25 0 0 1 16.75 17H3.25A2.25 2.25 0 0 1 1 14.75v-9.5Zm1.5 5.81v3.69c0 .414.336.75.75.75h13.5a.75.75 0 0 0 .75-.75v-2.69l-2.22-2.219a.75.75 0 0 0-1.06 0l-1.91 1.909-4.97-4.969a.75.75 0 0 0-1.06 0L2.5 11.06Zm6-2.56a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0Z" clipRule="evenodd" />
+                  </svg>
+                  {isUploading ? "上传中…" : "图片"}
+                </button>
+                <div className="text-xs text-slate-400">
+                  {activeSession ? "Active session" : "New session"}
+                </div>
               </div>
               {isStreaming ? (
                 <button

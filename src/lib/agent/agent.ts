@@ -56,11 +56,12 @@ export async function runAgent(
   userMessage: string,
   sessionId?: string,
   userName?: string,
+  images?: string[],
 ): Promise<AgentResponse> {
   await initMcp();
 
   const session = await getOrCreateSession(sessionId, userName);
-  return withSessionLock(session.id, () => runAgentInner(userMessage, session));
+  return withSessionLock(session.id, () => runAgentInner(userMessage, session, images));
 }
 
 export async function runAgentStream(
@@ -69,31 +70,60 @@ export async function runAgentStream(
   userName: string | undefined,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
+  images?: string[],
 ): Promise<AgentResponse> {
   await initMcp();
   const session = await getOrCreateSession(sessionId, userName);
   callbacks.onSession?.(session.id);
   return withSessionLock(session.id, () =>
-    runAgentStreamInner(userMessage, session, callbacks, signal),
+    runAgentStreamInner(userMessage, session, callbacks, signal, images),
   );
+}
+
+/**
+ * Convert a ChatMessage to an LlmMessage, building multi-part content
+ * when images are present (OpenAI vision format).
+ */
+function chatMsgToLlm(msg: ChatMessage): LlmMessage {
+  if (msg.images?.length && msg.content) {
+    return {
+      role: msg.role as "user",
+      content: [
+        { type: "text" as const, text: msg.content },
+        ...msg.images.map((url) => ({
+          type: "image_url" as const,
+          image_url: { url },
+        })),
+      ],
+    };
+  }
+  const base: Record<string, unknown> = {
+    role: msg.role,
+    content: msg.content ?? null,
+  };
+  if (msg.tool_calls?.length) base.tool_calls = msg.tool_calls;
+  if (msg.tool_call_id) base.tool_call_id = msg.tool_call_id;
+  return base as unknown as LlmMessage;
 }
 
 async function runAgentInner(
   userMessage: string,
   session: { id: string; messages: ChatMessage[] },
+  images?: string[],
 ): Promise<AgentResponse> {
   // Build system prompt (fresh each turn to pick up new skills)
   const systemPrompt = await buildSystemPrompt();
 
   // User message (will be persisted at the end)
   const userMsg: ChatMessage = { role: "user", content: userMessage };
+  if (images?.length) userMsg.images = images;
   const newMessages: ChatMessage[] = [userMsg];
 
   // Build messages for LLM (history from DB + new user message)
   const llmMessages: LlmMessage[] = [
     { role: "system", content: systemPrompt },
-    ...(session.messages as LlmMessage[]),
-    userMsg as LlmMessage,
+    ...session.messages.map(chatMsgToLlm),
+    chatMsgToLlm(userMsg),
   ];
 
   // eslint-disable-next-line no-constant-condition
@@ -206,16 +236,18 @@ async function runAgentStreamInner(
   session: { id: string; messages: ChatMessage[] },
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
+  images?: string[],
 ): Promise<AgentResponse> {
   const systemPrompt = await buildSystemPrompt();
 
   const userMsg: ChatMessage = { role: "user", content: userMessage };
+  if (images?.length) userMsg.images = images;
   const newMessages: ChatMessage[] = [userMsg];
 
   const llmMessages: LlmMessage[] = [
     { role: "system", content: systemPrompt },
-    ...(session.messages as LlmMessage[]),
-    userMsg as LlmMessage,
+    ...session.messages.map(chatMsgToLlm),
+    chatMsgToLlm(userMsg),
   ];
 
   let lastReply = "";

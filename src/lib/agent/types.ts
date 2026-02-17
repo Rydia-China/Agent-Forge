@@ -11,6 +11,7 @@ export interface ToolCall {
 export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool";
   content?: string | null;
+  images?: string[];
   tool_calls?: ToolCall[];
   tool_call_id?: string;
 }

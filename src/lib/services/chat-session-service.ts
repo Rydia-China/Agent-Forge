@@ -124,6 +124,7 @@ export async function pushMessages(
     sessionId,
     role: m.role,
     content: m.content ?? null,
+    images: m.images?.length ? m.images : [],
     toolCalls: m.tool_calls ? (m.tool_calls as unknown as Prisma.InputJsonValue) : undefined,
     toolCallId: m.tool_call_id ?? null,
   }));
@@ -153,6 +154,7 @@ export async function getMessages(
 interface DbMessageRow {
   role: string;
   content: string | null;
+  images: string[];
   toolCalls: Prisma.JsonValue;
   toolCallId: string | null;
 }
@@ -162,6 +164,9 @@ function dbMsgToChat(row: DbMessageRow): ChatMessage {
     role: row.role as ChatMessage["role"],
     content: row.content,
   };
+  if (row.images.length > 0) {
+    msg.images = row.images;
+  }
   if (row.toolCalls) {
     msg.tool_calls = row.toolCalls as unknown as ChatMessage["tool_calls"];
   }

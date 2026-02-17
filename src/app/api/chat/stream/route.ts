@@ -7,6 +7,7 @@ const StreamRequestSchema = z.object({
   message: z.string().min(1),
   session_id: z.string().optional(),
   user: z.string().optional(),
+  images: z.array(z.string().url()).optional(),
 });
 
 function toSse(event: string, data: unknown): string {
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  const { message, session_id, user } = parsed.data;
+  const { message, session_id, user, images } = parsed.data;
   const encoder = new TextEncoder();
   const ac = new AbortController();
 
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
         onSession: (id) => send("session", { session_id: id }),
         onDelta: (text) => send("delta", { text }),
         onToolCall: (call) => send("tool", { summary: summarizeTool(call) }),
-      }, ac.signal)
+      }, ac.signal, images)
         .then((result) => {
           if (!ac.signal.aborted) {
             send("done", { session_id: result.sessionId, reply: result.reply });
