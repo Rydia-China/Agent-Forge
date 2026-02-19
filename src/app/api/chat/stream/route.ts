@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
           onSession: (id) => send("session", { session_id: id }),
           onDelta: (text) => send("delta", { text }),
           onToolCall: (call) => send("tool", { summary: summarizeTool(call) }),
+          onUploadRequest: (req) => send("upload_request", req),
         }, ac.signal, images),
       )
         .then((result) => {

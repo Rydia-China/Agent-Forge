@@ -12,6 +12,7 @@ import { raw as videoMgr } from "./video-mgr";
 import { raw as langfuse } from "./langfuse";
 import { raw as subagent } from "./subagent";
 import { raw as oss } from "./oss";
+import { raw as upload } from "./upload";
 
 const RAW_SKILLS: readonly string[] = [
   skillCreator,
@@ -22,6 +23,7 @@ const RAW_SKILLS: readonly string[] = [
   langfuse,
   subagent,
   oss,
+  upload,
 ];
 
 /* ------------------------------------------------------------------ */

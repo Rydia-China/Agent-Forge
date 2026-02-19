@@ -90,6 +90,20 @@ type ResourceSelection =
   | { type: "skill"; name: string }
   | { type: "mcp"; name: string };
 
+type UploadRequestPayload = {
+  uploadId: string;
+  endpoint: string;
+  method: "PUT" | "POST";
+  headers?: Record<string, string>;
+  fields?: Record<string, string>;
+  fileFieldName: string;
+  accept?: string;
+  purpose?: string;
+  maxSizeMB?: number;
+  bodyTemplate?: Record<string, string>;
+  timeout?: number;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -281,6 +295,8 @@ export default function Home() {
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadDialog, setUploadDialog] = useState<UploadRequestPayload | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
   const selectedResourceRef = useRef<string | null>(null);
@@ -802,6 +818,11 @@ export default function Home() {
             doneSessionId = sid;
           }
           void loadResources();
+        } else if (event === "upload_request") {
+          const req = payloadData as UploadRequestPayload;
+          if (req.uploadId && req.endpoint) {
+            setUploadDialog(req);
+          }
         } else if (event === "error") {
           const errMsg = payloadData.error;
           if (typeof errMsg === "string") {
@@ -870,6 +891,123 @@ export default function Home() {
     userName,
   ]);
 
+
+  const executeUpload = useCallback(async (req: UploadRequestPayload, file: File) => {
+    const sessionId = activeSessionIdRef.current;
+    if (!sessionId) return;
+    setUploadProgress("上传中…");
+    const timeoutMs = (req.timeout ?? 60) * 1000;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      let res: Response;
+
+      if (req.bodyTemplate) {
+        // JSON body mode: read file as text, substitute placeholders
+        const fileText = await file.text();
+        const nameNoExt = file.name.replace(/\.[^.]+$/, "");
+        const now = new Date();
+        const ts = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+        const replacePlaceholders = (s: string) =>
+          s
+            .replace(/\{\{fileContent\}\}/g, fileText)
+            .replace(/\{\{fileName\}\}/g, nameNoExt)
+            .replace(/\{\{fileNameFull\}\}/g, file.name)
+            .replace(/\{\{timestamp\}\}/g, ts);
+        const jsonBody: Record<string, string> = {};
+        for (const [k, v] of Object.entries(req.bodyTemplate)) {
+          jsonBody[k] = replacePlaceholders(v);
+        }
+        setUploadProgress(`上传中… (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+        res = await fetch(req.endpoint, {
+          method: req.method,
+          headers: { "Content-Type": "application/json", ...req.headers },
+          body: JSON.stringify(jsonBody),
+          signal: ac.signal,
+        });
+      } else if (req.method === "PUT") {
+        res = await fetch(req.endpoint, {
+          method: "PUT",
+          headers: { ...req.headers },
+          body: file,
+          signal: ac.signal,
+        });
+      } else {
+        const form = new FormData();
+        if (req.fields) {
+          for (const [k, v] of Object.entries(req.fields)) {
+            form.append(k, v);
+          }
+        }
+        form.append(req.fileFieldName, file);
+        res = await fetch(req.endpoint, {
+          method: "POST",
+          headers: { ...req.headers },
+          body: form,
+          signal: ac.signal,
+        });
+      }
+
+      let url: string | undefined;
+      try {
+        const body: unknown = await res.json();
+        if (isRecord(body) && typeof body.url === "string") url = body.url;
+      } catch { /* non-JSON response */ }
+
+      await fetchJson(`/api/sessions/${sessionId}/upload-result`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploadId: req.uploadId,
+          success: res.ok,
+          url,
+          filename: file.name,
+          size: file.size,
+          error: res.ok ? undefined : `HTTP ${res.status}`,
+        }),
+      });
+      setUploadProgress(null);
+      setUploadDialog(null);
+      await loadSession(sessionId);
+    } catch (err: unknown) {
+      setUploadProgress(null);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError(`上传超时 (${req.timeout ?? 60}s)`);
+      } else {
+        setError(getErrorMessage(err, "Upload failed."));
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }, [loadSession]);
+
+  const cancelUpload = useCallback(async (req: UploadRequestPayload) => {
+    const sessionId = activeSessionIdRef.current;
+    setUploadDialog(null);
+    setUploadProgress(null);
+    if (!sessionId) return;
+    try {
+      await fetchJson(`/api/sessions/${sessionId}/upload-result`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploadId: req.uploadId,
+          success: false,
+        }),
+      });
+      await loadSession(sessionId);
+    } catch { /* best effort */ }
+  }, [loadSession]);
+
+  const openManualUpload = useCallback(() => {
+    setUploadDialog({
+      uploadId: crypto.randomUUID(),
+      endpoint: "",
+      method: "POST",
+      fileFieldName: "file",
+      purpose: "手动上传文件",
+    });
+  }, []);
 
   const deleteSession = useCallback(async () => {
     if (!activeSession) return;
@@ -1210,6 +1348,19 @@ export default function Home() {
                     <path fillRule="evenodd" d="M1 5.25A2.25 2.25 0 0 1 3.25 3h13.5A2.25 2.25 0 0 1 19 5.25v9.5A2.25 2.25 0 0 1 16.75 17H3.25A2.25 2.25 0 0 1 1 14.75v-9.5Zm1.5 5.81v3.69c0 .414.336.75.75.75h13.5a.75.75 0 0 0 .75-.75v-2.69l-2.22-2.219a.75.75 0 0 0-1.06 0l-1.91 1.909-4.97-4.969a.75.75 0 0 0-1.06 0L2.5 11.06Zm6-2.56a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0Z" clipRule="evenodd" />
                   </svg>
                   {isUploading ? "上传中…" : "图片"}
+                </button>
+                <button
+                  className="flex items-center gap-1 rounded border border-slate-700 px-2 py-1.5 text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100 disabled:opacity-40"
+                  onClick={openManualUpload}
+                  type="button"
+                  disabled={isSending || !!uploadDialog}
+                  title="上传文件到指定接口"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                    <path d="M9.25 13.25a.75.75 0 0 0 1.5 0V4.636l2.955 3.129a.75.75 0 0 0 1.09-1.03l-4.25-4.5a.75.75 0 0 0-1.09 0l-4.25 4.5a.75.75 0 1 0 1.09 1.03L9.25 4.636v8.614Z" />
+                    <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+                  </svg>
+                  文件
                 </button>
                 <div className="text-xs text-slate-400">
                   {activeSession ? "Active session" : "New session"}
@@ -1649,6 +1800,94 @@ export default function Home() {
               </div>
             )}
           </section>
+        </div>
+      )}
+      {uploadDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="mb-4 text-sm font-semibold text-slate-100">
+              {uploadDialog.purpose || "上传文件"}
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">目标接口 (endpoint)</label>
+                <input
+                  className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                  value={uploadDialog.endpoint}
+                  onChange={(e) => setUploadDialog((prev) => prev ? { ...prev, endpoint: e.target.value } : prev)}
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-slate-400">Method</label>
+                  <select
+                    className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                    value={uploadDialog.method}
+                    onChange={(e) => setUploadDialog((prev) => prev ? { ...prev, method: e.target.value as "PUT" | "POST" } : prev)}
+                  >
+                    <option value="POST">POST</option>
+                    <option value="PUT">PUT</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-slate-400">File field name</label>
+                  <input
+                    className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
+                    value={uploadDialog.fileFieldName}
+                    onChange={(e) => setUploadDialog((prev) => prev ? { ...prev, fileFieldName: e.target.value } : prev)}
+                  />
+                </div>
+              </div>
+
+              {uploadDialog.maxSizeMB && (
+                <div className="text-xs text-slate-400">
+                  最大文件大小: {uploadDialog.maxSizeMB}MB
+                </div>
+              )}
+
+              {uploadProgress ? (
+                <div className="rounded border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-sm text-sky-100">
+                  {uploadProgress}
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-xs text-slate-400">选择文件</label>
+                  <input
+                    type="file"
+                    accept={uploadDialog.accept || undefined}
+                    className="w-full text-sm text-slate-300 file:mr-3 file:rounded file:border-0 file:bg-slate-700 file:px-3 file:py-1.5 file:text-sm file:text-slate-100 hover:file:bg-slate-600"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (uploadDialog.maxSizeMB && file.size > uploadDialog.maxSizeMB * 1024 * 1024) {
+                        setError(`文件超过 ${uploadDialog.maxSizeMB}MB 限制`);
+                        return;
+                      }
+                      if (!uploadDialog.endpoint.trim()) {
+                        setError("请填写目标接口 endpoint");
+                        return;
+                      }
+                      void executeUpload(uploadDialog, file);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                className="rounded border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:border-slate-500"
+                onClick={() => void cancelUpload(uploadDialog)}
+                type="button"
+                disabled={!!uploadProgress}
+              >
+                取消
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </main>

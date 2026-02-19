@@ -41,6 +41,7 @@ export interface StreamCallbacks {
   onSession?: (sessionId: string) => void;
   onDelta?: (text: string) => void;
   onToolCall?: (call: ToolCall) => void;
+  onUploadRequest?: (req: unknown) => void;
 }
 
 /**
@@ -336,6 +337,13 @@ async function runAgentStreamInner(
         }
 
         const result = await registry.callTool(tc.function.name, args);
+
+        // Side-channel: upload provider attaches _uploadRequest
+        const uploadReq = (result as Record<string, unknown>)._uploadRequest;
+        if (uploadReq) {
+          callbacks.onUploadRequest?.(uploadReq);
+        }
+
         const content =
           result.content
             ?.map((c: Record<string, unknown>) =>
