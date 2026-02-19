@@ -8,7 +8,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .
-RUN pnpm exec prisma generate && pnpm run build
+RUN mkdir -p public && pnpm exec prisma generate && pnpm run build
 
 # Stage 2: 生产运行时
 FROM node:20-alpine AS runner
