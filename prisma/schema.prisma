@@ -97,6 +97,19 @@ model McpServerVersion {
   @@index([mcpServerId])
 }
 
+/// BizTableMapping — 逻辑表名到物理表名(UUID)的映射，实现 biz-db 用户隔离
+/// userName="_global_" 表示全局表，其他值为用户私有表
+model BizTableMapping {
+  id           String   @id @default(cuid())
+  userName     String
+  logicalName  String
+  physicalName String   @unique
+  createdAt    DateTime @default(now())
+
+  @@unique([userName, logicalName])
+  @@index([userName])
+}
+
 /// Api — 对外 CRUD 接口，声明式 SQL 操作绑定 biz-db 数据
 /// 实体表保留身份 + 启用状态 + production 指针，内容存在 ApiVersion
 model Api {

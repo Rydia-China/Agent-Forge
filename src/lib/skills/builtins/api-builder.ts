@@ -182,6 +182,13 @@ curl -X POST http://localhost:8001/api/public/customer-api/create \\
 curl -X POST http://localhost:8001/api/public/customer-api/list
 \\\`\\\`\\\`
 
+## 数据隔离与表名
+
+API 中的 SQL 表名会根据当前用户自动处理：
+- 通过 Agent 对话调用 API 时，SQL 中的表名自动映射到当前用户的表（或全局表）
+- 通过 HTTP 公开端点（\`/api/public/...\`）调用时，无用户上下文，SQL 直接操作裸表名（仅全局表可用）
+- 如果 API 需要通过 HTTP 公开给第三方使用，确保相关表已通过 \`biz_db__upgrade_global\` 升级为全局表
+
 ## SQL 注意事项
 
 ### 参数化

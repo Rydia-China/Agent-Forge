@@ -161,6 +161,52 @@ function formatToolCallSummary(call: ToolCall): string {
   return `Called ${name}(${truncated})`;
 }
 
+function summarizeToolCalls(calls: ToolCall[]): string {
+  const tools: string[] = [];
+  const skills: string[] = [];
+  for (const call of calls) {
+    const name = call.function.name;
+    if (name.startsWith("skills__")) {
+      const parsed = parseJsonObject(call.function.arguments);
+      const skillName = parsed && typeof parsed.name === "string" ? parsed.name : "skill";
+      if (!skills.includes(skillName)) skills.push(skillName);
+    } else {
+      if (!tools.includes(name)) tools.push(name);
+    }
+  }
+  const parts: string[] = [];
+  if (tools.length > 0) parts.push(`调用了工具：${tools.join("、")}`);
+  if (skills.length > 0) parts.push(`使用了 skill：${skills.join("、")}`);
+  return parts.join(" · ");
+}
+
+function mergeStreamingSummaries(summaries: string[]): string {
+  const tools: string[] = [];
+  const skills: string[] = [];
+  for (const s of summaries) {
+    const toolMatch = s.match(/^调用了工具：(.+)$/);
+    if (toolMatch) {
+      const name = toolMatch[1];
+      if (name && !tools.includes(name)) tools.push(name);
+      continue;
+    }
+    const skillMatch = s.match(/^使用了 skill[：:](.+)$/);
+    if (skillMatch) {
+      const name = skillMatch[1];
+      if (name && !skills.includes(name)) skills.push(name);
+      continue;
+    }
+    if (s === "使用了 skill") {
+      if (!skills.includes("skill")) skills.push("skill");
+      continue;
+    }
+  }
+  const parts: string[] = [];
+  if (tools.length > 0) parts.push(`调用了工具：${tools.join("、")}`);
+  if (skills.length > 0) parts.push(`使用了 skill：${skills.join("、")}`);
+  return parts.join(" · ");
+}
+
 const roleStyles: Record<
   ChatMessage["role"],
   { label: string; tone: string; chip: string }
@@ -1025,15 +1071,10 @@ export default function Home() {
                     {message.role === "assistant" &&
                     message.tool_calls &&
                     message.tool_calls.length > 0 ? (
-                      <div className="mt-3 space-y-2">
-                        {message.tool_calls.map((call) => (
-                          <div
-                            key={call.id}
-                            className="rounded border border-slate-800 bg-slate-950/70 p-3 text-xs text-slate-200"
-                          >
-                            {formatToolCallSummary(call)}
-                          </div>
-                        ))}
+                      <div className="mt-3">
+                        <div className="rounded border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs text-slate-200">
+                          {summarizeToolCalls(message.tool_calls)}
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -1054,15 +1095,10 @@ export default function Home() {
                     <p className="text-sm text-slate-400">Streaming…</p>
                   )}
                   {streamingTools.length > 0 ? (
-                    <div className="mt-3 space-y-2">
-                      {streamingTools.map((summary) => (
-                        <div
-                          key={summary}
-                          className="rounded border border-slate-800 bg-slate-950/70 p-3 text-xs text-slate-200"
-                        >
-                          {summary}
-                        </div>
-                      ))}
+                    <div className="mt-3">
+                      <div className="rounded border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs text-slate-200">
+                        {mergeStreamingSummaries(streamingTools)}
+                      </div>
                     </div>
                   ) : null}
                 </div>

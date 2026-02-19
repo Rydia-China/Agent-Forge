@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { runAgentStream } from "@/lib/agent/agent";
 import type { ToolCall } from "@/lib/agent/types";
+import { requestContext } from "@/lib/request-context";
 
 const StreamRequestSchema = z.object({
   message: z.string().min(1),
@@ -66,11 +67,13 @@ export async function POST(req: NextRequest) {
         try { controller.close(); } catch { /* already closed */ }
       };
 
-      runAgentStream(message, session_id, user, {
-        onSession: (id) => send("session", { session_id: id }),
-        onDelta: (text) => send("delta", { text }),
-        onToolCall: (call) => send("tool", { summary: summarizeTool(call) }),
-      }, ac.signal, images)
+      requestContext.run({ userName: user }, () =>
+        runAgentStream(message, session_id, user, {
+          onSession: (id) => send("session", { session_id: id }),
+          onDelta: (text) => send("delta", { text }),
+          onToolCall: (call) => send("tool", { summary: summarizeTool(call) }),
+        }, ac.signal, images),
+      )
         .then((result) => {
           if (!ac.signal.aborted) {
             send("done", { session_id: result.sessionId, reply: result.reply });

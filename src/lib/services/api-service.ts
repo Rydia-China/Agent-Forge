@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import type { Api, ApiVersion, Prisma } from "@/generated/prisma";
 import { bizPool } from "@/lib/biz-db";
 import { guardQuery, guardExecute } from "@/lib/sql-guard";
+import { getCurrentUserName } from "@/lib/request-context";
+import { rewriteSqlWithResolve } from "@/lib/biz-db-namespace";
 
 /* ------------------------------------------------------------------ */
 /*  Zod schemas — single source of truth for input validation         */
@@ -325,7 +327,10 @@ export async function callApiOperation(
     if (!check.ok) throw new Error(check.reason);
   }
 
-  const result = await bizPool.query(op.sql, paramValues);
+  // Rewrite logical table names → physical UUIDs via mapping table
+  const autoCreate = op.type === "execute";
+  const finalSql = await rewriteSqlWithResolve(getCurrentUserName(), op.sql, autoCreate);
+  const result = await bizPool.query(finalSql, paramValues);
 
   if (op.type === "query") {
     return {

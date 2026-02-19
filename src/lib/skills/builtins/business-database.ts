@@ -29,10 +29,22 @@ requires_mcps:
 
 ## 可用工具
 
-- \`biz_db__list_tables\` — 列出所有业务表
+- \`biz_db__list_tables\` — 列出所有业务表（你的表 + 全局表）
 - \`biz_db__describe_table\` — 查看表结构（列名、类型）
 - \`biz_db__query\` — 执行 SELECT 查询，返回 JSON
-- \`biz_db__execute\` — 执行 DDL/DML（CREATE TABLE、INSERT、UPDATE、DELETE 等）
+- \`biz_db__execute\` — 执行 DDL/DML（INSERT、UPDATE、DELETE 等）
+- \`biz_db__upgrade_global\` — 将你的表升级为全局表（不可逆）
+- \`biz_db__list_global_tables\` — 列出全局表
+
+## 数据隔离
+
+业务数据库按用户自动隔离。你写的 SQL 中使用逻辑表名，系统会自动映射到物理存储，**你无需关心底层细节**：
+
+- 你创建的表只有你能看到，其他用户看不到
+- \`biz_db__list_tables\` 会显示你的表和全局表，scope 字段区分
+- 查询时优先匹配你的表，找不到再查全局表
+- 如需让所有用户都能访问，使用 \`biz_db__upgrade_global\` 升级为全局表
+- 全局升级**不可逆**。如果表之间有关联，系统会提示一并升级
 
 ## SQL 语法
 
