@@ -73,14 +73,28 @@ export async function listSessions(
   return rows;
 }
 
-/** Get a single session with its messages. */
+export interface KeyResourceSummary {
+  id: string;
+  mediaType: string;
+  url: string | null;
+  data: unknown;
+  title: string | null;
+}
+
+/** Get a single session with its messages and key resources. */
 export async function getSession(
   sessionId: string,
-): Promise<{ id: string; title: string | null; messages: ChatMessage[] } | null> {
+): Promise<{
+  id: string;
+  title: string | null;
+  messages: ChatMessage[];
+  keyResources: KeyResourceSummary[];
+} | null> {
   const session = await prisma.chatSession.findUnique({
     where: { id: sessionId },
     include: {
       messages: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+      keyResources: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!session) return null;
@@ -88,6 +102,13 @@ export async function getSession(
     id: session.id,
     title: session.title,
     messages: session.messages.map(dbMsgToChat),
+    keyResources: session.keyResources.map((kr) => ({
+      id: kr.id,
+      mediaType: kr.mediaType,
+      url: kr.url,
+      data: kr.data,
+      title: kr.title,
+    })),
   };
 }
 

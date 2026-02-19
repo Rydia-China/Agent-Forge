@@ -44,13 +44,14 @@ model User {
 
 /// ChatSession — 对话会话，持久化多轮对话，按 user 隔离
 model ChatSession {
-  id        String        @id @default(cuid())
-  title     String?
-  userId    String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages  ChatMessage[]
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id           String         @id @default(cuid())
+  title        String?
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages     ChatMessage[]
+  keyResources KeyResource[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   @@index([userId])
 }
@@ -68,6 +69,20 @@ model ChatMessage {
   createdAt  DateTime    @default(now())
 
   @@index([sessionId, createdAt])
+}
+
+/// KeyResource — 关键资源，LLM 通过 present 工具展示的图片/视频/JSON，会话隔离
+model KeyResource {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  mediaType String      // "image" | "video" | "json"
+  url       String?
+  data      Json?
+  title     String?
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId])
 }
 
 /// McpServer — 动态 MCP，JS 代码存储于 DB，运行于 QuickJS WebAssembly 沙盒

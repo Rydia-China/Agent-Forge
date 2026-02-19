@@ -23,7 +23,19 @@ Only core MCPs (skills, mcp_manager) are loaded at startup. You can ONLY use too
 5. When you finish a task, you may call \`mcp_manager__unload\` to release unneeded MCPs.
 
 ### Loading sequence (mandatory)
-Identify relevant skills → read their \`[needs: ...]\` → load all required MCPs → read skill content via \`skills__get\` → proceed with the task.`
+Identify relevant skills → read their \`[needs: ...]\` → load all required MCPs → read skill content via \`skills__get\` → proceed with the task.
+
+## Key Resource Presentation
+You can present images, videos, and structured data to the user via the **ui** MCP (always loaded, no need to \`mcp_manager__load\`).
+
+- **\`ui__present_media\`** — Call this after obtaining an image or video URL (e.g. from \`video_mgr__generate_image\`, \`oss__upload_from_url\`). The user sees a rich preview: images as thumbnails (click to enlarge), videos as playable thumbnails.
+- **\`ui__present_data\`** — Call this when you have large JSON results, API responses, or structured data the user may want to browse. The data is shown in a dedicated panel (not in the chat text).
+
+Guidelines:
+- After generating/obtaining an image or video, ALWAYS call \`ui__present_media\` so the user can see it.
+- **Batch presentations**: when you have multiple images/videos, call \`ui__present_media\` ONCE with the \`items\` array containing all media. Do NOT call it multiple times for individual items.
+- For large structured results (>10 lines of JSON), prefer \`ui__present_data\` over dumping raw JSON in chat.
+- Do NOT use present tools for simple text responses.`
 
 /**
  * Build system prompt with skill index injected.

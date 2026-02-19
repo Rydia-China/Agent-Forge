@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { runAgentStream } from "@/lib/agent/agent";
+import type { KeyResourceEvent } from "@/lib/agent/agent";
 import type { ToolCall } from "@/lib/agent/types";
 import { requestContext } from "@/lib/request-context";
+import { addKeyResource } from "@/lib/services/key-resource-service";
+import type { Prisma } from "@/generated/prisma";
 
 const StreamRequestSchema = z.object({
   message: z.string().min(1),
@@ -67,12 +70,35 @@ export async function POST(req: NextRequest) {
         try { controller.close(); } catch { /* already closed */ }
       };
 
+      // Track session ID — may be set later by onSession for new sessions
+      let resolvedSessionId: string | undefined = session_id;
+
       requestContext.run({ userName: user }, () =>
         runAgentStream(message, session_id, user, {
-          onSession: (id) => send("session", { session_id: id }),
+          onSession: (id) => {
+            resolvedSessionId = id;
+            send("session", { session_id: id });
+          },
           onDelta: (text) => send("delta", { text }),
           onToolCall: (call) => send("tool", { summary: summarizeTool(call) }),
           onUploadRequest: (req) => send("upload_request", req),
+          onKeyResource: (resource: KeyResourceEvent) => {
+            const sid = resolvedSessionId;
+            if (sid) {
+              void addKeyResource(sid, {
+                mediaType: resource.mediaType,
+                url: resource.url,
+                data: resource.data as Prisma.InputJsonValue | undefined,
+                title: resource.title,
+              }).then((row) => {
+                send("key_resource", { ...resource, id: row.id });
+              }).catch(() => {
+                send("key_resource", resource);
+              });
+            } else {
+              send("key_resource", resource);
+            }
+          },
         }, ac.signal, images),
       )
         .then((result) => {

@@ -3,6 +3,8 @@ import type { McpProvider } from "../types";
 import { registry } from "../registry";
 import { getCatalogEntries, isCatalogEntry, loadFromCatalog } from "../catalog";
 import { sandboxManager } from "../sandbox";
+import { sessionMcpTracker } from "../session-tracker";
+import { getCurrentSessionId } from "@/lib/request-context";
 import * as svc from "@/lib/services/mcp-service";
 
 function text(t: string): CallToolResult {
@@ -140,34 +142,43 @@ export const mcpManagerMcp: McpProvider = {
   ): Promise<CallToolResult> {
     switch (name) {
       case "list": {
-        const active = registry.listProviders().map((p) => p.name);
+        const sessionId = getCurrentSessionId();
+        const visible = sessionId
+          ? sessionMcpTracker.getVisible(sessionId)
+          : new Set(registry.listProviders().map((p) => p.name));
+        const active = [...visible];
         const catalog = getCatalogEntries().map((e) => ({
           name: e.name,
           available: e.available,
-          active: active.includes(e.name),
+          active: visible.has(e.name),
         }));
         const database = (await svc.listMcpServers()).map((m) => ({
           name: m.name,
           enabled: m.enabled,
-          active: active.includes(m.name),
+          active: visible.has(m.name),
         }));
         return json({ active, catalog, database });
       }
       case "list_available": {
-        const activeNames = new Set(registry.listProviders().map((p) => p.name));
+        const sessionId = getCurrentSessionId();
+        const visible = sessionId
+          ? sessionMcpTracker.getVisible(sessionId)
+          : new Set(registry.listProviders().map((p) => p.name));
         const catalogAvailable = getCatalogEntries()
-          .filter((e) => e.available && !activeNames.has(e.name))
+          .filter((e) => e.available && !visible.has(e.name))
           .map((e) => ({ name: e.name, source: "catalog" as const }));
         const dbAvailable = (await svc.listMcpServers())
-          .filter((m) => m.enabled && !activeNames.has(m.name))
+          .filter((m) => m.enabled && !visible.has(m.name))
           .map((m) => ({ name: m.name, source: "database" as const }));
         return json([...catalogAvailable, ...dbAvailable]);
       }
       case "load": {
         const { name: n } = svc.McpNameParams.parse(args);
+        const sessionId = getCurrentSessionId();
         // Try catalog first
         if (isCatalogEntry(n)) {
-          loadFromCatalog(n);
+          loadFromCatalog(n); // ensure provider is in global pool
+          if (sessionId) sessionMcpTracker.load(sessionId, n);
           return text(`Loaded catalog MCP "${n}" — its tools are now available`);
         }
         // Try DB dynamic
@@ -178,6 +189,7 @@ export const mcpManagerMcp: McpProvider = {
         try {
           const provider = await sandboxManager.load(n, code);
           registry.replace(provider);
+          if (sessionId) sessionMcpTracker.load(sessionId, n);
           return text(`Loaded dynamic MCP "${n}" — its tools are now available`);
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -188,6 +200,13 @@ export const mcpManagerMcp: McpProvider = {
         const { name: n } = svc.McpNameParams.parse(args);
         const CORE = new Set(["skills", "mcp_manager"]);
         if (CORE.has(n)) return text(`Cannot unload core MCP "${n}"`);
+        const sessionId = getCurrentSessionId();
+        // Session-scoped: remove from this session's visibility only
+        if (sessionId) {
+          sessionMcpTracker.unload(sessionId, n);
+          return text(`Unloaded MCP "${n}" from this session`);
+        }
+        // Fallback (no session context, e.g. external MCP call): global unload
         if (!registry.getProvider(n)) return text(`MCP "${n}" is not currently loaded`);
         registry.unregister(n);
         if (!isCatalogEntry(n)) sandboxManager.unload(n);

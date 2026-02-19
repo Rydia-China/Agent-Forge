@@ -7,4 +7,5 @@
 - API 一等公民：声明式 SQL 操作绑定 biz-db，版本管理 + HTTP 公开端点 + MCP tools + 自动生成文档
 - OSS 通用上传能力：oss-service + MCP provider + HTTP 上传端点 + builtin skill
 - biz-db 用户数据隔离：表名 userName 前缀自动隔离、upgrade_global 单向升级、LLM 无感知
+- 多 Agent 并行仪表盘：AgentPanel 组件提取 + 状态机（idle/running/needs_attention/done）+ 多 panel 横向布局 + 事件内嵌处理
 
