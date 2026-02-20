@@ -9,6 +9,7 @@ import {
 import {
   getOrCreateSession,
   pushMessages,
+  stripDanglingToolCalls,
 } from "@/lib/services/chat-session-service";
 import { buildSystemPrompt } from "./system-prompt";
 import type { ChatMessage, ToolCall } from "./types";
@@ -403,11 +404,23 @@ async function runAgentStreamInnerCore(
         newMessages.push(toolMsg);
       }
 
+      // If aborted mid-execution, strip unmatched tool_calls so
+      // the persisted context stays valid for future LLM calls.
+      if (signal?.aborted) {
+        stripDanglingToolCalls(newMessages);
+        await flush();
+        break;
+      }
+
       // Flush assistant + tool messages so recall can find them
       await flush();
     } catch (err: unknown) {
       if (signal?.aborted) {
-        if (currentContent) {
+        // Strip dangling tool_calls that were accumulated before abort
+        stripDanglingToolCalls(newMessages);
+        if (currentContent && !newMessages.some(
+          (m) => m.role === "assistant" && m.content === currentContent,
+        )) {
           lastReply = currentContent;
           newMessages.push({ role: "assistant", content: currentContent });
         }
@@ -418,6 +431,7 @@ async function runAgentStreamInnerCore(
   }
 
   // Abort path: persist whatever we accumulated
+  stripDanglingToolCalls(newMessages);
   await flush();
   const allMessages = [...session.messages, ...newMessages];
   return {

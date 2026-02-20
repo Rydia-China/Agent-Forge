@@ -46,10 +46,9 @@ export async function getOrCreateSession(
       },
     });
     if (existing) {
-      return {
-        id: existing.id,
-        messages: existing.messages.map(dbMsgToChat),
-      };
+      const messages = existing.messages.map(dbMsgToChat);
+      stripDanglingToolCalls(messages);
+      return { id: existing.id, messages };
     }
   }
 
@@ -218,4 +217,37 @@ function dbMsgToChat(row: DbMessageRow): ChatMessage {
     msg.tool_call_id = row.toolCallId;
   }
   return msg;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Dangling tool_calls cleanup                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Strip tool_calls from assistant messages that have no matching tool
+ * response.  This happens when the agent is aborted mid-execution —
+ * the assistant message is persisted with tool_calls but the
+ * corresponding tool responses are never created.  OpenAI API rejects
+ * conversations with unmatched tool_calls, so we clean them on load
+ * and before flush on abort.
+ *
+ * Mutates in-place for efficiency.
+ */
+export function stripDanglingToolCalls(messages: ChatMessage[]): void {
+  const respondedIds = new Set<string>();
+  for (const m of messages) {
+    if (m.role === "tool" && m.tool_call_id) {
+      respondedIds.add(m.tool_call_id);
+    }
+  }
+  for (const msg of messages) {
+    if (msg.role !== "assistant" || !msg.tool_calls?.length) continue;
+    const matched = msg.tool_calls.filter((tc) => respondedIds.has(tc.id));
+    if (matched.length === msg.tool_calls.length) continue; // all matched
+    if (matched.length === 0) {
+      delete msg.tool_calls;
+    } else {
+      msg.tool_calls = matched;
+    }
+  }
 }
