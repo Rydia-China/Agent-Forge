@@ -22,10 +22,19 @@ type ChatMessage = {
   tool_call_id?: string;
 };
 
+type KeyResourceItem = {
+  id: string;
+  mediaType: string;
+  url?: string | null;
+  data?: unknown;
+  title?: string | null;
+};
+
 type SessionDetail = {
   id: string;
   title: string | null;
   messages: ChatMessage[];
+  keyResources?: KeyResourceItem[];
 };
 
 type UploadRequestPayload = {
@@ -133,6 +142,32 @@ export interface AgentPanelProps {
 }
 
 /* ------------------------------------------------------------------ */
+/*  JsonViewer                                                         */
+/* ------------------------------------------------------------------ */
+
+function JsonViewer({ data }: { data: unknown }) {
+  const [expanded, setExpanded] = useState(false);
+  const text = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  const preview = text.length > 200 ? text.slice(0, 200) + "\u2026" : text;
+  return (
+    <div className="rounded border border-slate-800 bg-slate-950/80 p-2">
+      <pre className="whitespace-pre-wrap break-all font-mono text-[10px] leading-relaxed text-slate-300">
+        {expanded ? text : preview}
+      </pre>
+      {text.length > 200 && (
+        <button
+          className="mt-1 text-[10px] text-sky-400 hover:text-sky-300"
+          onClick={() => setExpanded((v) => !v)}
+          type="button"
+        >
+          {expanded ? "收起" : "展开全部"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -161,6 +196,9 @@ export function AgentPanel({
   const [uploadDialog, setUploadDialog] = useState<UploadRequestPayload | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [status, setStatus] = useState<AgentStatus>("idle");
+  const [keyResources, setKeyResources] = useState<KeyResourceItem[]>([]);
+  const [showKeyResources, setShowKeyResources] = useState(true);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const endRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -203,6 +241,7 @@ export function AgentPanel({
         setSessionId(data.id);
         setTitle(data.title);
         setMessages(data.messages);
+        setKeyResources(data.keyResources ?? []);
         if (data.title) onTitleChange(data.title);
       })
       .catch((err: unknown) => {
@@ -356,6 +395,15 @@ export function AgentPanel({
             setUploadDialog(req);
             setStatus("needs_attention");
           }
+        } else if (event === "key_resource") {
+          const kr: KeyResourceItem = {
+            id: typeof payloadData.id === "string" ? payloadData.id : crypto.randomUUID(),
+            mediaType: typeof payloadData.mediaType === "string" ? payloadData.mediaType : "json",
+            url: typeof payloadData.url === "string" ? payloadData.url : null,
+            data: payloadData.data,
+            title: typeof payloadData.title === "string" ? payloadData.title : null,
+          };
+          setKeyResources((prev) => [...prev, kr]);
         } else if (event === "error") {
           const errMsg = payloadData.error;
           if (typeof errMsg === "string") streamError = errMsg;
@@ -386,6 +434,7 @@ export function AgentPanel({
         try {
           const data = await fetchJson<SessionDetail>(`/api/sessions/${finalSessionId}`);
           setMessages(data.messages);
+          setKeyResources(data.keyResources ?? []);
           if (data.title) {
             setTitle(data.title);
             onTitleChange(data.title);
@@ -403,6 +452,7 @@ export function AgentPanel({
           try {
             const data = await fetchJson<SessionDetail>(`/api/sessions/${s}`);
             setMessages(data.messages);
+            setKeyResources(data.keyResources ?? []);
           } catch {
             /* best effort */
           }
@@ -499,6 +549,7 @@ export function AgentPanel({
         try {
           const data = await fetchJson<SessionDetail>(`/api/sessions/${sid}`);
           setMessages(data.messages);
+          setKeyResources(data.keyResources ?? []);
         } catch {
           /* best effort */
         }
@@ -540,6 +591,7 @@ export function AgentPanel({
       });
       const data = await fetchJson<SessionDetail>(`/api/sessions/${sid}`);
       setMessages(data.messages);
+      setKeyResources(data.keyResources ?? []);
     } catch {
       /* best effort */
     }
@@ -549,7 +601,7 @@ export function AgentPanel({
   const displayTitle = title?.trim() || (sessionId ? "Untitled" : "New session");
 
   return (
-    <div className="flex h-full min-w-[400px] flex-1 flex-col border-r border-slate-800 last:border-r-0">
+    <div className="relative flex h-full min-w-[400px] flex-1 flex-col border-r border-slate-800 last:border-r-0">
       {/* Header */}
       <header className="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
         <div className="min-w-0 flex-1">
@@ -558,7 +610,22 @@ export function AgentPanel({
             {sessionId ? sessionId.slice(0, 12) + "…" : "Not created"}
           </div>
         </div>
+        {keyResources.length > 0 && (
+          <button
+            className={`shrink-0 rounded border px-2 py-1 text-[10px] transition ${showKeyResources ? "border-sky-400/60 bg-sky-500/10 text-sky-200" : "border-slate-700 text-slate-400 hover:border-slate-500"}`}
+            onClick={() => setShowKeyResources((v) => !v)}
+            type="button"
+            title="切换关键资源面板"
+          >
+            📎 {keyResources.length}
+          </button>
+        )}
       </header>
+
+      {/* Content area: chat + key resources */}
+      <div className="flex min-h-0 flex-1">
+        {/* Chat column */}
+        <div className="flex min-w-0 flex-1 flex-col">
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -728,6 +795,40 @@ export function AgentPanel({
         </div>
       </footer>
 
+        </div>{/* end chat column */}
+
+        {/* Key Resources panel */}
+        {keyResources.length > 0 && showKeyResources && (
+          <aside className="flex w-72 shrink-0 flex-col border-l border-slate-800 bg-slate-950/80">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-950/90 px-3 py-2 backdrop-blur">
+              <span className="text-[10px] uppercase tracking-wide text-slate-400">关键资源</span>
+              <span className="text-[10px] text-slate-500">{keyResources.length}</span>
+            </div>
+            <div className="flex-1 space-y-3 overflow-y-auto p-3">
+              {keyResources.map((kr) => (
+                <div key={kr.id} className="rounded border border-slate-800 bg-slate-900/40 p-2 fade-in">
+                  {kr.title && <div className="mb-1.5 text-[10px] font-medium text-slate-300">{kr.title}</div>}
+                  {kr.mediaType === "image" && kr.url && (
+                    <button type="button" className="block w-full" onClick={() => setLightboxUrl(kr.url!)}>
+                      <img src={kr.url} alt={kr.title ?? "Image"} className="w-full cursor-zoom-in rounded border border-slate-700 object-cover transition hover:border-slate-500" />
+                    </button>
+                  )}
+                  {kr.mediaType === "video" && kr.url && (
+                    <video src={kr.url} controls className="w-full rounded border border-slate-700" />
+                  )}
+                  {kr.mediaType === "json" && kr.data != null && (
+                    <JsonViewer data={kr.data} />
+                  )}
+                  {!kr.url && kr.mediaType !== "json" && (
+                    <div className="text-[10px] text-slate-500">No content</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </aside>
+        )}
+      </div>{/* end content area */}
+
       {/* Upload dialog — inline within panel */}
       {uploadDialog && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -784,6 +885,19 @@ export function AgentPanel({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Image lightbox */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm lightbox-in"
+          onClick={() => setLightboxUrl(null)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Escape") setLightboxUrl(null); }}
+        >
+          <img src={lightboxUrl} alt="Preview" className="max-h-[90vh] max-w-[90vw] rounded-lg shadow-2xl" />
         </div>
       )}
     </div>

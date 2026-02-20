@@ -44,11 +44,20 @@ export interface AgentResponse {
   messages: ChatMessage[];
 }
 
+export interface KeyResourceEvent {
+  id: string;
+  mediaType: "image" | "video" | "json";
+  url?: string;
+  data?: unknown;
+  title?: string;
+}
+
 export interface StreamCallbacks {
   onSession?: (sessionId: string) => void;
   onDelta?: (text: string) => void;
   onToolCall?: (call: ToolCall) => void;
   onUploadRequest?: (req: unknown) => void;
+  onKeyResource?: (resource: KeyResourceEvent) => void;
 }
 
 /**
@@ -384,6 +393,20 @@ async function runAgentStreamInnerCore(
         const uploadReq = (result as Record<string, unknown>)._uploadRequest;
         if (uploadReq) {
           callbacks.onUploadRequest?.(uploadReq);
+        }
+
+        // Side-channel: key resources (present_media / present_data)
+        const singleKr = (result as Record<string, unknown>)._keyResource;
+        if (isRecord(singleKr)) {
+          callbacks.onKeyResource?.(singleKr as unknown as KeyResourceEvent);
+        }
+        const batchKr = (result as Record<string, unknown>)._keyResources;
+        if (Array.isArray(batchKr)) {
+          for (const kr of batchKr) {
+            if (isRecord(kr)) {
+              callbacks.onKeyResource?.(kr as unknown as KeyResourceEvent);
+            }
+          }
         }
 
         const content =
