@@ -518,6 +518,16 @@ export function AgentPanel({
     [],
   );
 
+  const openManualUpload = useCallback(() => {
+    setUploadDialog({
+      uploadId: crypto.randomUUID(),
+      endpoint: "",
+      method: "POST",
+      fileFieldName: "file",
+      purpose: "手动上传文件",
+    });
+  }, []);
+
   const cancelUpload = useCallback(async (req: UploadRequestPayload) => {
     const sid = sessionIdRef.current;
     setUploadDialog(null);
@@ -701,6 +711,15 @@ export function AgentPanel({
                 disabled={isSending || isUploading}
               >
                 {isUploading ? "…" : "图片"}
+              </button>
+              <button
+                className="rounded border border-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:border-slate-500 disabled:opacity-40"
+                onClick={openManualUpload}
+                type="button"
+                disabled={isSending || !!uploadDialog}
+                title="上传文件到指定接口"
+              >
+                文件
               </button>
             </div>
             {isStreaming ? (
