@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentPanel } from "./components/AgentPanel";
-import { StatusBadge, type AgentStatus } from "./components/StatusBadge";
 import {
   fetchJson,
   formatTimestamp,
@@ -33,14 +32,6 @@ type McpVersionSummary = { version: number; description: string | null; isProduc
 type BuiltinMcpSummary = { name: string; available: boolean; active: boolean };
 type ResourceSelection = { type: "skill"; name: string } | { type: "mcp"; name: string };
 
-type PanelEntry = {
-  panelId: string;
-  sessionId?: string;
-  status: AgentStatus;
-  title: string | null;
-};
-
-const MAX_PANELS = 6;
 const USER_STORAGE_KEY = "agentForge.user";
 
 export default function Home() {
@@ -48,9 +39,8 @@ export default function Home() {
   const [userDraft, setUserDraft] = useState("default");
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
-  const [panels, setPanels] = useState<PanelEntry[]>(() => [
-    { panelId: crypto.randomUUID(), status: "idle", title: null },
-  ]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
+  const [panelKey, setPanelKey] = useState(() => crypto.randomUUID());
 
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [mcps, setMcps] = useState<McpSummary[]>([]);
@@ -71,8 +61,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const selectedResourceRef = useRef<string | null>(null);
-  const panelsRef = useRef(panels);
-  useEffect(() => { panelsRef.current = panels; }, [panels]);
+  const currentSessionIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => { currentSessionIdRef.current = currentSessionId; }, [currentSessionId]);
 
   useEffect(() => { if (typeof window === "undefined") return; const s = window.localStorage.getItem(USER_STORAGE_KEY); if (s && s.trim().length > 0) { setUserName(s); setUserDraft(s); } }, []);
   useEffect(() => { if (typeof window === "undefined") return; const n = userDraft.trim(); if (n.length > 0) window.localStorage.setItem(USER_STORAGE_KEY, n); else window.localStorage.removeItem(USER_STORAGE_KEY); }, [userDraft]);
@@ -91,7 +81,7 @@ export default function Home() {
   const loadResources = useCallback(async () => {
     setIsLoadingResources(true);
     try {
-      const sid = panelsRef.current.find((p) => p.sessionId)?.sessionId;
+      const sid = currentSessionIdRef.current;
       const sp = sid ? `?session=${encodeURIComponent(sid)}` : "";
       const [sk, mc, bm] = await Promise.all([
         fetchJson<SkillSummary[]>("/api/skills"),
@@ -189,45 +179,24 @@ export default function Home() {
     if (!builtinMcps.some((m) => m.name === selectedResource.name) && !mcps.some((m) => m.name === selectedResource.name)) { setSelectedResource(null); setMcpDetail(null); setMcpVersions([]); }
   }, [builtinSkills, builtinMcps, dbSkills, mcps, selectedResource]);
 
-  const [activePanelId, setActivePanelId] = useState<string>(panels[0]?.panelId ?? "");
-
-  /* ---- Panel management ---- */
-  const addPanel = useCallback((sessionId?: string, panelTitle?: string | null) => {
-    setPanels((prev) => {
-      if (prev.length >= MAX_PANELS) return prev;
-      if (sessionId) {
-        const existing = prev.find((p) => p.sessionId === sessionId);
-        if (existing) { setActivePanelId(existing.panelId); return prev; }
-      }
-      const newId = crypto.randomUUID();
-      setActivePanelId(newId);
-      return [...prev, { panelId: newId, sessionId, status: "idle" as const, title: panelTitle ?? null }];
-    });
+  /* ---- Session management ---- */
+  const switchSession = useCallback((sessionId?: string) => {
+    setCurrentSessionId(sessionId);
+    setPanelKey(crypto.randomUUID());
   }, []);
 
-  const removePanel = useCallback((panelId: string) => {
-    setPanels((prev) => {
-      const idx = prev.findIndex((p) => p.panelId === panelId);
-      const next = prev.filter((p) => p.panelId !== panelId);
-      if (next.length === 0) {
-        const fresh = { panelId: crypto.randomUUID(), status: "idle" as const, title: null };
-        setActivePanelId(fresh.panelId);
-        return [fresh];
-      }
-      setActivePanelId((cur) => {
-        if (cur !== panelId) return cur;
-        const newIdx = Math.min(idx, next.length - 1);
-        return next[newIdx]?.panelId ?? next[0]?.panelId ?? cur;
-      });
-      return next;
-    });
-  }, []);
+  const deleteSessionById = useCallback(async (sessionId: string) => {
+    if (!confirm("确定永久删除此会话？")) return;
+    try {
+      await fetchJson(`/api/sessions/${sessionId}`, { method: "DELETE" });
+      if (currentSessionIdRef.current === sessionId) switchSession(undefined);
+      await refreshSessions();
+      setNotice("已删除会话");
+    } catch (err: unknown) { setError(getErrorMessage(err, "Failed to delete session.")); }
+  }, [refreshSessions, switchSession]);
 
-  const updatePanelStatus = useCallback((panelId: string, status: AgentStatus) => { setPanels((prev) => prev.map((p) => p.panelId === panelId ? { ...p, status } : p)); }, []);
-  const updatePanelSession = useCallback((panelId: string, sessionId: string) => { setPanels((prev) => prev.map((p) => p.panelId === panelId ? { ...p, sessionId } : p)); }, []);
-  const updatePanelTitle = useCallback((panelId: string, title: string) => { setPanels((prev) => prev.map((p) => p.panelId === panelId ? { ...p, title } : p)); }, []);
   const handleRefresh = useCallback(() => { void refreshSessions(); void loadResources(); }, [refreshSessions, loadResources]);
-  const applyUserName = useCallback(() => { setUserName(userDraft.trim() || "default"); setPanels([{ panelId: crypto.randomUUID(), status: "idle", title: null }]); }, [userDraft]);
+  const applyUserName = useCallback(() => { setUserName(userDraft.trim() || "default"); switchSession(undefined); }, [userDraft, switchSession]);
 
   return (
     <main className="flex h-screen w-full bg-slate-950 text-slate-100">
@@ -246,7 +215,10 @@ export default function Home() {
         </div>
         <div className="mb-1.5 flex items-center justify-between">
           <div className="text-[10px] uppercase tracking-wide text-slate-400">Sessions</div>
-          <button className="text-[10px] text-slate-300 hover:text-white" onClick={refreshSessions} type="button">{isLoadingSessions ? "…" : "↻"}</button>
+          <div className="flex items-center gap-1.5">
+            <button className="text-[10px] text-slate-300 hover:text-white" onClick={() => switchSession(undefined)} type="button" title="新会话">+</button>
+            <button className="text-[10px] text-slate-300 hover:text-white" onClick={refreshSessions} type="button">{isLoadingSessions ? "…" : "↻"}</button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {sessions.length === 0 ? (
@@ -254,12 +226,22 @@ export default function Home() {
           ) : (
             <ul className="space-y-1">
               {sessions.map((s) => {
-                const isOpen = panels.some((p) => p.sessionId === s.id);
+                const isActive = currentSessionId === s.id;
                 return (
-                  <li key={s.id}>
-                    <button className={`w-full rounded border px-2 py-1.5 text-left text-[11px] transition ${isOpen ? "border-emerald-400/60 bg-emerald-500/10" : "border-slate-800 bg-slate-900/40 hover:border-slate-600"}`} onClick={() => addPanel(s.id, s.title)} type="button">
-                      <div className="truncate font-medium text-slate-100">{s.title?.trim() || "Untitled"}</div>
+                  <li key={s.id} className="group relative">
+                    <button className={`w-full rounded border px-2 py-1.5 text-left text-[11px] transition ${isActive ? "border-emerald-400/60 bg-emerald-500/10" : "border-slate-800 bg-slate-900/40 hover:border-slate-600"}`} onClick={() => switchSession(s.id)} type="button">
+                      <div className="truncate pr-4 font-medium text-slate-100">{s.title?.trim() || "Untitled"}</div>
                       <div className="text-[10px] text-slate-400">{formatTimestamp(s.updatedAt)}</div>
+                    </button>
+                    <button
+                      className="absolute right-1.5 top-1.5 rounded p-0.5 text-slate-600 opacity-0 transition hover:bg-slate-800 hover:text-rose-400 group-hover:opacity-100"
+                      onClick={(e) => { e.stopPropagation(); void deleteSessionById(s.id); }}
+                      type="button"
+                      title="永久删除"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
+                        <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5A.75.75 0 0 1 9.95 6Z" clipRule="evenodd" />
+                      </svg>
                     </button>
                   </li>
                 );
@@ -271,50 +253,15 @@ export default function Home() {
 
       {/* Main */}
       <section className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-1 border-b border-slate-800 px-3 py-1.5">
-          {panels.map((p) => (
-            <div
-              key={p.panelId}
-              className={`group flex cursor-pointer items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] transition ${
-                p.panelId === activePanelId
-                  ? "border-emerald-400/60 bg-emerald-500/10 text-slate-100"
-                  : "border-slate-700 bg-slate-900/60 text-slate-400 hover:border-slate-500 hover:text-slate-200"
-              }`}
-              onClick={() => setActivePanelId(p.panelId)}
-            >
-              <StatusBadge status={p.status} />
-              <span className="max-w-[100px] truncate">{p.title?.trim() || "New"}</span>
-              <button
-                className="ml-0.5 rounded p-0.5 text-slate-500 opacity-0 transition hover:bg-slate-700 hover:text-slate-200 group-hover:opacity-100"
-                onClick={(e) => { e.stopPropagation(); removePanel(p.panelId); }}
-                type="button"
-                aria-label="Close tab"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
-                  <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
-                </svg>
-              </button>
-            </div>
-          ))}
-          {panels.length < MAX_PANELS && (
-            <button className="rounded border border-dashed border-slate-700 px-2.5 py-1 text-[11px] text-slate-400 hover:border-slate-500 hover:text-slate-200" onClick={() => addPanel()} type="button">+</button>
-          )}
-        </header>
-        <div className="relative flex-1 overflow-hidden">
-          {panels.map((p) => (
-            <div key={p.panelId} className={`absolute inset-0 flex ${p.panelId === activePanelId ? "" : "pointer-events-none invisible"}`}>
-              <AgentPanel
-                initialSessionId={p.sessionId}
-                userName={userName}
-                onStatusChange={(s) => updatePanelStatus(p.panelId, s)}
-                onSessionCreated={(sid) => updatePanelSession(p.panelId, sid)}
-                onTitleChange={(t) => updatePanelTitle(p.panelId, t)}
-                onClose={() => removePanel(p.panelId)}
-                onRefreshNeeded={handleRefresh}
-              />
-            </div>
-          ))}
-        </div>
+        <AgentPanel
+          key={panelKey}
+          initialSessionId={currentSessionId}
+          userName={userName}
+          onStatusChange={() => {}}
+          onSessionCreated={(sid) => setCurrentSessionId(sid)}
+          onTitleChange={() => {}}
+          onRefreshNeeded={handleRefresh}
+        />
       </section>
 
       {/* Right sidebar */}
