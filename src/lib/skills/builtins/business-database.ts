@@ -55,24 +55,23 @@ XTDB 通过 PostgreSQL wire 协议通信，但它**不是 PostgreSQL**。核心�
 XTDB **没有 CREATE TABLE 语句**。直接 INSERT 即可，表和 schema 自动创建：
 
 \\\`\\\`\\\`sql
--- 直接插入，表 customers 自动创建，schema 自动推断
-INSERT INTO customers (_id, name, email, created_at)
-VALUES (1, 'Alice', 'alice@example.com', CURRENT_TIMESTAMP);
+-- 直接插入，表 customers 自动创建，_id 自动生成
+INSERT INTO customers (name, email, created_at)
+VALUES ('Alice', 'alice@example.com', CURRENT_TIMESTAMP);
+-- 响应: OK — 1 row(s) affected. Auto-generated _id: a1b2c3d4-...
 
 -- 后续插入可以有不同的字段，schema 会自动扩展
-INSERT INTO customers (_id, name, email, phone)
-VALUES (2, 'Bob', 'bob@example.com', '13800138000');
+INSERT INTO customers (name, email, phone)
+VALUES ('Bob', 'bob@example.com', '13800138000');
 \\\`\\\`\\\`
 
-### _id 字段（必须）
+### _id 字段（自动生成）
 
-XTDB 要求每行有一个 \`_id\` 字段作为实体标识。**必须手动指定值**：
-- 整数：\`_id = 1, 2, 3...\`（推荐用递增整数，简单直观）
-- UUID 字符串：\`_id = 'a1b2c3...'\`
-- 任意唯一值均可
+XTDB 要求每行有一个 \`_id\` 字段作为实体标识。**你不需要手动指定 _id** — 如果 INSERT 语句中省略了 \`_id\`，系统会自动生成 UUID 并在响应中返回。
 
-**注意**：没有 \`AUTO_INCREMENT\` 或 \`GENERATED ALWAYS AS IDENTITY\`。你需要自己管理 ID 生成。
-建议：插入前先查当前最大 ID，然后 +1。
+- 推荐：省略 \`_id\`，让系统自动生成 UUID
+- 也可手动指定：整数 \`_id = 1\` 或字符串 \`_id = 'my-key'\`
+- 响应中会返回生成的 \`_id\`，用于后续 UPDATE/DELETE/查询
 
 ### 无约束
 
@@ -82,13 +81,18 @@ XTDB 不支持：\`NOT NULL\`、\`DEFAULT\`、\`FOREIGN KEY\`、\`UNIQUE\`、\`C
 ### 插入数据
 
 \\\`\\\`\\\`sql
+-- _id 省略，自动生成 UUID
+INSERT INTO customers (name, email)
+VALUES ('Alice', 'alice@example.com');
+
+-- 批量插入，每行自动分配不同的 UUID
+INSERT INTO customers (name, email) VALUES
+  ('Bob', 'bob@example.com'),
+  ('Carol', 'carol@example.com');
+
+-- 也可以手动指定 _id
 INSERT INTO customers (_id, name, email)
 VALUES (1, 'Alice', 'alice@example.com');
-
--- 批量插入
-INSERT INTO customers (_id, name, email) VALUES
-  (2, 'Bob', 'bob@example.com'),
-  (3, 'Carol', 'carol@example.com');
 \\\`\\\`\\\`
 
 ### 更新和删除
@@ -135,7 +139,7 @@ XTDB 自动为每行维护以下系统字段（查询时可选择性返回）：
 ### 建模
 
 - 每个业务实体一张表（customers、orders、products…）
-- \`_id\` 必须手动指定，推荐用递增整数
+- \`_id\` 自动生成 UUID（省略即可），也可手动指定整数或字符串
 - 关联关系通过字段引用（如 \`task.project_id\` 引用 \`projects._id\`），数据库不强制
 - 不需要 \`updated_at\` / \`created_at\` 字段 — XTDB 的 \`_system_from\` 自动记录
 

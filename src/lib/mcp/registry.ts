@@ -12,6 +12,7 @@ import {
  */
 class McpRegistry {
   private providers = new Map<string, McpProvider>();
+  private protectedNames = new Set<string>();
   initialized = false;
 
   register(provider: McpProvider): void {
@@ -21,12 +22,28 @@ class McpRegistry {
     this.providers.set(provider.name, provider);
   }
 
+  /** Mark a provider name as protected (cannot be replaced or unregistered by custom code). */
+  protect(name: string): void {
+    this.protectedNames.add(name);
+  }
+
+  /** Check if a provider name is protected (core or catalog). */
+  isProtected(name: string): boolean {
+    return this.protectedNames.has(name);
+  }
+
   unregister(name: string): void {
+    if (this.protectedNames.has(name)) {
+      throw new Error(`Cannot unregister protected MCP provider "${name}"`);
+    }
     this.providers.delete(name);
   }
 
-  /** Replace (or register) a provider by name */
+  /** Replace (or register) a provider by name. Cannot replace protected providers. */
   replace(provider: McpProvider): void {
+    if (this.protectedNames.has(provider.name)) {
+      throw new Error(`Cannot replace protected MCP provider "${provider.name}"`);
+    }
     this.providers.set(provider.name, provider);
   }
 

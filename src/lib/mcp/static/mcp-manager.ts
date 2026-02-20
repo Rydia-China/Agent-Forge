@@ -41,7 +41,7 @@ export const mcpManagerMcp: McpProvider = {
       },
       {
         name: "unload",
-        description: "Unload an MCP server from the active runtime. Cannot unload core MCPs (skills, mcp_manager). Use after finishing a task to reduce active tool count.",
+        description: "Unload an MCP server from the active runtime. Cannot unload system built-in MCPs. Use after finishing a task to reduce active tool count.",
         inputSchema: {
           type: "object" as const,
           properties: { name: { type: "string", description: "MCP server name to unload" } },
@@ -198,8 +198,7 @@ export const mcpManagerMcp: McpProvider = {
       }
       case "unload": {
         const { name: n } = svc.McpNameParams.parse(args);
-        const CORE = new Set(["skills", "mcp_manager"]);
-        if (CORE.has(n)) return text(`Cannot unload core MCP "${n}"`);
+        if (registry.isProtected(n)) return text(`Cannot unload system built-in MCP "${n}"`);
         const sessionId = getCurrentSessionId();
         // Session-scoped: remove from this session's visibility only
         if (sessionId) {
@@ -209,7 +208,7 @@ export const mcpManagerMcp: McpProvider = {
         // Fallback (no session context, e.g. external MCP call): global unload
         if (!registry.getProvider(n)) return text(`MCP "${n}" is not currently loaded`);
         registry.unregister(n);
-        if (!isCatalogEntry(n)) sandboxManager.unload(n);
+        sandboxManager.unload(n);
         return text(`Unloaded MCP "${n}"`);
       }
       case "get_code": {

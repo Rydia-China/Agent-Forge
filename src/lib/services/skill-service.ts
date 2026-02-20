@@ -9,7 +9,18 @@ import {
 } from "@/lib/skills/builtins";
 
 /* ------------------------------------------------------------------ */
-/*  Zod schemas — single source of truth for input validation         */
+/*  Built-in name protection                                          */
+/* ------------------------------------------------------------------ */
+
+/** Throw if the name collides with a built-in skill. */
+function rejectIfBuiltin(name: string): void {
+  if (getBuiltinSkill(name)) {
+    throw new Error(`Skill name "${name}" is reserved by a system built-in skill and cannot be created, updated, or deleted`);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Zod schemas
 /* ------------------------------------------------------------------ */
 
 export const SkillListParams = z.object({
@@ -193,6 +204,7 @@ export interface SkillCreateResult {
 export async function createSkill(
   params: z.infer<typeof SkillCreateParams>,
 ): Promise<SkillCreateResult> {
+  rejectIfBuiltin(params.name);
   const skill = await prisma.skill.create({
     data: {
       name: params.name,
@@ -221,6 +233,7 @@ export interface SkillUpdateResult {
 export async function updateSkill(
   params: z.infer<typeof SkillUpdateParams>,
 ): Promise<SkillUpdateResult> {
+  rejectIfBuiltin(params.name);
   const found = await prisma.skill.findUnique({
     where: { name: params.name },
     include: { versions: { orderBy: { version: "desc" }, take: 1 } },
@@ -259,6 +272,7 @@ export async function updateSkill(
 }
 
 export async function deleteSkill(name: string): Promise<void> {
+  rejectIfBuiltin(name);
   await prisma.skill.delete({ where: { name } });
 }
 
@@ -268,6 +282,7 @@ export async function importSkill(
 ): Promise<SkillCreateResult | SkillUpdateResult> {
   const parsed = parseSkillMd(params.skillMd);
   if (!parsed.name) throw new Error("SKILL.md missing 'name' in frontmatter");
+  rejectIfBuiltin(parsed.name);
 
   const existing = await prisma.skill.findUnique({ where: { name: parsed.name } });
   if (!existing) {

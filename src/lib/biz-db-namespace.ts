@@ -15,6 +15,7 @@
 import crypto from "node:crypto";
 import { prisma } from "./db";
 import { bizPool } from "./biz-db";
+import { replaceInCode, codeOnly } from "./sql-segments";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -134,9 +135,10 @@ const TABLE_REF_RE =
 /** Collect all logical table names referenced in a SQL string. */
 export function extractTableNames(sql: string): string[] {
   const names: string[] = [];
+  const code = codeOnly(sql);
   let m: RegExpExecArray | null;
   TABLE_REF_RE.lastIndex = 0;
-  while ((m = TABLE_REF_RE.exec(sql)) !== null) {
+  while ((m = TABLE_REF_RE.exec(code)) !== null) {
     names.push(m[3]!);
   }
   return names;
@@ -172,16 +174,21 @@ export async function buildRewriteMap(
 
 /**
  * Rewrite all table references in a SQL string using a logical→physical map.
+ * String-literal-aware: keywords inside '...' values are never matched.
  */
 export function applySqlRewrite(
   sql: string,
   rewriteMap: Map<string, string>,
 ): string {
-  return sql.replace(TABLE_REF_RE, (match, keyword: string, quote: string, table: string) => {
-    const physical = rewriteMap.get(table);
-    if (!physical) return match;
-    return `${keyword} ${quote}${physical}${quote}`;
-  });
+  return replaceInCode(
+    sql,
+    TABLE_REF_RE,
+    (match: string, keyword: string, quote: string, table: string) => {
+      const physical = rewriteMap.get(table);
+      if (!physical) return match;
+      return `${keyword} ${quote}${physical}${quote}`;
+    },
+  );
 }
 
 /**

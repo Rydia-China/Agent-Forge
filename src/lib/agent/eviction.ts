@@ -31,13 +31,18 @@ const EPHEMERAL = new Set([
   "langfuse_admin__create_prompt",
 ]);
 
-/** High-value results — keep longer but still evictable (and thus recallable). */
-const HIGH_RETENTION = new Set([
+/** Pinned — NEVER evict. Skills are curated reference docs, always kept in full. */
+const PINNED = new Set([
   "skills__get",
+]);
+
+/** High-value results — keep longer but still evictable (and thus recallable). */
+const HIGH_RETENTION = new Set<string>([
 ]);
 const HIGH_RETENTION_VALUE = 10;
 
 function getBaseRetention(toolName: string): number {
+  if (PINNED.has(toolName)) return Infinity;
   if (HIGH_RETENTION.has(toolName)) return HIGH_RETENTION_VALUE;
   if (EPHEMERAL.has(toolName)) return 0;
   return DEFAULT_RETENTION;

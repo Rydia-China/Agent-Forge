@@ -7,6 +7,25 @@ import { getCatalogEntries, isCatalogEntry } from "@/lib/mcp/catalog";
 import { sessionMcpTracker } from "@/lib/mcp/session-tracker";
 
 /* ------------------------------------------------------------------ */
+/*  Built-in name protection                                          */
+/* ------------------------------------------------------------------ */
+
+/** Names reserved by core MCPs (always registered at init). */
+const CORE_MCP_NAMES = new Set(["skills", "mcp_manager", "ui", "memory"]);
+
+/** Check if a name is reserved by the system (core or catalog). */
+function isReservedMcpName(name: string): boolean {
+  return CORE_MCP_NAMES.has(name) || isCatalogEntry(name);
+}
+
+/** Throw if the name is reserved by a system built-in MCP. */
+function rejectIfReserved(name: string): void {
+  if (isReservedMcpName(name)) {
+    throw new Error(`MCP name "${name}" is reserved by a system built-in provider and cannot be used for custom servers`);
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Zod schemas                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -90,7 +109,7 @@ export interface StaticMcpSummary {
 }
 
 /** Core MCPs — always registered, cannot be unloaded. */
-const CORE_MCPS: readonly string[] = ["skills", "mcp_manager"];
+const CORE_MCPS: readonly string[] = ["skills", "mcp_manager", "ui", "memory"];
 
 /**
  * Return all built-in MCPs (core + catalog) with availability and
@@ -174,7 +193,7 @@ export async function listMcpServers(): Promise<McpSummary[]> {
 
 export async function getMcpServer(name: string): Promise<McpDetail | null> {
   // Resolve built-in (core / catalog) MCPs first
-  if (CORE_MCPS.includes(name) || isCatalogEntry(name)) {
+  if (isReservedMcpName(name)) {
     return {
       name,
       description: "Built-in MCP provider",
@@ -228,6 +247,7 @@ export async function getMcpCode(name: string): Promise<string | null> {
 export async function createMcpServer(
   params: z.infer<typeof McpCreateParams>,
 ): Promise<McpMutationResult> {
+  rejectIfReserved(params.name);
   const record = await prisma.mcpServer.create({
     data: {
       name: params.name,
@@ -256,6 +276,7 @@ export async function createMcpServer(
 export async function updateMcpServer(
   params: z.infer<typeof McpUpdateParams>,
 ): Promise<McpMutationResult> {
+  rejectIfReserved(params.name);
   const found = await prisma.mcpServer.findUnique({
     where: { name: params.name },
     include: { versions: { orderBy: { version: "desc" }, take: 1 } },
@@ -292,6 +313,7 @@ export async function updateMcpServer(
 export async function toggleMcpServer(
   params: z.infer<typeof McpToggleParams>,
 ): Promise<McpServer> {
+  rejectIfReserved(params.name);
   const record = await prisma.mcpServer.update({
     where: { name: params.name },
     data: { enabled: params.enabled },
@@ -307,12 +329,14 @@ export async function toggleMcpServer(
 }
 
 export async function deleteMcpServer(name: string): Promise<void> {
+  rejectIfReserved(name);
   sandboxManager.unload(name);
   registry.unregister(name);
   await prisma.mcpServer.delete({ where: { name } });
 }
 
 export async function reloadMcpServer(name: string): Promise<string> {
+  rejectIfReserved(name);
   const record = await prisma.mcpServer.findUnique({ where: { name } });
   if (!record) throw new Error(`MCP server "${name}" not found in DB`);
   if (!record.enabled) throw new Error(`MCP server "${name}" is disabled. Enable it first.`);
@@ -365,6 +389,7 @@ export async function getMcpServerVersion(name: string, version: number): Promis
 }
 
 export async function setMcpProduction(name: string, version: number): Promise<{ record: McpServer; loadError?: string }> {
+  rejectIfReserved(name);
   const server = await prisma.mcpServer.findUnique({ where: { name } });
   if (!server) throw new Error(`MCP server "${name}" not found`);
 

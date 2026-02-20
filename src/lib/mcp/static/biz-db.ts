@@ -2,6 +2,7 @@ import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
 import { bizPool } from "@/lib/biz-db";
 import { guardQuery, guardExecute } from "@/lib/sql-guard";
+import { autoFillId } from "@/lib/auto-id";
 import { getCurrentUserName } from "@/lib/request-context";
 import {
   listVisibleTables,
@@ -65,7 +66,7 @@ export const bizDbMcp: McpProvider = {
       {
         name: "execute",
         description:
-          "Execute a SQL statement (INSERT, UPDATE, DELETE, etc.) on the XTDB immutable database. Tables are created automatically on first INSERT — no CREATE TABLE needed.",
+          "Execute a SQL statement (INSERT, UPDATE, DELETE, etc.) on the XTDB immutable database. Tables are created automatically on first INSERT — no CREATE TABLE needed. For INSERT: if _id column is omitted, a UUID is auto-generated and returned.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -151,26 +152,39 @@ export const bizDbMcp: McpProvider = {
 
       case "query": {
         const sql = String(args.sql);
+        console.log("[biz_db query] input:", sql);
         const check = guardQuery(sql);
         if (!check.ok) return text(check.reason);
 
         // Read-only: resolve existing mappings, no auto-create
         const map = await buildRewriteMap(userName, sql, false);
         const rewritten = applySqlRewrite(sql, map);
+        console.log("[biz_db query] rewritten:", rewritten);
         const result = await bizPool.query(rewritten);
         return json({ rows: result.rows, rowCount: result.rowCount });
       }
 
       case "execute": {
         const sql = String(args.sql);
+        console.log("[biz_db execute] input:", sql);
         const check = guardExecute(sql);
         if (!check.ok) return text(check.reason);
 
+        // Auto-fill _id for INSERT without _id
+        const { sql: filledSql, generatedIds } = autoFillId(sql);
+        if (filledSql !== sql) console.log("[biz_db execute] after autoFillId:", filledSql);
+
         // Write: auto-create mappings for new tables (INSERT)
-        const map = await buildRewriteMap(userName, sql, true);
-        const rewritten = applySqlRewrite(sql, map);
+        const map = await buildRewriteMap(userName, filledSql, true);
+        const rewritten = applySqlRewrite(filledSql, map);
+        console.log("[biz_db execute] final SQL:", rewritten);
         const result = await bizPool.query(rewritten);
-        return text(`OK — ${result.rowCount ?? 0} row(s) affected. Command: ${result.command}`);
+
+        let msg = `OK — ${result.rowCount ?? 0} row(s) affected. Command: ${result.command}`;
+        if (generatedIds.length > 0) {
+          msg += `\nAuto-generated _id: ${generatedIds.length === 1 ? generatedIds[0] : JSON.stringify(generatedIds)}`;
+        }
+        return text(msg);
       }
 
       case "upgrade_global": {

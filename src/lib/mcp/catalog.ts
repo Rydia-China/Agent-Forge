@@ -107,5 +107,6 @@ export function loadFromCatalog(name: string): string {
   }
   if (registry.getProvider(name)) return name; // already loaded
   registry.register(entry.provider);
+  registry.protect(name); // catalog providers are protected from custom override
   return name;
 }

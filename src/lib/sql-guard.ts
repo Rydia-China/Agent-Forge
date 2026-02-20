@@ -5,6 +5,8 @@
  * `query` and `execute` MCP tools.
  */
 
+import { codeOnly } from "./sql-segments";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -72,11 +74,11 @@ function referencesBlockedIdentifier(normalized: string): string | null {
 
 /**
  * Detect multi-statement injection.
- * Strips single-quoted string literals first (rough heuristic) then checks
+ * Uses string-literal-aware segmenter to strip all '...' content, then checks
  * whether more than one non-empty statement remains after splitting on `;`.
  */
 function containsMultipleStatements(normalized: string): boolean {
-  const withoutStrings = normalized.replace(/'[^']*'/g, "");
+  const withoutStrings = codeOnly(normalized);
   const parts = withoutStrings.split(";").filter((p) => p.trim().length > 0);
   return parts.length > 1;
 }
