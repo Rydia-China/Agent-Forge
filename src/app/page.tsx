@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { Button } from "antd";
+import { AppstoreOutlined } from "@ant-design/icons";
 import { AgentPanel } from "./components/AgentPanel";
 import { SessionSidebar } from "./components/SessionSidebar";
 import { ResourceDrawer } from "./components/ResourceDrawer";
@@ -24,12 +26,6 @@ export default function Home() {
 
   const user = useUser(() => switchSession(undefined));
 
-  const sessionsHook = useSessions(
-    user.userName,
-    (msg) => resourceDetail.error, // errors handled in resource detail
-    () => {},
-  );
-
   const resources = useResources(currentSessionIdRef, () => {});
 
   const resourceDetail = useResourceDetail(
@@ -38,6 +34,12 @@ export default function Home() {
     resources.dbSkills,
     resources.builtinMcps,
     resources.mcps,
+  );
+
+  const sessionsHook = useSessions(
+    user.userName,
+    () => {}, // errors handled in resource detail
+    () => {},
   );
 
   const handleRefresh = useCallback(() => {
@@ -70,13 +72,15 @@ export default function Home() {
       <section className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center border-b border-slate-800 px-3 py-1.5">
           <div className="ml-auto">
-            <button
-              className={`rounded border px-2.5 py-1 text-[11px] transition ${showResources ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-200" : "border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200"}`}
+            <Button
+              size="small"
+              type={showResources ? "primary" : "default"}
+              ghost={showResources}
+              icon={<AppstoreOutlined />}
               onClick={() => setShowResources((v) => !v)}
-              type="button"
             >
               Resources
-            </button>
+            </Button>
           </div>
         </header>
         <AgentPanel
@@ -93,20 +97,19 @@ export default function Home() {
         />
       </section>
 
-      {showResources && (
-        <ResourceDrawer
-          builtinSkills={resources.builtinSkills}
-          dbSkills={resources.dbSkills}
-          builtinMcps={resources.builtinMcps}
-          mcps={resources.mcps}
-          isLoadingResources={resources.isLoadingResources}
-          error={resourceDetail.error}
-          notice={resourceDetail.notice}
-          onLoadResources={() => void resources.loadResources()}
-          onSelectResource={(r) => void resourceDetail.loadResourceDetail(r)}
-          onClose={() => setShowResources(false)}
-        />
-      )}
+      <ResourceDrawer
+        open={showResources}
+        builtinSkills={resources.builtinSkills}
+        dbSkills={resources.dbSkills}
+        builtinMcps={resources.builtinMcps}
+        mcps={resources.mcps}
+        isLoadingResources={resources.isLoadingResources}
+        error={resourceDetail.error}
+        notice={resourceDetail.notice}
+        onLoadResources={() => void resources.loadResources()}
+        onSelectResource={(r) => void resourceDetail.loadResourceDetail(r)}
+        onClose={() => setShowResources(false)}
+      />
 
       <ResourceDetailDrawer detail={resourceDetail} />
     </main>

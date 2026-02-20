@@ -24,13 +24,21 @@ const FcResultSchema = z.object({
 });
 
 const GenerateImageParams = z.object({
-  prompt: z.string().min(1, "prompt is required"),
-  referenceImageUrls: z.array(z.string().url()).optional(),
+  items: z.array(
+    z.object({
+      prompt: z.string().min(1),
+      referenceImageUrls: z.array(z.string().url()).optional(),
+    }),
+  ).min(1),
 });
 
 const GenerateVideoParams = z.object({
-  imageUrl: z.string().url("imageUrl must be a valid URL"),
-  prompt: z.string().min(1, "prompt is required"),
+  items: z.array(
+    z.object({
+      imageUrl: z.string().url(),
+      prompt: z.string().min(1),
+    }),
+  ).min(1),
 });
 
 export const videoMgrMcp: McpProvider = {
@@ -41,40 +49,51 @@ export const videoMgrMcp: McpProvider = {
       {
         name: "generate_image",
         description:
-          "Generate an image from a text prompt (via FC). Returns the URL of the generated image.",
+          "Generate image(s) from text prompt(s) concurrently (via FC). Returns an array of results with status (ok/error) and image URL. For a single image, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
           properties: {
-            prompt: {
-              type: "string",
-              description: "Text prompt describing the image to generate",
-            },
-            referenceImageUrls: {
+            items: {
               type: "array",
-              items: { type: "string" },
-              description: "Optional reference image URLs for style/content guidance",
+              description: "Array of image generation tasks",
+              items: {
+                type: "object",
+                properties: {
+                  prompt: { type: "string", description: "Text prompt describing the image to generate" },
+                  referenceImageUrls: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Optional reference image URLs for style/content guidance",
+                  },
+                },
+                required: ["prompt"],
+              },
             },
           },
-          required: ["prompt"],
+          required: ["items"],
         },
       },
       {
         name: "generate_video",
         description:
-          "Generate a video from an image and a motion prompt (via FC). Returns the URL of the generated video.",
+          "Generate video(s) from image(s) and motion prompt(s) concurrently (via FC). Returns an array of results with status (ok/error) and video URL. For a single video, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
           properties: {
-            imageUrl: {
-              type: "string",
-              description: "Source image URL to animate",
-            },
-            prompt: {
-              type: "string",
-              description: "Text prompt describing the desired motion/animation",
+            items: {
+              type: "array",
+              description: "Array of video generation tasks",
+              items: {
+                type: "object",
+                properties: {
+                  imageUrl: { type: "string", description: "Source image URL to animate" },
+                  prompt: { type: "string", description: "Text prompt describing the desired motion/animation" },
+                },
+                required: ["imageUrl", "prompt"],
+              },
             },
           },
-          required: ["imageUrl", "prompt"],
+          required: ["items"],
         },
       },
     ];
@@ -91,44 +110,60 @@ export const videoMgrMcp: McpProvider = {
         if (!fc.imageUrl || !fc.imageToken) {
           return text("未配置 FC 图像生成服务 (FC_GENERATE_IMAGE_URL, FC_GENERATE_IMAGE_TOKEN)");
         }
-        const { prompt, referenceImageUrls } = GenerateImageParams.parse(args);
-        const res = await fetch(fc.imageUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${fc.imageToken}`,
-          },
-          body: JSON.stringify({ prompt, referenceImageUrls }),
-        });
-        const data: unknown = await res.json();
-        const parsed = FcResultSchema.parse(data);
-        if (!res.ok || parsed.error) {
-          return text(`Image generation failed: ${parsed.error ?? res.statusText}`);
-        }
-        if (!parsed.result) return text("FC returned no result");
-        return json({ imageUrl: parsed.result });
+        const { items } = GenerateImageParams.parse(args);
+        const results = await Promise.allSettled(
+          items.map(async ({ prompt, referenceImageUrls }) => {
+            const res = await fetch(fc.imageUrl!, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${fc.imageToken}`,
+              },
+              body: JSON.stringify({ prompt, referenceImageUrls }),
+            });
+            const data: unknown = await res.json();
+            const parsed = FcResultSchema.parse(data);
+            if (!res.ok || parsed.error) throw new Error(parsed.error ?? res.statusText);
+            if (!parsed.result) throw new Error("FC returned no result");
+            return parsed.result;
+          }),
+        );
+        const imgOutput = results.map((r, i) =>
+          r.status === "fulfilled"
+            ? { index: i, status: "ok" as const, imageUrl: r.value }
+            : { index: i, status: "error" as const, error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
+        );
+        return json(imgOutput);
       }
 
       case "generate_video": {
         if (!fc.videoUrl || !fc.videoToken) {
           return text("未配置 FC 视频生成服务 (FC_GENERATE_VIDEO_URL, FC_GENERATE_VIDEO_TOKEN)");
         }
-        const { imageUrl, prompt } = GenerateVideoParams.parse(args);
-        const res = await fetch(fc.videoUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${fc.videoToken}`,
-          },
-          body: JSON.stringify({ action: "generate", imageUrl, prompt }),
-        });
-        const data: unknown = await res.json();
-        const parsed = FcResultSchema.parse(data);
-        if (!res.ok || parsed.error) {
-          return text(`Video generation failed: ${parsed.error ?? res.statusText}`);
-        }
-        if (!parsed.result) return text("FC returned no result");
-        return json({ videoUrl: parsed.result });
+        const { items } = GenerateVideoParams.parse(args);
+        const results = await Promise.allSettled(
+          items.map(async ({ imageUrl, prompt }) => {
+            const res = await fetch(fc.videoUrl!, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${fc.videoToken}`,
+              },
+              body: JSON.stringify({ action: "generate", imageUrl, prompt }),
+            });
+            const data: unknown = await res.json();
+            const parsed = FcResultSchema.parse(data);
+            if (!res.ok || parsed.error) throw new Error(parsed.error ?? res.statusText);
+            if (!parsed.result) throw new Error("FC returned no result");
+            return parsed.result;
+          }),
+        );
+        const vidOutput = results.map((r, i) =>
+          r.status === "fulfilled"
+            ? { index: i, status: "ok" as const, videoUrl: r.value }
+            : { index: i, status: "error" as const, error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
+        );
+        return json(vidOutput);
       }
 
       default:

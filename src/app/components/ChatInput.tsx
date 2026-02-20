@@ -1,5 +1,14 @@
 "use client";
 
+import { Button, Input, Space } from "antd";
+import {
+  PictureOutlined,
+  UploadOutlined,
+  SendOutlined,
+  StopOutlined,
+  CloseCircleFilled,
+} from "@ant-design/icons";
+
 export interface ChatInputProps {
   input: string;
   setInput: (v: string) => void;
@@ -46,20 +55,19 @@ export function ChatInput({
           <div className="flex flex-wrap gap-1.5">
             {pendingImages.map((url, i) => (
               <div key={url} className="group relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={url}
                   alt={`Pending ${i + 1}`}
                   className="h-12 w-12 rounded border border-slate-700 object-cover"
                 />
-                <button
-                  className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-slate-700 text-[8px] text-slate-200 opacity-0 transition group-hover:opacity-100 hover:bg-rose-500"
+                <CloseCircleFilled
+                  className="absolute -right-1 -top-1 cursor-pointer text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-rose-400"
+                  style={{ fontSize: 14 }}
                   onClick={() =>
                     setPendingImages((prev) => prev.filter((_, idx) => idx !== i))
                   }
-                  type="button"
-                >
-                  ✕
-                </button>
+                />
               </div>
             ))}
           </div>
@@ -77,8 +85,9 @@ export function ChatInput({
             void handleImageFiles(Array.from(e.dataTransfer.files));
           }}
         >
-          <textarea
-            className="h-20 w-full resize-none rounded bg-slate-900 px-3 py-2 text-xs text-slate-100 focus:border-emerald-500 focus:outline-none"
+          <Input.TextArea
+            variant="borderless"
+            autoSize={{ minRows: 3, maxRows: 6 }}
             placeholder={isDragOver ? "松开以上传图片…" : "Type message… (Enter to send)"}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -109,7 +118,7 @@ export function ChatInput({
           />
         </div>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <Space size={8}>
             <input
               ref={fileInputRef}
               type="file"
@@ -121,41 +130,45 @@ export function ChatInput({
                 e.target.value = "";
               }}
             />
-            <button
-              className="rounded border border-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:border-slate-500 disabled:opacity-40"
+            <Button
+              size="small"
+              icon={<PictureOutlined />}
               onClick={() => fileInputRef.current?.click()}
-              type="button"
               disabled={isSending || isUploading}
+              loading={isUploading}
             >
-              {isUploading ? "…" : "图片"}
-            </button>
-            <button
-              className="rounded border border-slate-700 px-2 py-1 text-[10px] text-slate-300 hover:border-slate-500 disabled:opacity-40"
+              图片
+            </Button>
+            <Button
+              size="small"
+              icon={<UploadOutlined />}
               onClick={openManualUpload}
-              type="button"
               disabled={isSending || uploadDialogOpen}
               title="上传文件到指定接口"
             >
               文件
-            </button>
-          </div>
+            </Button>
+          </Space>
           {isStreaming ? (
-            <button
-              className="rounded bg-rose-500 px-3 py-1 text-xs font-semibold text-white hover:bg-rose-600"
+            <Button
+              danger
+              type="primary"
+              size="small"
+              icon={<StopOutlined />}
               onClick={stopStreaming}
-              type="button"
             >
               Stop
-            </button>
+            </Button>
           ) : (
-            <button
-              className="rounded bg-emerald-500 px-3 py-1 text-xs font-semibold text-emerald-950 disabled:opacity-60"
+            <Button
+              type="primary"
+              size="small"
+              icon={<SendOutlined />}
               onClick={sendMessage}
               disabled={isSending || input.trim().length === 0}
-              type="button"
             >
               Send
-            </button>
+            </Button>
           )}
         </div>
       </div>

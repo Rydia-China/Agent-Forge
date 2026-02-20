@@ -1,5 +1,7 @@
 "use client";
 
+import { Drawer, Button, Tag, Alert, Divider, Typography } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import type {
   SkillSummary,
   McpSummary,
@@ -8,6 +10,7 @@ import type {
 } from "../types";
 
 export interface ResourceDrawerProps {
+  open: boolean;
   builtinSkills: SkillSummary[];
   dbSkills: SkillSummary[];
   builtinMcps: BuiltinMcpSummary[];
@@ -21,6 +24,7 @@ export interface ResourceDrawerProps {
 }
 
 export function ResourceDrawer({
+  open,
   builtinSkills,
   dbSkills,
   builtinMcps,
@@ -33,141 +37,132 @@ export function ResourceDrawer({
   onClose,
 }: ResourceDrawerProps) {
   return (
-    <div className="fixed inset-0 z-40 flex items-stretch justify-end bg-black/40 backdrop-blur-sm">
-      <button
-        className="absolute inset-0 h-full w-full cursor-pointer"
-        onClick={onClose}
-        type="button"
-        aria-label="Close"
-      />
-      <aside className="relative z-10 h-full w-72 overflow-y-auto border-l border-slate-800 bg-slate-950 p-4 shadow-2xl drawer-in">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="text-[10px] uppercase tracking-wide text-slate-400">Resources</div>
-          <div className="flex items-center gap-2">
-            <button
-              className="text-[10px] text-slate-300 hover:text-white"
-              onClick={onLoadResources}
-              type="button"
-            >
-              {isLoadingResources ? "…" : "↻"}
-            </button>
-            <button
-              className="text-[10px] text-slate-400 hover:text-white"
-              onClick={onClose}
-              type="button"
-            >
-              ✕
-            </button>
+    <Drawer
+      title="Resources"
+      placement="right"
+      width={288}
+      open={open}
+      onClose={onClose}
+      extra={
+        <Button
+          type="text"
+          size="small"
+          icon={<ReloadOutlined />}
+          loading={isLoadingResources}
+          onClick={onLoadResources}
+        />
+      }
+    >
+      {error && <Alert type="error" message={error} showIcon style={{ marginBottom: 8 }} />}
+      {notice && <Alert type="success" message={notice} showIcon style={{ marginBottom: 8 }} />}
+
+      <div className="space-y-4">
+        <section>
+          <Typography.Text type="secondary" style={{ fontSize: 10, textTransform: "uppercase" }}>
+            内置 Skills
+          </Typography.Text>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {builtinSkills.map((s) => (
+              <Tag
+                key={s.name}
+                color="green"
+                style={{ cursor: "pointer" }}
+                title={s.description}
+                onClick={() => {
+                  onSelectResource({ type: "skill", name: s.name });
+                  onClose();
+                }}
+              >
+                {s.name}
+              </Tag>
+            ))}
           </div>
-        </div>
-        {error && (
-          <div className="mb-2 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[10px] text-rose-100">
-            {error}
+        </section>
+
+        <section>
+          <Typography.Text type="secondary" style={{ fontSize: 10, textTransform: "uppercase" }}>
+            内置 MCPs
+          </Typography.Text>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {builtinMcps.map((m) => (
+              <Tag
+                key={m.name}
+                color={m.active ? "green" : m.available ? "default" : undefined}
+                style={{
+                  cursor: "pointer",
+                  ...((!m.active && !m.available) ? { textDecoration: "line-through", opacity: 0.5 } : {}),
+                }}
+                title={
+                  m.active
+                    ? `${m.name} (active)`
+                    : m.available
+                      ? `${m.name} (available)`
+                      : `${m.name} (unavailable)`
+                }
+                onClick={() => {
+                  onSelectResource({ type: "mcp", name: m.name });
+                  onClose();
+                }}
+              >
+                {m.name}
+              </Tag>
+            ))}
           </div>
-        )}
-        {notice && (
-          <div className="mb-2 rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-1.5 text-[10px] text-emerald-100">
-            {notice}
-          </div>
-        )}
-        <div className="space-y-4">
-          <section>
-            <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
-              内置 Skills
+        </section>
+
+        <Divider style={{ margin: "8px 0" }} />
+
+        <section>
+          <Typography.Text strong style={{ fontSize: 11 }}>Skills</Typography.Text>
+          {dbSkills.length === 0 ? (
+            <div className="mt-1">
+              <Typography.Text type="secondary" style={{ fontSize: 10 }}>No database skills.</Typography.Text>
             </div>
-            <div className="flex flex-wrap gap-1">
-              {builtinSkills.map((s) => (
-                <button
+          ) : (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {dbSkills.map((s) => (
+                <Tag
                   key={s.name}
-                  className="rounded-full border border-emerald-400/60 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200 hover:bg-emerald-500/25"
+                  color="green"
+                  style={{ cursor: "pointer" }}
                   title={s.description}
                   onClick={() => {
                     onSelectResource({ type: "skill", name: s.name });
                     onClose();
                   }}
-                  type="button"
                 >
                   {s.name}
-                </button>
+                </Tag>
               ))}
             </div>
-          </section>
-          <section>
-            <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
-              内置 MCPs
+          )}
+        </section>
+
+        <section>
+          <Typography.Text strong style={{ fontSize: 11 }}>MCPs</Typography.Text>
+          {mcps.length === 0 ? (
+            <div className="mt-1">
+              <Typography.Text type="secondary" style={{ fontSize: 10 }}>No MCP servers.</Typography.Text>
             </div>
-            <div className="flex flex-wrap gap-1">
-              {builtinMcps.map((m) => (
-                <button
+          ) : (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {mcps.map((m) => (
+                <Tag
                   key={m.name}
-                  className={`rounded-full border px-2 py-0.5 text-[10px] ${m.active ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-200" : m.available ? "border-slate-700/60 bg-slate-900/40 text-slate-400" : "border-slate-800/40 bg-slate-950/40 text-slate-600 line-through"}`}
-                  title={
-                    m.active
-                      ? `${m.name} (active)`
-                      : m.available
-                        ? `${m.name} (available)`
-                        : `${m.name} (unavailable)`
-                  }
+                  style={{ cursor: "pointer" }}
+                  title={m.description ?? ""}
                   onClick={() => {
                     onSelectResource({ type: "mcp", name: m.name });
                     onClose();
                   }}
-                  type="button"
                 >
                   {m.name}
-                </button>
+                </Tag>
               ))}
             </div>
-          </section>
-          <hr className="border-slate-800" />
-          <section>
-            <div className="mb-1 text-[10px] font-semibold text-slate-100">Skills</div>
-            {dbSkills.length === 0 ? (
-              <div className="text-[10px] text-slate-500">No database skills.</div>
-            ) : (
-              <div className="flex flex-wrap gap-1">
-                {dbSkills.map((s) => (
-                  <button
-                    key={s.name}
-                    className="rounded-full border border-emerald-400/60 bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-200 hover:bg-emerald-500/25"
-                    title={s.description}
-                    onClick={() => {
-                      onSelectResource({ type: "skill", name: s.name });
-                      onClose();
-                    }}
-                    type="button"
-                  >
-                    {s.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-          <section>
-            <div className="mb-1 text-[10px] font-semibold text-slate-100">MCPs</div>
-            {mcps.length === 0 ? (
-              <div className="text-[10px] text-slate-500">No MCP servers.</div>
-            ) : (
-              <div className="flex flex-wrap gap-1">
-                {mcps.map((m) => (
-                  <button
-                    key={m.name}
-                    className="rounded-full border border-slate-700 bg-slate-900/60 px-2 py-0.5 text-[10px] text-slate-300 hover:border-slate-500"
-                    title={m.description ?? ""}
-                    onClick={() => {
-                      onSelectResource({ type: "mcp", name: m.name });
-                      onClose();
-                    }}
-                    type="button"
-                  >
-                    {m.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
-      </aside>
-    </div>
+          )}
+        </section>
+      </div>
+    </Drawer>
   );
 }

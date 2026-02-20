@@ -21,13 +21,17 @@ function json(data: unknown): CallToolResult {
 /*  Zod input schemas                                                  */
 /* ------------------------------------------------------------------ */
 
-const PromptNameParams = z.object({
-  name: z.string().min(1, "prompt name is required"),
+const GetPromptParams = z.object({
+  names: z.array(z.string().min(1)).min(1),
 });
 
 const CompilePromptParams = z.object({
-  name: z.string().min(1, "prompt name is required"),
-  variables: z.record(z.string(), z.string()).default({}),
+  items: z.array(
+    z.object({
+      name: z.string().min(1),
+      variables: z.record(z.string(), z.string()).default({}),
+    }),
+  ).min(1),
 });
 
 /* ------------------------------------------------------------------ */
@@ -48,30 +52,44 @@ export const langfuseMcp: McpProvider = {
       {
         name: "get_prompt",
         description:
-          "Get a prompt template by name from Langfuse. Returns the raw template with {{variable}} placeholders.",
+          "Get prompt template(s) by name from Langfuse. Returns an array of results with raw template and {{variable}} placeholders. For a single prompt, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
           properties: {
-            name: { type: "string", description: "Prompt name" },
+            names: {
+              type: "array",
+              items: { type: "string" },
+              description: "Array of prompt names to fetch",
+            },
           },
-          required: ["name"],
+          required: ["names"],
         },
       },
       {
         name: "compile_prompt",
         description:
-          "Fetch a Langfuse prompt and compile it by replacing {{variable}} placeholders with provided values. Returns the final prompt ready for subagent execution.",
+          "Fetch and compile Langfuse prompt(s) by replacing {{variable}} placeholders concurrently. Returns an array of compiled prompts ready for subagent execution. For a single prompt, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
           properties: {
-            name: { type: "string", description: "Prompt name" },
-            variables: {
-              type: "object",
-              description: "Key-value pairs to replace {{variable}} placeholders in the template",
-              additionalProperties: { type: "string" },
+            items: {
+              type: "array",
+              description: "Array of prompts to compile",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string", description: "Prompt name" },
+                  variables: {
+                    type: "object",
+                    description: "Key-value pairs to replace {{variable}} placeholders",
+                    additionalProperties: { type: "string" },
+                  },
+                },
+                required: ["name"],
+              },
             },
           },
-          required: ["name"],
+          required: ["items"],
         },
       },
     ];
@@ -93,32 +111,51 @@ export const langfuseMcp: McpProvider = {
       }
 
       case "get_prompt": {
-        const { name: promptName } = PromptNameParams.parse(args);
-        const raw = await langfuseFetch(
-          `/api/public/v2/prompts/${encodeURIComponent(promptName)}`,
+        const { names } = GetPromptParams.parse(args);
+        const results = await Promise.allSettled(
+          names.map(async (promptName) => {
+            const raw = await langfuseFetch(
+              `/api/public/v2/prompts/${encodeURIComponent(promptName)}`,
+            );
+            const parsed = PromptDetailSchema.parse(raw);
+            return {
+              name: parsed.name,
+              version: parsed.version,
+              labels: parsed.labels,
+              template: extractTemplate(parsed),
+            };
+          }),
         );
-        const parsed = PromptDetailSchema.parse(raw);
-        return json({
-          name: parsed.name,
-          version: parsed.version,
-          labels: parsed.labels,
-          template: extractTemplate(parsed),
-        });
+        const output = results.map((r, i) =>
+          r.status === "fulfilled"
+            ? { status: "ok" as const, ...r.value }
+            : { status: "error" as const, name: names[i], error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
+        );
+        return json(output);
       }
 
       case "compile_prompt": {
-        const { name: promptName, variables } =
-          CompilePromptParams.parse(args);
-        const raw = await langfuseFetch(
-          `/api/public/v2/prompts/${encodeURIComponent(promptName)}`,
+        const { items } = CompilePromptParams.parse(args);
+        const results = await Promise.allSettled(
+          items.map(async ({ name: promptName, variables }) => {
+            const raw = await langfuseFetch(
+              `/api/public/v2/prompts/${encodeURIComponent(promptName)}`,
+            );
+            const parsed = PromptDetailSchema.parse(raw);
+            const compiled = compileTemplate(extractTemplate(parsed), variables);
+            return {
+              name: parsed.name,
+              version: parsed.version,
+              compiledPrompt: compiled,
+            };
+          }),
         );
-        const parsed = PromptDetailSchema.parse(raw);
-        const compiled = compileTemplate(extractTemplate(parsed), variables);
-        return json({
-          name: parsed.name,
-          version: parsed.version,
-          compiledPrompt: compiled,
-        });
+        const output = results.map((r, i) =>
+          r.status === "fulfilled"
+            ? { status: "ok" as const, ...r.value }
+            : { status: "error" as const, name: items[i]!.name, error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
+        );
+        return json(output);
       }
 
       default:

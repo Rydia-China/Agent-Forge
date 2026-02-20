@@ -1,5 +1,12 @@
 "use client";
 
+import { Tag, Typography, Image } from "antd";
+import {
+  UserOutlined,
+  RobotOutlined,
+  SettingOutlined,
+  ToolOutlined,
+} from "@ant-design/icons";
 import type { ChatMessage, ToolCall } from "../types";
 import { parseJsonObject } from "./client-utils";
 
@@ -24,30 +31,14 @@ function summarizeToolCalls(calls: ToolCall[]): string {
   return parts.join(" · ");
 }
 
-const roleStyles: Record<
+const roleConfig: Record<
   ChatMessage["role"],
-  { label: string; tone: string; chip: string }
+  { label: string; color: string; icon: React.ReactNode; tone: string }
 > = {
-  user: {
-    label: "User",
-    tone: "border-slate-700 bg-slate-900/60",
-    chip: "bg-slate-700 text-slate-100",
-  },
-  assistant: {
-    label: "Assistant",
-    tone: "border-emerald-500/40 bg-emerald-500/10",
-    chip: "bg-emerald-600 text-emerald-50",
-  },
-  system: {
-    label: "System",
-    tone: "border-amber-500/40 bg-amber-500/10",
-    chip: "bg-amber-500 text-amber-950",
-  },
-  tool: {
-    label: "Tool",
-    tone: "border-sky-500/40 bg-sky-500/10",
-    chip: "bg-sky-600 text-sky-50",
-  },
+  user: { label: "User", color: "default", icon: <UserOutlined />, tone: "border-slate-700 bg-slate-900/60" },
+  assistant: { label: "Assistant", color: "green", icon: <RobotOutlined />, tone: "border-emerald-500/40 bg-emerald-500/10" },
+  system: { label: "System", color: "orange", icon: <SettingOutlined />, tone: "border-amber-500/40 bg-amber-500/10" },
+  tool: { label: "Tool", color: "blue", icon: <ToolOutlined />, tone: "border-sky-500/40 bg-sky-500/10" },
 };
 
 /* ---- Component ---- */
@@ -57,32 +48,36 @@ export interface MessageBubbleProps {
 }
 
 export function MessageBubble({ message }: MessageBubbleProps) {
-  const style = roleStyles[message.role];
+  const cfg = roleConfig[message.role];
   return (
-    <div className={`rounded border px-3 py-2 ${style.tone} fade-in`}>
-      <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-300">
-        <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${style.chip}`}>
-          {style.label}
-        </span>
+    <div className={`rounded border px-3 py-2 ${cfg.tone}`}>
+      <div className="mb-1">
+        <Tag color={cfg.color} icon={cfg.icon} style={{ fontSize: 10 }}>
+          {cfg.label}
+        </Tag>
       </div>
       {message.content ? (
-        <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-100">
+        <Typography.Paragraph
+          style={{ marginBottom: 0, fontSize: 12, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
+        >
           {message.content}
-        </p>
+        </Typography.Paragraph>
       ) : (
-        <p className="text-xs text-slate-400">No content</p>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>No content</Typography.Text>
       )}
       {message.images && message.images.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
-          {message.images.map((url, i) => (
-            <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-              <img
+          <Image.PreviewGroup>
+            {message.images.map((url, i) => (
+              <Image
+                key={i}
                 src={url}
                 alt={`Image ${i + 1}`}
-                className="h-24 max-w-[160px] rounded border border-slate-700 object-cover hover:border-slate-500"
+                height={96}
+                style={{ maxWidth: 160, objectFit: "cover", borderRadius: 4 }}
               />
-            </a>
-          ))}
+            ))}
+          </Image.PreviewGroup>
         </div>
       )}
       {message.role === "assistant" && message.tool_calls && message.tool_calls.length > 0 && (

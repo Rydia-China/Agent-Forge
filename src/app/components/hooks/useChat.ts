@@ -73,6 +73,12 @@ export function useChat(
     onStatusChangeRef.current(status);
   }, [status]);
 
+  // Title change callback
+  const onTitleChangeRef = useRef(onTitleChange);
+  useEffect(() => {
+    onTitleChangeRef.current = onTitleChange;
+  }, [onTitleChange]);
+
   // Done → idle after 3s
   useEffect(() => {
     if (status !== "done") return;
@@ -91,13 +97,12 @@ export function useChat(
         setTitle(data.title);
         setMessages(data.messages);
         setKeyResources(data.keyResources ?? []);
-        if (data.title) onTitleChange(data.title);
+        if (data.title) onTitleChangeRef.current(data.title);
       })
       .catch((err: unknown) => {
         setError(getErrorMessage(err, "Failed to load session."));
       })
       .finally(() => setIsLoadingSession(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSessionId]);
 
   const reloadSession = useCallback(async () => {
@@ -112,25 +117,22 @@ export function useChat(
     }
   }, []);
 
-  const generateTitle = useCallback(
-    async (sid: string, seed: string) => {
-      try {
-        const result = await fetchJson<{ id: string; title: string }>(
-          `/api/sessions/${sid}/title`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: seed }),
-          },
-        );
-        setTitle(result.title);
-        onTitleChange(result.title);
-      } catch {
-        /* best effort */
-      }
-    },
-    [onTitleChange],
-  );
+  const generateTitle = useCallback(async (sid: string, seed: string) => {
+    try {
+      const result = await fetchJson<{ id: string; title: string }>(
+        `/api/sessions/${sid}/title`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: seed }),
+        },
+      );
+      setTitle(result.title);
+      onTitleChangeRef.current(result.title);
+    } catch {
+      /* best effort */
+    }
+  }, []);
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();

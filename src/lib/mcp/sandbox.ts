@@ -212,12 +212,11 @@ export class SandboxManager {
   /* ---------- provider factory -------------------------------------- */
 
   private createProvider(mcpName: string): McpProvider {
-    const self = this;
     return {
       name: mcpName,
 
-      async listTools(): Promise<Tool[]> {
-        const inst = self.instances.get(mcpName);
+      listTools: async (): Promise<Tool[]> => {
+        const inst = this.instances.get(mcpName);
         if (!inst) throw new Error(`Sandbox "${mcpName}" not loaded`);
 
         inst.deadline = Date.now() + 5_000;
@@ -236,11 +235,11 @@ export class SandboxManager {
         return JSON.parse(json) as Tool[];
       },
 
-      async callTool(
+      callTool: async (
         toolName: string,
         args: Record<string, unknown>,
-      ): Promise<CallToolResult> {
-        const inst = self.instances.get(mcpName);
+      ): Promise<CallToolResult> => {
+        const inst = this.instances.get(mcpName);
         if (!inst) throw new Error(`Sandbox "${mcpName}" not loaded`);
 
         const argsJson = JSON.stringify(args);
@@ -249,7 +248,7 @@ export class SandboxManager {
         // callTool may be sync or async; we detect Promises and
         // pump the microtask queue with executePendingJobs() as a
         // fallback for async callTool.
-        inst.deadline = Date.now() + self.timeoutMs;
+        inst.deadline = Date.now() + this.timeoutMs;
         const result = await inst.context.evalCodeAsync(
           `(function() {
             var __args = JSON.parse(${JSON.stringify(argsJson)});

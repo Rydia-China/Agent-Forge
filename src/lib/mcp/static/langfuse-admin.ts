@@ -20,8 +20,8 @@ function json(data: unknown): CallToolResult {
 /*  Zod input schemas                                                  */
 /* ------------------------------------------------------------------ */
 
-const PromptNameParams = z.object({
-  name: z.string().min(1, "prompt name is required"),
+const GetPromptParams = z.object({
+  names: z.array(z.string().min(1)).min(1),
 });
 
 const CreatePromptParams = z.object({
@@ -48,13 +48,17 @@ export const langfuseAdminMcp: McpProvider = {
       {
         name: "get_prompt",
         description:
-          "Get a prompt template by name. Returns the full template content, version, and labels.",
+          "Get prompt template(s) by name. Returns an array of results with full template content, version, and labels. For a single prompt, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
           properties: {
-            name: { type: "string", description: "Prompt name" },
+            names: {
+              type: "array",
+              items: { type: "string" },
+              description: "Array of prompt names to fetch",
+            },
           },
-          required: ["name"],
+          required: ["names"],
         },
       },
       {
@@ -103,18 +107,28 @@ export const langfuseAdminMcp: McpProvider = {
       }
 
       case "get_prompt": {
-        const { name: promptName } = PromptNameParams.parse(args);
-        const raw = await langfuseFetch(
-          `/api/public/v2/prompts/${encodeURIComponent(promptName)}`,
+        const { names } = GetPromptParams.parse(args);
+        const results = await Promise.allSettled(
+          names.map(async (promptName) => {
+            const raw = await langfuseFetch(
+              `/api/public/v2/prompts/${encodeURIComponent(promptName)}`,
+            );
+            const parsed = PromptDetailSchema.parse(raw);
+            return {
+              name: parsed.name,
+              version: parsed.version,
+              labels: parsed.labels,
+              tags: parsed.tags,
+              template: extractTemplate(parsed),
+            };
+          }),
         );
-        const parsed = PromptDetailSchema.parse(raw);
-        return json({
-          name: parsed.name,
-          version: parsed.version,
-          labels: parsed.labels,
-          tags: parsed.tags,
-          template: extractTemplate(parsed),
-        });
+        const output = results.map((r, i) =>
+          r.status === "fulfilled"
+            ? { status: "ok" as const, ...r.value }
+            : { status: "error" as const, name: names[i], error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
+        );
+        return json(output);
       }
 
       case "create_prompt": {

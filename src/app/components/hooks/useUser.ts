@@ -12,18 +12,16 @@ export interface UseUserReturn {
 }
 
 export function useUser(onUserChanged: () => void): UseUserReturn {
-  const [userName, setUserName] = useState("default");
-  const [userDraft, setUserDraft] = useState("default");
-
-  // Restore from localStorage
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  const [userName, setUserName] = useState(() => {
+    if (typeof window === "undefined") return "default";
     const s = window.localStorage.getItem(USER_STORAGE_KEY);
-    if (s && s.trim().length > 0) {
-      setUserName(s);
-      setUserDraft(s);
-    }
-  }, []);
+    return s && s.trim().length > 0 ? s : "default";
+  });
+  const [userDraft, setUserDraft] = useState(() => {
+    if (typeof window === "undefined") return "default";
+    const s = window.localStorage.getItem(USER_STORAGE_KEY);
+    return s && s.trim().length > 0 ? s : "default";
+  });
 
   // Persist draft to localStorage
   useEffect(() => {

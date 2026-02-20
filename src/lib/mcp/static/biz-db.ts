@@ -36,16 +36,17 @@ export const bizDbMcp: McpProvider = {
       {
         name: "describe_table",
         description:
-          "Show the column names and inferred data types of a table.",
+          "Show the column names and inferred data types of table(s). Pass an array of table names. For a single table, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
           properties: {
-            table: {
-              type: "string",
-              description: "Table name",
+            tables: {
+              type: "array",
+              items: { type: "string" },
+              description: "Array of table names to describe",
             },
           },
-          required: ["table"],
+          required: ["tables"],
         },
       },
       {
@@ -125,29 +126,31 @@ export const bizDbMcp: McpProvider = {
       }
 
       case "describe_table": {
-        const logicalName = String(args.table);
-        const resolved = await resolveTable(userName, logicalName);
-        if (!resolved) return text(`Table "${logicalName}" not found.`);
+        const tableNames = args.tables as string[];
+        if (!Array.isArray(tableNames) || tableNames.length === 0) return text("Missing tables parameter.");
 
-        const colResult = await bizPool.query(
-          `SELECT
-            column_name,
-            data_type,
-            is_nullable
-          FROM information_schema.columns
-          WHERE table_schema = 'public' AND table_name = $1
-          ORDER BY ordinal_position`,
-          [resolved.physicalName],
-        );
+        const describeOne = async (logicalName: string) => {
+          const resolved = await resolveTable(userName, logicalName);
+          if (!resolved) return { table: logicalName, error: "not found" };
+          const colResult = await bizPool.query(
+            `SELECT column_name, data_type, is_nullable
+             FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = $1
+             ORDER BY ordinal_position`,
+            [resolved.physicalName],
+          );
+          if (colResult.rows.length === 0) return { table: logicalName, error: "not found" };
+          return { table: logicalName, columns: colResult.rows };
+        };
 
-        if (colResult.rows.length === 0) {
-          return text(`Table "${logicalName}" not found.`);
+        if (tableNames.length === 1) {
+          const result = await describeOne(tableNames[0]!);
+          if ("error" in result) return text(`Table "${tableNames[0]}" not found.`);
+          return json(result);
         }
 
-        return json({
-          table: logicalName,
-          columns: colResult.rows,
-        });
+        const results = await Promise.all(tableNames.map(describeOne));
+        return json(results);
       }
 
       case "query": {

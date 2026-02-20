@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
 import * as svc from "@/lib/services/api-service";
@@ -34,18 +35,28 @@ export const apisMcp: McpProvider = {
       {
         name: "call",
         description:
-          "Invoke an API operation. Returns query results (for query type) or affected row count (for execute type).",
+          "Invoke API operation(s) concurrently. Returns an array of results with status (ok/error). For a single call, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
           properties: {
-            api_name: { type: "string", description: "API name" },
-            operation: { type: "string", description: "Operation name" },
-            params: {
-              type: "object",
-              description: "Operation parameters (key-value pairs matching the operation's input definition)",
+            items: {
+              type: "array",
+              description: "Array of API call tasks",
+              items: {
+                type: "object",
+                properties: {
+                  api_name: { type: "string", description: "API name" },
+                  operation: { type: "string", description: "Operation name" },
+                  params: {
+                    type: "object",
+                    description: "Operation parameters (key-value pairs matching the operation's input definition)",
+                  },
+                },
+                required: ["api_name", "operation"],
+              },
             },
           },
-          required: ["api_name", "operation"],
+          required: ["items"],
         },
       },
       /* ---------- management ---------- */
@@ -173,9 +184,20 @@ export const apisMcp: McpProvider = {
         });
       }
       case "call": {
-        const { api_name, operation, params } = svc.ApiCallParams.parse(args);
-        const result = await svc.callApiOperation(api_name, operation, params);
-        return json(result);
+        const { items } = z
+          .object({ items: z.array(svc.ApiCallParams).min(1) })
+          .parse(args);
+        const results = await Promise.allSettled(
+          items.map(({ api_name, operation, params }) =>
+            svc.callApiOperation(api_name, operation, params),
+          ),
+        );
+        const output = results.map((r, i) =>
+          r.status === "fulfilled"
+            ? { index: i, status: "ok" as const, result: r.value }
+            : { index: i, status: "error" as const, error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
+        );
+        return json(output);
       }
       /* ---------- management ---------- */
       case "create": {

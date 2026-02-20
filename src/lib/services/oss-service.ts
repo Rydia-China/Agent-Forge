@@ -111,3 +111,29 @@ export async function deleteObject(objectName: string): Promise<void> {
   const client = createClient();
   await client.delete(objectName);
 }
+
+export async function batchUploadFromUrl(
+  items: Array<{ url: string; folder?: string; filename?: string }>,
+): Promise<Array<{ status: "ok"; url: string; objectName: string } | { status: "error"; error: string }>> {
+  const results = await Promise.allSettled(
+    items.map(({ url, folder, filename }) => uploadFromUrl(url, folder ?? "file", filename)),
+  );
+  return results.map((r) =>
+    r.status === "fulfilled"
+      ? { status: "ok" as const, url: r.value.url, objectName: r.value.objectName }
+      : { status: "error" as const, error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
+  );
+}
+
+export async function batchDelete(
+  objectNames: string[],
+): Promise<Array<{ objectName: string; status: "ok" | "error"; error?: string }>> {
+  const results = await Promise.allSettled(
+    objectNames.map((name) => deleteObject(name)),
+  );
+  return results.map((r, i) =>
+    r.status === "fulfilled"
+      ? { objectName: objectNames[i]!, status: "ok" as const }
+      : { objectName: objectNames[i]!, status: "error" as const, error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
+  );
+}

@@ -157,11 +157,10 @@ async function runAgentInnerCore(
     const batch = newMessages.slice(persistedCount);
     if (batch.length > 0) {
       await pushMessages(session.id, batch);
-      persistedCount = newMessages.length;
-    }
+    persistedCount = newMessages.length;
   }
+}
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     // Rebuild compressed LLM context each iteration
     const allRaw = [...session.messages, ...newMessages];
@@ -310,12 +309,11 @@ async function runAgentStreamInnerCore(
     if (batch.length > 0) {
       await pushMessages(session.id, batch);
       persistedCount = newMessages.length;
-    }
   }
+}
 
   let lastReply = "";
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     if (signal?.aborted) break;
 

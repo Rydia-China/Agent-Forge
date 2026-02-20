@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Button, Typography } from "antd";
+import { PaperClipOutlined } from "@ant-design/icons";
 import type { AgentStatus } from "./StatusBadge";
 import { useChat } from "./hooks/useChat";
 import { useImageUpload } from "./hooks/useImageUpload";
@@ -66,22 +68,24 @@ export function AgentPanel({
       {/* Header */}
       <header className="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-slate-100">
+          <Typography.Text strong ellipsis style={{ display: "block", fontSize: 14 }}>
             {displayTitle}
-          </div>
-          <div className="truncate text-[11px] text-slate-500">
+          </Typography.Text>
+          <Typography.Text type="secondary" ellipsis style={{ display: "block", fontSize: 11 }}>
             {chat.sessionId ? chat.sessionId.slice(0, 12) + "…" : "Not created"}
-          </div>
+          </Typography.Text>
         </div>
         {chat.keyResources.length > 0 && (
-          <button
-            className={`shrink-0 rounded border px-2 py-1 text-[10px] transition ${showKeyResources ? "border-sky-400/60 bg-sky-500/10 text-sky-200" : "border-slate-700 text-slate-400 hover:border-slate-500"}`}
+          <Button
+            size="small"
+            type={showKeyResources ? "primary" : "default"}
+            ghost={showKeyResources}
+            icon={<PaperClipOutlined />}
             onClick={() => setShowKeyResources((v) => !v)}
-            type="button"
             title="切换关键资源面板"
           >
-            📎 {chat.keyResources.length}
-          </button>
+            {chat.keyResources.length}
+          </Button>
         )}
       </header>
 

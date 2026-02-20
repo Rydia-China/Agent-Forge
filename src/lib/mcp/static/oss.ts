@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
 import * as svc from "@/lib/services/oss-service";
@@ -18,26 +19,25 @@ export const ossMcp: McpProvider = {
       {
         name: "upload_from_url",
         description:
-          "Download a file from the given URL and upload it to OSS. Returns the permanent OSS URL. Useful for persisting generated images/videos or external resources.",
+          "Download file(s) from URL(s) and upload to OSS concurrently. Returns an array of results with status (ok/error) and permanent OSS URL for each item. For a single file, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
           properties: {
-            url: {
-              type: "string",
-              description: "Source URL to download from",
-            },
-            folder: {
-              type: "string",
-              description:
-                'OSS folder name (e.g. "image", "video", "file"). Default: "file"',
-            },
-            filename: {
-              type: "string",
-              description:
-                "Target filename. If omitted, auto-generated from source URL or timestamp",
+            items: {
+              type: "array",
+              description: "Array of files to download and upload",
+              items: {
+                type: "object",
+                properties: {
+                  url: { type: "string", description: "Source URL to download from" },
+                  folder: { type: "string", description: 'OSS folder name (e.g. "image", "video", "file"). Default: "file"' },
+                  filename: { type: "string", description: "Target filename (auto-generated if omitted)" },
+                },
+                required: ["url"],
+              },
             },
           },
-          required: ["url"],
+          required: ["items"],
         },
       },
       {
@@ -66,17 +66,17 @@ export const ossMcp: McpProvider = {
       {
         name: "delete",
         description:
-          "Delete an object from OSS by its full object name (e.g. public/image/xxx.png).",
+          "Delete object(s) from OSS concurrently. Pass an array of object names. For a single deletion, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
           properties: {
-            objectName: {
-              type: "string",
-              description:
-                'Full OSS object path (e.g. "public/image/1234-abc.png")',
+            objectNames: {
+              type: "array",
+              items: { type: "string" },
+              description: 'Array of full OSS object paths (e.g. ["public/image/1234-abc.png"])',
             },
           },
-          required: ["objectName"],
+          required: ["objectNames"],
         },
       },
     ];
@@ -88,9 +88,11 @@ export const ossMcp: McpProvider = {
   ): Promise<CallToolResult> {
     switch (name) {
       case "upload_from_url": {
-        const { url, folder, filename } = svc.UploadFromUrlParams.parse(args);
-        const result = await svc.uploadFromUrl(url, folder, filename);
-        return json(result);
+        const { items } = z
+          .object({ items: z.array(svc.UploadFromUrlParams).min(1) })
+          .parse(args);
+        const results = await svc.batchUploadFromUrl(items);
+        return json(results);
       }
 
       case "upload_base64": {
@@ -101,9 +103,11 @@ export const ossMcp: McpProvider = {
       }
 
       case "delete": {
-        const { objectName } = svc.DeleteObjectParams.parse(args);
-        await svc.deleteObject(objectName);
-        return text(`Deleted: ${objectName}`);
+        const { objectNames } = z
+          .object({ objectNames: z.array(z.string().min(1)).min(1) })
+          .parse(args);
+        const results = await svc.batchDelete(objectNames);
+        return json(results);
       }
 
       default:

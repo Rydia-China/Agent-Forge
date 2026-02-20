@@ -32,11 +32,17 @@ export const mcpManagerMcp: McpProvider = {
       },
       {
         name: "load",
-        description: "Load an MCP server into the active runtime so its tools become available. Works for both catalog (built-in) and DB dynamic servers. Call this when a skill's requires_mcps lists MCPs that are not yet active.",
+        description: "Load MCP server(s) into the active runtime so their tools become available. Works for both catalog (built-in) and DB dynamic servers. Pass an array of names. For a single MCP, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
-          properties: { name: { type: "string", description: "MCP server name to load" } },
-          required: ["name"],
+          properties: {
+            names: {
+              type: "array",
+              items: { type: "string" },
+              description: "Array of MCP server names to load",
+            },
+          },
+          required: ["names"],
         },
       },
       {
@@ -173,28 +179,33 @@ export const mcpManagerMcp: McpProvider = {
         return json([...catalogAvailable, ...dbAvailable]);
       }
       case "load": {
-        const { name: n } = svc.McpNameParams.parse(args);
+        const nameList = args.names as string[];
+        if (!Array.isArray(nameList) || nameList.length === 0) return text("Missing names parameter.");
         const sessionId = getCurrentSessionId();
-        // Try catalog first
-        if (isCatalogEntry(n)) {
-          loadFromCatalog(n); // ensure provider is in global pool
-          if (sessionId) sessionMcpTracker.load(sessionId, n);
-          return text(`Loaded catalog MCP "${n}" — its tools are now available`);
-        }
-        // Try DB dynamic
-        const server = await svc.getMcpServer(n);
-        if (!server) return text(`MCP "${n}" not found in catalog or database`);
-        const code = await svc.getMcpCode(n);
-        if (!code) return text(`MCP "${n}" has no production code`);
-        try {
+
+        const loadOne = async (n: string): Promise<string> => {
+          if (isCatalogEntry(n)) {
+            loadFromCatalog(n);
+            if (sessionId) sessionMcpTracker.load(sessionId, n);
+            return `Loaded catalog MCP "${n}"`;
+          }
+          const server = await svc.getMcpServer(n);
+          if (!server) return `MCP "${n}" not found in catalog or database`;
+          const code = await svc.getMcpCode(n);
+          if (!code) return `MCP "${n}" has no production code`;
           const provider = await sandboxManager.load(n, code);
           registry.replace(provider);
           if (sessionId) sessionMcpTracker.load(sessionId, n);
-          return text(`Loaded dynamic MCP "${n}" — its tools are now available`);
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return text(`Failed to load MCP "${n}": ${msg}`);
-        }
+          return `Loaded dynamic MCP "${n}"`;
+        };
+
+        const results = await Promise.allSettled(nameList.map(loadOne));
+        const output = results.map((r, i) =>
+          r.status === "fulfilled"
+            ? { name: nameList[i], status: "ok" as const, message: r.value }
+            : { name: nameList[i], status: "error" as const, error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
+        );
+        return json(output);
       }
       case "unload": {
         const { name: n } = svc.McpNameParams.parse(args);

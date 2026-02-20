@@ -17,11 +17,17 @@ export const skillsMcp: McpProvider = {
     return [
       {
         name: "get",
-        description: "Get the full content of a skill by name (returns production version).",
+        description: "Get the full content of skill(s) by name (returns production version). Pass an array of names. For a single skill, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
-          properties: { name: { type: "string", description: "Skill name" } },
-          required: ["name"],
+          properties: {
+            names: {
+              type: "array",
+              items: { type: "string" },
+              description: "Array of skill names to fetch",
+            },
+          },
+          required: ["names"],
         },
       },
       {
@@ -113,10 +119,21 @@ export const skillsMcp: McpProvider = {
   ): Promise<CallToolResult> {
     switch (name) {
       case "get": {
-        const { name: n } = svc.SkillGetParams.parse(args);
-        const skill = await svc.getSkill(n);
-        if (!skill) return text(`Skill "${n}" not found`);
-        return text(skill.content);
+        const names = args.names as string[];
+        if (!Array.isArray(names) || names.length === 0) return text("Missing names parameter.");
+        const results = await Promise.allSettled(
+          names.map(async (n) => {
+            const skill = await svc.getSkill(n);
+            if (!skill) throw new Error(`Skill "${n}" not found`);
+            return { name: n, content: skill.content };
+          }),
+        );
+        const output = results.map((r, i) =>
+          r.status === "fulfilled"
+            ? { status: "ok" as const, ...r.value }
+            : { status: "error" as const, name: names[i], error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
+        );
+        return json(output);
       }
       case "create": {
         const params = svc.SkillCreateParams.parse(args);

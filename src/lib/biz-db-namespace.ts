@@ -14,7 +14,6 @@
 
 import crypto from "node:crypto";
 import { prisma } from "./db";
-import { bizPool } from "./biz-db";
 import { replaceInCode, codeOnly } from "./sql-segments";
 
 // ---------------------------------------------------------------------------

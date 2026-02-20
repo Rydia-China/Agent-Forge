@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "antd";
+import { ExpandOutlined, CompressOutlined } from "@ant-design/icons";
 
 export function JsonViewer({ data }: { data: unknown }) {
   const [expanded, setExpanded] = useState(false);
@@ -12,13 +14,15 @@ export function JsonViewer({ data }: { data: unknown }) {
         {expanded ? text : preview}
       </pre>
       {text.length > 200 && (
-        <button
-          className="mt-1 text-[10px] text-sky-400 hover:text-sky-300"
+        <Button
+          type="link"
+          size="small"
+          icon={expanded ? <CompressOutlined /> : <ExpandOutlined />}
           onClick={() => setExpanded((v) => !v)}
-          type="button"
+          style={{ fontSize: 10, padding: 0, marginTop: 4 }}
         >
           {expanded ? "收起" : "展开全部"}
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -7,6 +7,10 @@ function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
 }
 
+function json(data: unknown): CallToolResult {
+  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+}
+
 /* ------------------------------------------------------------------ */
 /*  OpenAI client (reuses main LLM proxy)                              */
 /* ------------------------------------------------------------------ */
@@ -30,9 +34,13 @@ function getClient(): OpenAI {
 /* ------------------------------------------------------------------ */
 
 const RunTextParams = z.object({
-  prompt: z.string().min(1, "prompt is required"),
-  model: z.string().min(1, "model is required — specify the model name"),
-  imageUrls: z.array(z.string().url()).optional(),
+  tasks: z.array(
+    z.object({
+      prompt: z.string().min(1),
+      model: z.string().min(1),
+      imageUrls: z.array(z.string().url()).optional(),
+    }),
+  ).min(1, "tasks array must not be empty"),
 });
 
 /* ------------------------------------------------------------------ */
@@ -47,27 +55,32 @@ export const subagentMcp: McpProvider = {
       {
         name: "run_text",
         description:
-          "Execute a prompt on a specified model (subagent). Use this to delegate prompt-driven tasks to smaller/cheaper models instead of handling them in the main controller. The model parameter is required — it should be determined by the relevant skill or workflow. Returns the raw text response.",
+          "Execute prompt(s) on specified model(s) via subagent. Accepts an array of tasks; all tasks run concurrently. For a single prompt, pass a one-element array. Each result includes status (ok/error) so partial failures are handled gracefully.",
         inputSchema: {
           type: "object" as const,
           properties: {
-            prompt: {
-              type: "string",
-              description: "The compiled prompt to execute",
-            },
-            model: {
-              type: "string",
-              description:
-"Model name to use (e.g. 'google/gemini-3.1-pro-preview', 'z-ai/glm-5'). Required — no default."
-            },
-            imageUrls: {
+            tasks: {
               type: "array",
-              items: { type: "string" },
-              description:
-                "Optional image URLs for multimodal prompts (vision tasks)",
+              description: "Array of prompt tasks to execute concurrently",
+              items: {
+                type: "object",
+                properties: {
+                  prompt: { type: "string", description: "The compiled prompt to execute" },
+                  model: {
+                    type: "string",
+                    description: "Model name (e.g. 'google/gemini-3.1-pro-preview'). Required — no default.",
+                  },
+                  imageUrls: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Optional image URLs for multimodal prompts (vision tasks)",
+                  },
+                },
+                required: ["prompt", "model"],
+              },
             },
           },
-          required: ["prompt", "model"],
+          required: ["tasks"],
         },
       },
     ];
@@ -79,7 +92,7 @@ export const subagentMcp: McpProvider = {
   ): Promise<CallToolResult> {
     switch (name) {
       case "run_text": {
-        const { prompt, model, imageUrls } = RunTextParams.parse(args);
+        const { tasks } = RunTextParams.parse(args);
         const client = getClient();
 
         type MessageContent =
@@ -89,26 +102,35 @@ export const subagentMcp: McpProvider = {
               | { type: "image_url"; image_url: { url: string } }
             >;
 
-        let content: MessageContent;
-        if (imageUrls && imageUrls.length > 0) {
-          content = [
-            { type: "text", text: prompt },
-            ...imageUrls.map((url) => ({
-              type: "image_url" as const,
-              image_url: { url },
-            })),
-          ];
-        } else {
-          content = prompt;
-        }
+        const results = await Promise.allSettled(
+          tasks.map(async (task) => {
+            let content: MessageContent;
+            if (task.imageUrls && task.imageUrls.length > 0) {
+              content = [
+                { type: "text", text: task.prompt },
+                ...task.imageUrls.map((url) => ({
+                  type: "image_url" as const,
+                  image_url: { url },
+                })),
+              ];
+            } else {
+              content = task.prompt;
+            }
 
-        const res = await client.chat.completions.create({
-          model,
-          messages: [{ role: "user", content }],
-        });
+            const res = await client.chat.completions.create({
+              model: task.model,
+              messages: [{ role: "user", content }],
+            });
+            return res.choices[0]?.message.content ?? "";
+          }),
+        );
 
-        const reply = res.choices[0]?.message.content ?? "";
-        return text(reply);
+        const output = results.map((r, i) =>
+          r.status === "fulfilled"
+            ? { index: i, status: "ok" as const, result: r.value }
+            : { index: i, status: "error" as const, error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
+        );
+        return json(output);
       }
 
       default:

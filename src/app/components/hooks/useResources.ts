@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchJson, getErrorMessage } from "../client-utils";
 import type { SkillSummary, McpSummary, BuiltinMcpSummary } from "../../types";
 
