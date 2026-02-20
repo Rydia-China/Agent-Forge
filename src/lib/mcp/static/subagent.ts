@@ -58,7 +58,7 @@ export const subagentMcp: McpProvider = {
             model: {
               type: "string",
               description:
-                "Model name to use (e.g. 'google/gemini-3-pro-preview', 'deepseek/deepseek-chat'). Required — no default.",
+"Model name to use (e.g. 'google/gemini-3.1-pro-preview', 'z-ai/glm-5'). Required — no default."
             },
             imageUrls: {
               type: "array",

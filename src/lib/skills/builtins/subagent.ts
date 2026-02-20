@@ -39,9 +39,9 @@ requires_mcps:
 
 模型名称由具体的业务 skill 决定，不由 subagent 自行选择。常见模型：
 
-- \`google/gemini-3-pro-preview\` — 文本生成、JSON 解析、提示词生成
+- \`google/gemini-3.1-pro-preview\` — 文本生成、JSON 解析、提示词生成
 - \`google/gemini-3-pro-image-preview\` — 需要理解图片的多模态任务
-- \`deepseek/deepseek-chat\` — 长文本分析、章节处理
+- \`z-ai/glm-5\` — 长文本分析、章节处理
 
 ## 典型工作流
 
@@ -66,7 +66,7 @@ langfuse__compile_prompt({
 # Step 2: 执行
 subagent__run_text({
   prompt: "日漫风格，请根据以下剧情生成场景描述：校园黄昏",
-  model: "google/gemini-3-pro-preview"
+  model: "google/gemini-3.1-pro-preview"
 })
 → "夕阳西下的校园走廊，橙红色的光线透过窗户..."
 \\\`\\\`\\\`
