@@ -2,6 +2,7 @@ import { registry } from "./registry";
 import { skillsMcp } from "./static/skills-mcp";
 import { mcpManagerMcp } from "./static/mcp-manager";
 import { uiMcp } from "./static/ui";
+import { memoryMcp } from "./static/memory";
 
 /**
  * Register core MCP providers only: skills + mcp_manager + ui.
@@ -17,4 +18,5 @@ export async function initMcp(): Promise<void> {
   registry.register(skillsMcp);
   registry.register(mcpManagerMcp);
   registry.register(uiMcp);
+  registry.register(memoryMcp);
 }

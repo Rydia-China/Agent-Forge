@@ -12,6 +12,12 @@ import {
 } from "@/lib/services/chat-session-service";
 import { buildSystemPrompt } from "./system-prompt";
 import type { ChatMessage, ToolCall } from "./types";
+import {
+  ToolCallTracker,
+  scanMessages,
+  compressMessages,
+} from "./eviction";
+import { requestContext } from "@/lib/request-context";
 
 /* ------------------------------------------------------------------ */
 /*  Per-session concurrency lock                                       */
@@ -112,24 +118,49 @@ async function runAgentInner(
   session: { id: string; messages: ChatMessage[] },
   images?: string[],
 ): Promise<AgentResponse> {
-  // Build system prompt (fresh each turn to pick up new skills)
+  // Wrap with sessionId in request context (needed by memory__recall)
+  const parentStore = requestContext.getStore() ?? {};
+  return requestContext.run(
+    { ...parentStore, sessionId: session.id },
+    () => runAgentInnerCore(userMessage, session, images),
+  );
+}
+
+async function runAgentInnerCore(
+  userMessage: string,
+  session: { id: string; messages: ChatMessage[] },
+  images?: string[],
+): Promise<AgentResponse> {
   const systemPrompt = await buildSystemPrompt();
 
-  // User message (will be persisted at the end)
+  // --- Eviction setup (compression only; recall reads from DB) ---
+  const tracker = new ToolCallTracker();
+  scanMessages(session.messages, tracker);
+
   const userMsg: ChatMessage = { role: "user", content: userMessage };
   if (images?.length) userMsg.images = images;
   const newMessages: ChatMessage[] = [userMsg];
+  let persistedCount = 0;
 
-  // Build messages for LLM (history from DB + new user message)
-  const llmMessages: LlmMessage[] = [
-    { role: "system", content: systemPrompt },
-    ...session.messages.map(chatMsgToLlm),
-    chatMsgToLlm(userMsg),
-  ];
+  /** Flush un-persisted messages to DB so recall can find them. */
+  async function flush(): Promise<void> {
+    const batch = newMessages.slice(persistedCount);
+    if (batch.length > 0) {
+      await pushMessages(session.id, batch);
+      persistedCount = newMessages.length;
+    }
+  }
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    // Refresh tools each iteration — MCP load/unload mid-conversation
+    // Rebuild compressed LLM context each iteration
+    const allRaw = [...session.messages, ...newMessages];
+    const compressed = compressMessages(allRaw, tracker);
+    const llmMessages: LlmMessage[] = [
+      { role: "system", content: systemPrompt },
+      ...compressed.map(chatMsgToLlm),
+    ];
+
     const mcpTools = await registry.listAllTools();
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
 
@@ -139,7 +170,6 @@ async function runAgentInner(
 
     const assistantMsg = choice.message;
 
-    // Build storable assistant message
     const stored: ChatMessage = {
       role: "assistant",
       content: assistantMsg.content ?? null,
@@ -154,11 +184,9 @@ async function runAgentInner(
         }));
     }
     newMessages.push(stored);
-    llmMessages.push(assistantMsg as LlmMessage);
 
-    // No tool calls → persist & return
     if (!assistantMsg.tool_calls?.length) {
-      await pushMessages(session.id, newMessages);
+      await flush();
       const allMessages = [...session.messages, ...newMessages];
       return {
         sessionId: session.id,
@@ -167,7 +195,6 @@ async function runAgentInner(
       };
     }
 
-    // Execute tool calls
     const fnCalls = assistantMsg.tool_calls.filter(
       (tc): tc is Extract<typeof tc, { type: "function" }> => tc.type === "function",
     );
@@ -185,16 +212,20 @@ async function runAgentInner(
           ?.map((c: Record<string, unknown>) => ("text" in c ? String(c.text) : JSON.stringify(c)))
           .join("\n") ?? "";
 
+      // Register with eviction tracker
+      tracker.register(tc.id, tc.function.name, tc.function.arguments, content);
+
       const toolMsg: ChatMessage = {
         role: "tool",
         tool_call_id: tc.id,
         content,
       };
       newMessages.push(toolMsg);
-      llmMessages.push(toolMsg as LlmMessage);
     }
-  }
 
+    // Flush assistant + tool messages so recall can find them
+    await flush();
+  }
 }
 
 interface ToolCallDelta {
@@ -239,17 +270,38 @@ async function runAgentStreamInner(
   signal?: AbortSignal,
   images?: string[],
 ): Promise<AgentResponse> {
+  const parentStore = requestContext.getStore() ?? {};
+  return requestContext.run(
+    { ...parentStore, sessionId: session.id },
+    () => runAgentStreamInnerCore(userMessage, session, callbacks, signal, images),
+  );
+}
+
+async function runAgentStreamInnerCore(
+  userMessage: string,
+  session: { id: string; messages: ChatMessage[] },
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+  images?: string[],
+): Promise<AgentResponse> {
   const systemPrompt = await buildSystemPrompt();
+
+  const tracker = new ToolCallTracker();
+  scanMessages(session.messages, tracker);
 
   const userMsg: ChatMessage = { role: "user", content: userMessage };
   if (images?.length) userMsg.images = images;
   const newMessages: ChatMessage[] = [userMsg];
+  let persistedCount = 0;
 
-  const llmMessages: LlmMessage[] = [
-    { role: "system", content: systemPrompt },
-    ...session.messages.map(chatMsgToLlm),
-    chatMsgToLlm(userMsg),
-  ];
+  /** Flush un-persisted messages to DB so recall can find them. */
+  async function flush(): Promise<void> {
+    const batch = newMessages.slice(persistedCount);
+    if (batch.length > 0) {
+      await pushMessages(session.id, batch);
+      persistedCount = newMessages.length;
+    }
+  }
 
   let lastReply = "";
 
@@ -257,7 +309,14 @@ async function runAgentStreamInner(
   while (true) {
     if (signal?.aborted) break;
 
-    // Refresh tools each iteration — MCP load/unload mid-conversation
+    // Rebuild compressed LLM context each iteration
+    const allRaw = [...session.messages, ...newMessages];
+    const compressed = compressMessages(allRaw, tracker);
+    const llmMessages: LlmMessage[] = [
+      { role: "system", content: systemPrompt },
+      ...compressed.map(chatMsgToLlm),
+    ];
+
     const mcpTools = await registry.listAllTools();
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
 
@@ -297,26 +356,8 @@ async function runAgentStreamInner(
       }
       newMessages.push(stored);
 
-      const assistantMsg: LlmMessage =
-        toolCalls.length > 0
-          ? {
-              role: "assistant",
-              content: currentContent ? currentContent : null,
-              tool_calls: toolCalls.map((tc) => ({
-                id: tc.id,
-                type: "function",
-                function: {
-                  name: tc.function.name,
-                  arguments: tc.function.arguments,
-                },
-              })),
-            }
-          : { role: "assistant", content: currentContent };
-
-      llmMessages.push(assistantMsg);
-
       if (toolCalls.length === 0) {
-        await pushMessages(session.id, newMessages);
+        await flush();
         const allMessages = [...session.messages, ...newMessages];
         return {
           sessionId: session.id,
@@ -351,21 +392,21 @@ async function runAgentStreamInner(
             )
             .join("\n") ?? "";
 
+        // Register with eviction tracker
+        tracker.register(tc.id, tc.function.name, tc.function.arguments, content);
+
         const toolMsg: ChatMessage = {
           role: "tool",
           tool_call_id: tc.id,
           content,
         };
         newMessages.push(toolMsg);
-        llmMessages.push({
-          role: "tool",
-          content,
-          tool_call_id: tc.id,
-        });
       }
+
+      // Flush assistant + tool messages so recall can find them
+      await flush();
     } catch (err: unknown) {
       if (signal?.aborted) {
-        // Save partial streaming content before breaking
         if (currentContent) {
           lastReply = currentContent;
           newMessages.push({ role: "assistant", content: currentContent });
@@ -377,9 +418,7 @@ async function runAgentStreamInner(
   }
 
   // Abort path: persist whatever we accumulated
-  if (newMessages.length > 1) {
-    await pushMessages(session.id, newMessages);
-  }
+  await flush();
   const allMessages = [...session.messages, ...newMessages];
   return {
     sessionId: session.id,

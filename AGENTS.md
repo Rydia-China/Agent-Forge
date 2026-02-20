@@ -43,6 +43,11 @@
 - `docs/api-playbook.md` 记录接口间的因果关系、调用次序、验证方法——这些信息无法从代码推断
 - 任何新增/变更 API 时，同步更新 playbook 中的时序依赖和验证清单
 
+### Context Recovery
+- 当需要的中间产物（subagent 输出、编译结果等）不在当前上下文中时，**必须先通过 MCP/DB recall 已持久化的数据**
+- 禁止在未尝试 recall 的情况下 re-execute 任何已完成的步骤
+- 长对话中每个关键产物生成后，必须立即持久化到 DB/文件，不得仅依赖上下文保持
+
 ### 兼容性
 - Agent 使用 OpenAI chat/completions 格式 (tool-use loop)
 - Dynamic MCP 统一使用 JS 编写，运行于 QuickJS WebAssembly 沙盒

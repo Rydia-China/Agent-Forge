@@ -169,6 +169,29 @@ export async function getMessages(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Recall — retrieve original tool result from DB                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Recall the original content of a tool call result by its tool_call_id.
+ * Returns null if no matching tool message is found.
+ */
+export async function recallToolResult(
+  sessionId: string,
+  toolCallId: string,
+): Promise<string | null> {
+  const row = await prisma.chatMessage.findFirst({
+    where: {
+      sessionId,
+      role: "tool",
+      toolCallId,
+    },
+    select: { content: true },
+  });
+  return row?.content ?? null;
+}
+
+/* ------------------------------------------------------------------ */
 /*  DB row → ChatMessage conversion                                   */
 /* ------------------------------------------------------------------ */
 

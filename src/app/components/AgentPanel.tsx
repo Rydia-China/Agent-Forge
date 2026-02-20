@@ -168,16 +168,19 @@ export function AgentPanel({
   const abortRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const sessionIdRef = useRef<string | undefined>(initialSessionId);
+  const activeSendRef = useRef(false);
 
   // Keep ref in sync
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
 
-  // Status change callback
+  // Status change callback — use ref to avoid re-firing when parent re-renders
+  const onStatusChangeRef = useRef(onStatusChange);
+  useEffect(() => { onStatusChangeRef.current = onStatusChange; }, [onStatusChange]);
   useEffect(() => {
-    onStatusChange(status);
-  }, [status, onStatusChange]);
+    onStatusChangeRef.current(status);
+  }, [status]);
 
   // Auto-scroll
   useEffect(() => {
@@ -194,6 +197,8 @@ export function AgentPanel({
   // Load initial session
   useEffect(() => {
     if (!initialSessionId) return;
+    // Skip if session was just created during streaming — sendMessage handles messages
+    if (activeSendRef.current) return;
     setIsLoadingSession(true);
     fetchJson<SessionDetail>(`/api/sessions/${initialSessionId}`)
       .then((data) => {
@@ -273,6 +278,7 @@ export function AgentPanel({
     setError(null);
     setIsSending(true);
     setIsStreaming(true);
+    activeSendRef.current = true;
     setStatus("running");
     setInput("");
     const imagesToSend = [...pendingImages];
@@ -410,6 +416,7 @@ export function AgentPanel({
       }
     } finally {
       abortRef.current = null;
+      activeSendRef.current = false;
       setIsSending(false);
       setIsStreaming(false);
       setStreamingReply(null);

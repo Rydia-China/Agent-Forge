@@ -71,6 +71,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const selectedResourceRef = useRef<string | null>(null);
+  const panelsRef = useRef(panels);
+  useEffect(() => { panelsRef.current = panels; }, [panels]);
 
   useEffect(() => { if (typeof window === "undefined") return; const s = window.localStorage.getItem(USER_STORAGE_KEY); if (s && s.trim().length > 0) { setUserName(s); setUserDraft(s); } }, []);
   useEffect(() => { if (typeof window === "undefined") return; const n = userDraft.trim(); if (n.length > 0) window.localStorage.setItem(USER_STORAGE_KEY, n); else window.localStorage.removeItem(USER_STORAGE_KEY); }, [userDraft]);
@@ -89,7 +91,7 @@ export default function Home() {
   const loadResources = useCallback(async () => {
     setIsLoadingResources(true);
     try {
-      const sid = panels.find((p) => p.sessionId)?.sessionId;
+      const sid = panelsRef.current.find((p) => p.sessionId)?.sessionId;
       const sp = sid ? `?session=${encodeURIComponent(sid)}` : "";
       const [sk, mc, bm] = await Promise.all([
         fetchJson<SkillSummary[]>("/api/skills"),
@@ -99,7 +101,7 @@ export default function Home() {
       setSkills(sk); setMcps(mc); setBuiltinMcps(bm);
     } catch (err: unknown) { setError(getErrorMessage(err, "Failed to load resources.")); }
     finally { setIsLoadingResources(false); }
-  }, [panels]);
+  }, []);
 
   const loadResourceDetail = useCallback(async (resource: ResourceSelection) => {
     const key = `${resource.type}:${resource.name}`;
@@ -187,19 +189,37 @@ export default function Home() {
     if (!builtinMcps.some((m) => m.name === selectedResource.name) && !mcps.some((m) => m.name === selectedResource.name)) { setSelectedResource(null); setMcpDetail(null); setMcpVersions([]); }
   }, [builtinSkills, builtinMcps, dbSkills, mcps, selectedResource]);
 
+  const [activePanelId, setActivePanelId] = useState<string>(panels[0]?.panelId ?? "");
+
   /* ---- Panel management ---- */
   const addPanel = useCallback((sessionId?: string, panelTitle?: string | null) => {
     setPanels((prev) => {
       if (prev.length >= MAX_PANELS) return prev;
-      if (sessionId && prev.some((p) => p.sessionId === sessionId)) return prev;
-      return [...prev, { panelId: crypto.randomUUID(), sessionId, status: "idle" as const, title: panelTitle ?? null }];
+      if (sessionId) {
+        const existing = prev.find((p) => p.sessionId === sessionId);
+        if (existing) { setActivePanelId(existing.panelId); return prev; }
+      }
+      const newId = crypto.randomUUID();
+      setActivePanelId(newId);
+      return [...prev, { panelId: newId, sessionId, status: "idle" as const, title: panelTitle ?? null }];
     });
   }, []);
 
   const removePanel = useCallback((panelId: string) => {
     setPanels((prev) => {
+      const idx = prev.findIndex((p) => p.panelId === panelId);
       const next = prev.filter((p) => p.panelId !== panelId);
-      return next.length === 0 ? [{ panelId: crypto.randomUUID(), status: "idle" as const, title: null }] : next;
+      if (next.length === 0) {
+        const fresh = { panelId: crypto.randomUUID(), status: "idle" as const, title: null };
+        setActivePanelId(fresh.panelId);
+        return [fresh];
+      }
+      setActivePanelId((cur) => {
+        if (cur !== panelId) return cur;
+        const newIdx = Math.min(idx, next.length - 1);
+        return next[newIdx]?.panelId ?? next[0]?.panelId ?? cur;
+      });
+      return next;
     });
   }, []);
 
@@ -253,18 +273,36 @@ export default function Home() {
       <section className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-1 border-b border-slate-800 px-3 py-1.5">
           {panels.map((p) => (
-            <div key={p.panelId} className="flex items-center gap-1.5 rounded border border-slate-700 bg-slate-900/60 px-2.5 py-1 text-[11px] text-slate-200">
+            <div
+              key={p.panelId}
+              className={`group flex cursor-pointer items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] transition ${
+                p.panelId === activePanelId
+                  ? "border-emerald-400/60 bg-emerald-500/10 text-slate-100"
+                  : "border-slate-700 bg-slate-900/60 text-slate-400 hover:border-slate-500 hover:text-slate-200"
+              }`}
+              onClick={() => setActivePanelId(p.panelId)}
+            >
               <StatusBadge status={p.status} />
               <span className="max-w-[100px] truncate">{p.title?.trim() || "New"}</span>
+              <button
+                className="ml-0.5 rounded p-0.5 text-slate-500 opacity-0 transition hover:bg-slate-700 hover:text-slate-200 group-hover:opacity-100"
+                onClick={(e) => { e.stopPropagation(); removePanel(p.panelId); }}
+                type="button"
+                aria-label="Close tab"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3">
+                  <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                </svg>
+              </button>
             </div>
           ))}
           {panels.length < MAX_PANELS && (
             <button className="rounded border border-dashed border-slate-700 px-2.5 py-1 text-[11px] text-slate-400 hover:border-slate-500 hover:text-slate-200" onClick={() => addPanel()} type="button">+</button>
           )}
         </header>
-        <div className="flex flex-1 overflow-x-auto">
+        <div className="relative flex-1 overflow-hidden">
           {panels.map((p) => (
-            <div key={p.panelId} className="relative flex h-full min-w-[400px] flex-1">
+            <div key={p.panelId} className={`absolute inset-0 flex ${p.panelId === activePanelId ? "" : "pointer-events-none invisible"}`}>
               <AgentPanel
                 initialSessionId={p.sessionId}
                 userName={userName}

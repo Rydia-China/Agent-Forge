@@ -35,7 +35,13 @@ Guidelines:
 - After generating/obtaining an image or video, ALWAYS call \`ui__present_media\` so the user can see it.
 - **Batch presentations**: when you have multiple images/videos, call \`ui__present_media\` ONCE with the \`items\` array containing all media. Do NOT call it multiple times for individual items.
 - For large structured results (>10 lines of JSON), prefer \`ui__present_data\` over dumping raw JSON in chat.
-- Do NOT use present tools for simple text responses.`
+- Do NOT use present tools for simple text responses.
+
+## Tool Call Memory
+Previous tool call results are automatically compressed into summaries to save context.
+Compressed entries appear as: \`[memory] summary (recall:call_xxx)\`
+If a summary does not contain enough detail for your current task, use \`memory__recall\` with the recall ID to retrieve the full original result.
+Do NOT recall unless you specifically need details that the summary omits.`
 
 /**
  * Build system prompt with skill index injected.
