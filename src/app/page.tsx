@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "antd";
 import { AppstoreOutlined } from "@ant-design/icons";
 import { AgentPanel } from "./components/AgentPanel";
@@ -42,10 +42,17 @@ export default function Home() {
     () => {},
   );
 
+  const refreshSessionsRef = useRef(sessionsHook.refreshSessions);
+  const loadResourcesRef = useRef(resources.loadResources);
+  useEffect(() => {
+    refreshSessionsRef.current = sessionsHook.refreshSessions;
+    loadResourcesRef.current = resources.loadResources;
+  });
+
   const handleRefresh = useCallback(() => {
-    void sessionsHook.refreshSessions();
-    void resources.loadResources();
-  }, [sessionsHook, resources]);
+    void refreshSessionsRef.current();
+    void loadResourcesRef.current();
+  }, []);
 
   const handleDeleteSession = useCallback(
     async (sessionId: string) => {

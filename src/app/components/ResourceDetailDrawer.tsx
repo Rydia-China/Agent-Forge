@@ -33,8 +33,7 @@ export function ResourceDetailDrawer({ detail }: ResourceDetailDrawerProps) {
         ) : "Detail"
       }
       placement="right"
-      width="90vw"
-      styles={{ body: { maxWidth: 1400 } }}
+      styles={{ wrapper: { width: '90vw' }, body: { maxWidth: 1400 } }}
       open={!!detail.selectedResource}
       onClose={() => detail.setSelectedResource(null)}
       extra={
@@ -55,7 +54,7 @@ export function ResourceDetailDrawer({ detail }: ResourceDetailDrawerProps) {
 
       {detail.isLoadingResourceDetail ? (
         <div className="flex items-center justify-center py-12">
-          <Spin tip="Loading…" />
+          <Spin description="Loading…" />
         </div>
       ) : detail.selectedResource?.type === "skill" && detail.skillDetail ? (
         <SkillEditor

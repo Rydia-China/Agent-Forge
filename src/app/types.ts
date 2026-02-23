@@ -101,11 +101,17 @@ export type KeyResourceItem = {
   title?: string | null;
 };
 
+export type ActiveTask = {
+  id: string;
+  status: string;
+};
+
 export type SessionDetail = {
   id: string;
   title: string | null;
   messages: ChatMessage[];
   keyResources?: KeyResourceItem[];
+  activeTask?: ActiveTask | null;
 };
 
 export type UploadRequestPayload = {

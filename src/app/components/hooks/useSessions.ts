@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchJson, getErrorMessage } from "../client-utils";
 import type { SessionSummary } from "../../types";
 
@@ -19,6 +19,11 @@ export function useSessions(
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
 
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const onNoticeRef = useRef(onNotice);
+  onNoticeRef.current = onNotice;
+
   const refreshSessions = useCallback(async () => {
     setIsLoadingSessions(true);
     try {
@@ -28,11 +33,11 @@ export function useSessions(
         ),
       );
     } catch (err: unknown) {
-      onError(getErrorMessage(err, "Failed to load sessions."));
+      onErrorRef.current(getErrorMessage(err, "Failed to load sessions."));
     } finally {
       setIsLoadingSessions(false);
     }
-  }, [userName, onError]);
+  }, [userName]);
 
   const deleteSession = useCallback(
     async (sessionId: string) => {
@@ -40,12 +45,12 @@ export function useSessions(
       try {
         await fetchJson(`/api/sessions/${sessionId}`, { method: "DELETE" });
         await refreshSessions();
-        onNotice("已删除会话");
+        onNoticeRef.current("已删除会话");
       } catch (err: unknown) {
-        onError(getErrorMessage(err, "Failed to delete session."));
+        onErrorRef.current(getErrorMessage(err, "Failed to delete session."));
       }
     },
-    [refreshSessions, onError, onNotice],
+    [refreshSessions],
   );
 
   useEffect(() => {

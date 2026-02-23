@@ -14,9 +14,9 @@ export function ImageLightbox({ url, onClose }: ImageLightboxProps) {
       alt="Preview"
       style={{ display: "none" }}
       preview={{
-        visible: true,
-        onVisibleChange: (visible) => {
-          if (!visible) onClose();
+        open: true,
+        onOpenChange: (open) => {
+          if (!open) onClose();
         },
       }}
     />

@@ -24,6 +24,9 @@ export function useImageUpload(
   const [isComposing, setIsComposing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
   const uploadImage = useCallback(
     async (file: File): Promise<string | null> => {
       const form = new FormData();
@@ -36,11 +39,11 @@ export function useImageUpload(
         });
         return result.url;
       } catch (err: unknown) {
-        onError(getErrorMessage(err, "Failed to upload image."));
+        onErrorRef.current(getErrorMessage(err, "Failed to upload image."));
         return null;
       }
     },
-    [onError],
+    [],
   );
 
   const handleImageFiles = useCallback(

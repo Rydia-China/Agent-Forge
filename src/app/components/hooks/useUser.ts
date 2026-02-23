@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const USER_STORAGE_KEY = "agentForge.user";
 
@@ -23,6 +23,9 @@ export function useUser(onUserChanged: () => void): UseUserReturn {
     return s && s.trim().length > 0 ? s : "default";
   });
 
+  const onUserChangedRef = useRef(onUserChanged);
+  onUserChangedRef.current = onUserChanged;
+
   // Persist draft to localStorage
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -33,8 +36,8 @@ export function useUser(onUserChanged: () => void): UseUserReturn {
 
   const applyUserName = useCallback(() => {
     setUserName(userDraft.trim() || "default");
-    onUserChanged();
-  }, [userDraft, onUserChanged]);
+    onUserChangedRef.current();
+  }, [userDraft]);
 
   return { userName, userDraft, setUserDraft, applyUserName };
 }

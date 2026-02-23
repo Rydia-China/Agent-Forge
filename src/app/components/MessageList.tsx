@@ -64,7 +64,7 @@ export function MessageList({
       )}
       {isLoadingSession ? (
         <div className="flex items-center justify-center py-8">
-          <Spin tip="Loading…" />
+          <Spin description="Loading…" />
         </div>
       ) : messages.filter((m) => m.role !== "tool").length === 0 ? (
         <Empty description="Send a message to start." style={{ margin: "32px 0" }} />

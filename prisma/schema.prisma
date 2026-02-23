@@ -50,6 +50,7 @@ model ChatSession {
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages     ChatMessage[]
   keyResources KeyResource[]
+  tasks        Task[]
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
@@ -123,6 +124,34 @@ model BizTableMapping {
 
   @@unique([userName, logicalName])
   @@index([userName])
+}
+
+/// Task — 一次 agent 调用的生命周期，后端驱动，不依赖前端连接
+model Task {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  status    String      @default("pending") // pending | running | completed | failed | cancelled
+  input     Json        // { message, images? }
+  reply     String?
+  error     String?
+  events    TaskEvent[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([sessionId, status])
+}
+
+/// TaskEvent — 可重放的事件流，autoincrement id 用于 Last-Event-ID 排序
+model TaskEvent {
+  id        Int      @id @default(autoincrement())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  type      String   // delta | tool | done | error | session | upload_request | key_resource
+  data      Json
+  createdAt DateTime @default(now())
+
+  @@index([taskId, id])
 }
 
 /// Api — 对外 CRUD 接口，声明式 SQL 操作绑定 biz-db 数据

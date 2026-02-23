@@ -4,17 +4,24 @@ import {
   deleteSession,
   updateSessionTitle,
 } from "@/lib/services/chat-session-service";
+import { getActiveTaskForSession } from "@/lib/services/task-service";
 
 type Params = { params: Promise<{ id: string }> };
 
-/** GET /api/sessions/:id — get session with messages */
+/** GET /api/sessions/:id — get session with messages + active task */
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
   const session = await getSession(id);
   if (!session) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  return NextResponse.json(session);
+  const activeTask = await getActiveTaskForSession(id);
+  return NextResponse.json({
+    ...session,
+    activeTask: activeTask
+      ? { id: activeTask.id, status: activeTask.status }
+      : null,
+  });
 }
 
 /** PATCH /api/sessions/:id — update title */

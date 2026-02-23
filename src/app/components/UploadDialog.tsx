@@ -32,7 +32,7 @@ export function UploadDialog({
         </Button>
       }
       width={400}
-      maskClosable={!uploadProgress}
+      mask={{ closable: !uploadProgress }}
     >
       <div className="space-y-3">
         <div>

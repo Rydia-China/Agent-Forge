@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchJson, getErrorMessage } from "../client-utils";
 import type { SkillSummary, McpSummary, BuiltinMcpSummary } from "../../types";
 
@@ -22,6 +22,9 @@ export function useResources(
   const [mcps, setMcps] = useState<McpSummary[]>([]);
   const [builtinMcps, setBuiltinMcps] = useState<BuiltinMcpSummary[]>([]);
   const [isLoadingResources, setIsLoadingResources] = useState(false);
+
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   const builtinSkills = useMemo(
     () => skills.filter((s) => s.productionVersion === 0),
@@ -46,11 +49,11 @@ export function useResources(
       setMcps(mc);
       setBuiltinMcps(bm);
     } catch (err: unknown) {
-      onError(getErrorMessage(err, "Failed to load resources."));
+      onErrorRef.current(getErrorMessage(err, "Failed to load resources."));
     } finally {
       setIsLoadingResources(false);
     }
-  }, [currentSessionIdRef, onError]);
+  }, [currentSessionIdRef]);
 
   useEffect(() => {
     void loadResources();
