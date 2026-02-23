@@ -1,8 +1,8 @@
 /**
  * SQL security guard for biz-db tools.
  *
- * Centralised validation applied to every raw SQL that enters XTDB through the
- * `query` and `execute` MCP tools.
+ * Centralised validation applied to every raw SQL that enters the business
+ * PostgreSQL database through the `query` and `execute` MCP tools.
  */
 
 import { codeOnly } from "./sql-segments";
@@ -37,7 +37,21 @@ const BLOCKED_IDENTIFIERS = [
 const QUERY_PREFIXES = ["SELECT", "WITH"];
 
 /** Allowed first keyword for `execute` (write) tool. */
-const EXECUTE_PREFIXES = ["INSERT", "UPDATE", "DELETE"];
+const EXECUTE_PREFIXES = ["INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP", "TRUNCATE"];
+
+/** Dangerous DDL patterns that must never pass through execute. */
+const BLOCKED_DDL_PATTERNS = [
+  /\bDROP\s+DATABASE\b/,
+  /\bDROP\s+SCHEMA\b/,
+  /\bDROP\s+ROLE\b/,
+  /\bCREATE\s+DATABASE\b/,
+  /\bCREATE\s+ROLE\b/,
+  /\bCREATE\s+USER\b/,
+  /\bALTER\s+ROLE\b/,
+  /\bALTER\s+USER\b/,
+  /\bCREATE\s+(UNIQUE\s+)?INDEX\b/,
+  /\bREFERENCES\s+\w/,
+];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -125,9 +139,7 @@ export function guardExecute(sql: string): SqlCheckResult {
   if (forbidden)
     return {
       ok: false,
-      reason:
-        `BLOCKED: ${forbidden} is forbidden — it permanently destroys all history. ` +
-        "Use DELETE instead; the data can always be recovered via time-travel.",
+      reason: `BLOCKED: ${forbidden} is forbidden.`,
     };
 
   const blocked = referencesBlockedIdentifier(n);
@@ -137,13 +149,21 @@ export function guardExecute(sql: string): SqlCheckResult {
       reason: `BLOCKED: Access to "${blocked}" is not allowed.`,
     };
 
+  for (const pat of BLOCKED_DDL_PATTERNS) {
+    if (pat.test(n))
+      return {
+        ok: false,
+        reason: `BLOCKED: "${pat.source.replace(/\\[bs]/g, " ").trim()}" is not allowed.`,
+      };
+  }
+
   if (containsMultipleStatements(n))
     return { ok: false, reason: "BLOCKED: Multiple SQL statements are not allowed." };
 
   if (!EXECUTE_PREFIXES.some((p) => n.startsWith(p)))
     return {
       ok: false,
-      reason: "BLOCKED: Only INSERT, UPDATE, DELETE statements are allowed.",
+      reason: "BLOCKED: Only INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, TRUNCATE statements are allowed.",
     };
 
   return { ok: true };

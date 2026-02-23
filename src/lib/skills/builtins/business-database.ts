@@ -6,7 +6,7 @@
  */
 export const raw = `---
 name: business-database
-description: Manage business data using the XTDB immutable database via biz_db tools. Use when asked to create tables, store data, query data, or build any business data structure.
+description: Manage business data using the PostgreSQL business database via biz_db tools. Use when asked to create tables, store data, query data, or build any business data structure.
 tags:
   - core
   - database
@@ -14,25 +14,19 @@ tags:
 requires_mcps:
   - biz_db
 ---
-# Business Database (XTDB)
+# Business Database (PostgreSQL)
 
 ## 概述
 
-你可以通过 \`biz_db__*\` 系列 tools 操作一个独立的业务数据库。
-该数据库是 **XTDB v2** — 一个不可变的 SQL 数据库，所有数据变更都被永久记录，支持时间旅行查询。
-
-与传统数据库的关键差异：
-- **不可变** — 每次 INSERT/UPDATE/DELETE 都是追加新 fact，历史数据永不丢失
-- **双时态 (Bitemporal)** — 自动追踪 system_time（数据库记录时间）和 valid_time（业务生效时间）
-- **无需 soft delete** — DELETE 操作会记录删除事件，之后可通过时间旅行查看删除前的状态
-- **Schema 动态推断** — 可以先 INSERT 再建表，XTDB 会自动推断 schema
+你可以通过 \`biz_db__*\` 系列 tools 操作一个独立的业务 PostgreSQL 数据库。
+这是一个标准的 PostgreSQL 16 实例，支持完整的 DDL/DML 和所有 PG 特性。
 
 ## 可用工具
 
 - \`biz_db__list_tables\` — 列出所有业务表（你的表 + 全局表）
-- \`biz_db__describe_table\` — 查看表结构（列名、类型）
+- \`biz_db__describe_table\` — 查看表结构（列名、类型、是否可空）
 - \`biz_db__query\` — 执行 SELECT 查询，返回 JSON
-- \`biz_db__execute\` — 执行 DDL/DML（INSERT、UPDATE、DELETE 等）
+- \`biz_db__execute\` — 执行 DDL/DML（CREATE TABLE、INSERT、UPDATE、DELETE 等）
 - \`biz_db__upgrade_global\` — 将你的表升级为全局表（不可逆）
 - \`biz_db__list_global_tables\` — 列出全局表
 
@@ -48,113 +42,100 @@ requires_mcps:
 
 ## SQL 语法
 
-XTDB 通过 PostgreSQL wire 协议通信，但它**不是 PostgreSQL**。核心差异：
+标准 PostgreSQL SQL。以下是常用模式：
 
-### 无 CREATE TABLE — Schemaless
+### 建表
 
-XTDB **没有 CREATE TABLE 语句**。直接 INSERT 即可，表和 schema 自动创建：
+必须先用 CREATE TABLE 创建表结构，再插入数据：
 
 \\\`\\\`\\\`sql
--- 直接插入，表 customers 自动创建，_id 自动生成
-INSERT INTO customers (name, email, created_at)
-VALUES ('Alice', 'alice@example.com', CURRENT_TIMESTAMP);
--- 响应: OK — 1 row(s) affected. Auto-generated _id: a1b2c3d4-...
-
--- 后续插入可以有不同的字段，schema 会自动扩展
-INSERT INTO customers (name, email, phone)
-VALUES ('Bob', 'bob@example.com', '13800138000');
+CREATE TABLE customers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  phone TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 \\\`\\\`\\\`
 
-### _id 字段（自动生成）
+### 主键
 
-XTDB 要求每行有一个 \`_id\` 字段作为实体标识。**你不需要手动指定 _id** — 如果 INSERT 语句中省略了 \`_id\`，系统会自动生成 UUID 并在响应中返回。
+所有表统一使用 UUID 主键：\`id UUID PRIMARY KEY DEFAULT gen_random_uuid()\`。
+数据库自动生成，INSERT 时无需传入 id。
 
-- 推荐：省略 \`_id\`，让系统自动生成 UUID
-- 也可手动指定：整数 \`_id = 1\` 或字符串 \`_id = 'my-key'\`
-- 响应中会返回生成的 \`_id\`，用于后续 UPDATE/DELETE/查询
+### 数据类型
 
-### 无约束
+常用类型：
+- 文本：\`TEXT\`, \`VARCHAR(n)\`
+- 数值：\`INTEGER\`, \`BIGINT\`, \`NUMERIC(p,s)\`, \`REAL\`, \`DOUBLE PRECISION\`
+- 布尔：\`BOOLEAN\`
+- 时间：\`TIMESTAMPTZ\`, \`DATE\`, \`TIME\`
+- JSON：\`JSONB\`（推荐）, \`JSON\`
+- 数组：\`TEXT[]\`, \`INTEGER[]\` 等
 
-XTDB 不支持：\`NOT NULL\`、\`DEFAULT\`、\`FOREIGN KEY\`、\`UNIQUE\`、\`CHECK\`。
-数据完整性由应用层（即你）保证。关联关系通过字段值引用（如 \`task.project_id\` 引用 \`projects._id\`），但数据库不强制。
+### 约束
+
+支持的列约束：
+- \`NOT NULL\` — 非空
+- \`UNIQUE\` — 唯一
+- \`PRIMARY KEY\` — 主键
+- \`CHECK (expr)\` — 检查约束
+- \`DEFAULT value\` — 默认值
+
+**不支持**（受表名隔离机制限制）：
+- \`REFERENCES\` 外键 — 关联关系通过字段值约定（如 \`order.customer_id\` 存储 \`customers.id\` 的 UUID），应用层保证
+- \`CREATE INDEX\` — 索引由系统自动管理，无需手动创建
 
 ### 插入数据
 
 \\\`\\\`\\\`sql
--- _id 省略，自动生成 UUID
+-- 单条插入，id 自动生成 UUID
 INSERT INTO customers (name, email)
 VALUES ('Alice', 'alice@example.com');
 
--- 批量插入，每行自动分配不同的 UUID
+-- 批量插入
 INSERT INTO customers (name, email) VALUES
   ('Bob', 'bob@example.com'),
   ('Carol', 'carol@example.com');
 
--- 也可以手动指定 _id
-INSERT INTO customers (_id, name, email)
-VALUES (1, 'Alice', 'alice@example.com');
+-- 插入并返回生成的 id
+INSERT INTO customers (name, email)
+VALUES ('Dave', 'dave@example.com')
+RETURNING id;
 \\\`\\\`\\\`
 
 ### 更新和删除
 
 \\\`\\\`\\\`sql
--- UPDATE 不会覆盖历史，而是追加新版本
-UPDATE customers SET email = 'new@example.com' WHERE _id = 1;
-
--- DELETE 记录删除事件，历史仍可查
-DELETE FROM customers WHERE _id = 1;
+UPDATE customers SET email = 'new@example.com' WHERE id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+DELETE FROM customers WHERE id = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
 \\\`\\\`\\\`
 
-### 时间旅行查询
-
-这是 XTDB 的核心能力 — 查看数据在任意时间点的状态：
+### 修改表结构
 
 \\\`\\\`\\\`sql
--- 查看某个时间点的数据快照
-SELECT * FROM customers
-  FOR SYSTEM_TIME AS OF TIMESTAMP '2025-01-01T00:00:00Z';
+-- 添加列
+ALTER TABLE customers ADD COLUMN address TEXT;
 
--- 查看某段时间内的所有版本
-SELECT *, _system_from, _system_to FROM customers
-  FOR ALL SYSTEM_TIME
-  WHERE _id = 1;
-
--- 查看某条记录的完整变更历史
-SELECT *, _system_from, _system_to FROM customers
-  FOR ALL SYSTEM_TIME
-  WHERE _id = 1
-  ORDER BY _system_from;
+-- 删除列
+ALTER TABLE customers DROP COLUMN phone;
 \\\`\\\`\\\`
-
-### 系统字段
-
-XTDB 自动为每行维护以下系统字段（查询时可选择性返回）：
-- \`_system_from\` — 该版本的数据库记录开始时间
-- \`_system_to\` — 该版本的数据库记录结束时间（NULL 表示当前有效）
-- \`_valid_from\` — 业务生效开始时间
-- \`_valid_to\` — 业务生效结束时间
 
 ## 使用原则
 
 ### 建模
 
 - 每个业务实体一张表（customers、orders、products…）
-- \`_id\` 自动生成 UUID（省略即可），也可手动指定整数或字符串
-- 关联关系通过字段引用（如 \`task.project_id\` 引用 \`projects._id\`），数据库不强制
-- 不需要 \`updated_at\` / \`created_at\` 字段 — XTDB 的 \`_system_from\` 自动记录
+- 主键统一用 \`id UUID PRIMARY KEY DEFAULT gen_random_uuid()\`
+- 关联关系通过字段值约定（如 \`order.customer_id\` 存储关联表的 UUID），应用层保证完整性
+- 时间字段用 \`TIMESTAMPTZ\`，统一带时区
+- 需要审计时间的表加 \`created_at TIMESTAMPTZ DEFAULT NOW()\` 和 \`updated_at TIMESTAMPTZ DEFAULT NOW()\`
 
 ### 操作安全
 
 - **先查后改** — 操作数据前先用 \`biz_db__query\` 确认当前状态
-- **操作后确认** — 执行 DML 后用 \`biz_db__list_tables\` 或 \`biz_db__query\` 验证结果
+- **操作后确认** — 执行 DDL/DML 后用 \`biz_db__describe_table\` 或 \`biz_db__query\` 验证结果
 - **告知用户** — 对数据的任何修改都应先告知用户并获得确认
-- **误操作不慌** — 数据不可变，任何误操作都可以通过时间旅行查到历史状态
-- **禁止 ERASE** — XTDB 有一个 \`ERASE\` 命令可以永久删除数据及其全部历史。系统已在 MCP 层拦截此命令。不要尝试使用 ERASE，也不要向用户提及它的存在
-
-### 时间旅行的使用场景
-
-- 用户说"我之前删了一条数据，帮我找回来" → 用 \`FOR ALL SYSTEM_TIME\` 查历史
-- 用户说"昨天的数据是什么样的" → 用 \`FOR SYSTEM_TIME AS OF\` 查快照
-- 用户说"这条数据是什么时候改的" → 用 \`FOR ALL SYSTEM_TIME WHERE _id = ?\` 查变更历史
-- 数据审计 → 查完整时间线，展示谁在什么时候做了什么操作
+- **DDL 谨慎** — DROP TABLE、DROP COLUMN 等操作不可逆，务必先确认
+- **事务安全** — 单条 SQL 自动在事务中执行，无需手动 BEGIN/COMMIT
 `;

@@ -35,25 +35,6 @@ services:
     networks:
       - app-network
 
-  biz-db:
-    image: ghcr.io/xtdb/xtdb
-    restart: unless-stopped
-    volumes:
-      - xtdb_data:/var/lib/xtdb
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/healthz/alive || exit 1"]
-      start_period: 15s
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    networks:
-      - app-network
-
   app:
     image: agent-forge-app:latest
     build:
@@ -64,13 +45,11 @@ services:
       - "${PORT:-8001}:8001"
     env_file: .env
     environment:
-      # 覆盖 DATABASE_URL 指向容器内 db 服务
+      # 覆盖 DATABASE_URL 指向容器内 db 服务（同实例不同 database）
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-agent_forge}
-      BUSINESS_DATABASE_URL: postgresql://biz-db:5432/xtdb
+      BUSINESS_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/biz
     depends_on:
       db:
-        condition: service_healthy
-      biz-db:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:8001/ || exit 1"]
@@ -88,7 +67,6 @@ services:
 
 volumes:
   postgres_data:
-  xtdb_data:
 
 networks:
   app-network:

@@ -89,7 +89,6 @@ export function ResourceDrawer({
                 key={m.name}
                 color={m.active ? "green" : m.available ? "default" : undefined}
                 style={{
-                  cursor: "pointer",
                   ...((!m.active && !m.available) ? { textDecoration: "line-through", opacity: 0.5 } : {}),
                 }}
                 title={
@@ -99,10 +98,6 @@ export function ResourceDrawer({
                       ? `${m.name} (available)`
                       : `${m.name} (unavailable)`
                 }
-                onClick={() => {
-                  onSelectResource({ type: "mcp", name: m.name });
-                  onClose();
-                }}
               >
                 {m.name}
               </Tag>

@@ -4,7 +4,7 @@ import type { Api, ApiVersion, Prisma } from "@/generated/prisma";
 import { bizPool } from "@/lib/biz-db";
 import { guardQuery, guardExecute } from "@/lib/sql-guard";
 import { getCurrentUserName } from "@/lib/request-context";
-import { rewriteSqlWithResolve } from "@/lib/biz-db-namespace";
+import { rewriteSqlWithResolve, extractDroppedTableNames, deleteMappings } from "@/lib/biz-db-namespace";
 
 /* ------------------------------------------------------------------ */
 /*  Zod schemas — single source of truth for input validation         */
@@ -331,6 +331,12 @@ export async function callApiOperation(
   const autoCreate = op.type === "execute";
   const finalSql = await rewriteSqlWithResolve(getCurrentUserName(), op.sql, autoCreate);
   const result = await bizPool.query(finalSql, paramValues);
+
+  // Clean up mappings for dropped tables
+  const dropped = extractDroppedTableNames(op.sql);
+  if (dropped.length > 0) {
+    await deleteMappings(getCurrentUserName(), dropped);
+  }
 
   if (op.type === "query") {
     return {

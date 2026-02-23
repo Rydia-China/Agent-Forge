@@ -23,15 +23,23 @@ export interface TaskEventRow {
 const TASK_END = Symbol("task-end");
 
 /* ------------------------------------------------------------------ */
-/*  In-memory state                                                    */
+/*  In-memory state  (survives Next.js HMR)                            */
 /* ------------------------------------------------------------------ */
 
+const globalForTask = globalThis as unknown as {
+  __taskEmitter?: EventEmitter;
+  __taskAborts?: Map<string, AbortController>;
+};
+
 /** Emits `event:<taskId>` for live events, `end:<taskId>` on finish. */
-const emitter = new EventEmitter();
-emitter.setMaxListeners(0); // many concurrent subscribers
+const emitter = (globalForTask.__taskEmitter ??= (() => {
+  const e = new EventEmitter();
+  e.setMaxListeners(0);
+  return e;
+})());
 
 /** Active tasks' AbortControllers, keyed by taskId. */
-const activeAborts = new Map<string, AbortController>();
+const activeAborts = (globalForTask.__taskAborts ??= new Map());
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -317,39 +325,13 @@ export async function* subscribeEvents(
   lastEventId?: number,
   signal?: AbortSignal,
 ): AsyncGenerator<TaskEventRow> {
-  // 1. Replay from DB
-  const replayRows = await prisma.taskEvent.findMany({
-    where: {
-      taskId,
-      ...(lastEventId != null ? { id: { gt: lastEventId } } : {}),
-    },
-    orderBy: { id: "asc" },
-  });
-
-  let highestSeen = lastEventId ?? 0;
-  for (const row of replayRows) {
-    yield row;
-    highestSeen = row.id;
-  }
-
-  // Check if task is already terminal
-  const task = await prisma.task.findUnique({
-    where: { id: taskId },
-    select: { status: true },
-  });
-  if (
-    !task ||
-    task.status === "completed" ||
-    task.status === "failed" ||
-    task.status === "cancelled"
-  ) {
-    return;
-  }
-
-  // 2. Live events via EventEmitter
+  // --- Attach listener FIRST to avoid race condition ---
+  // Any events emitted after this point are captured in the queue.
+  // Events before this point are in the DB and will be replayed below.
   const queue: TaskEventRow[] = [];
   let resolve: (() => void) | null = null;
   let ended = false;
+  let highestSeen = lastEventId ?? 0;
 
   const onEvent = (row: TaskEventRow) => {
     if (row.id <= highestSeen) return; // duplicate guard
@@ -370,13 +352,47 @@ export async function* subscribeEvents(
   signal?.addEventListener("abort", onAbort, { once: true });
 
   try {
+    // 1. Replay persisted events from DB
+    const replayRows = await prisma.taskEvent.findMany({
+      where: {
+        taskId,
+        ...(lastEventId != null ? { id: { gt: lastEventId } } : {}),
+      },
+      orderBy: { id: "asc" },
+    });
+
+    for (const row of replayRows) {
+      highestSeen = row.id;
+      yield row;
+    }
+
+    // 2. Check if task already finished (events captured by listener above)
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { status: true },
+    });
+    const isTerminal =
+      !task ||
+      task.status === "completed" ||
+      task.status === "failed" ||
+      task.status === "cancelled";
+
+    // Drain any live events that arrived during replay
+    while (queue.length > 0) {
+      const row = queue.shift()!;
+      highestSeen = row.id;
+      yield row;
+    }
+
+    if (isTerminal) return;
+
+    // 3. Wait for live events
     while (!ended && !signal?.aborted) {
       if (queue.length > 0) {
         const row = queue.shift()!;
         highestSeen = row.id;
         yield row;
       } else {
-        // Wait for next event or end
         await new Promise<void>((r) => {
           resolve = r;
         });

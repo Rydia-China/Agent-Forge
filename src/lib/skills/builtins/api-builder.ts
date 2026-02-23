@@ -19,9 +19,9 @@ requires_mcps:
 
 ## 概述
 
-API 是系统的一等公民，与 Skill 和 MCP 平级。API 把对 biz-db（XTDB）的 SQL 操作声明式持久化，形成可管理、可版本化、可对外提供的 CRUD 接口。
+API 是系统的一等公民，与 Skill 和 MCP 平级。API 把对业务 PostgreSQL 数据库的 SQL 操作声明式持久化，形成可管理、可版本化、可对外提供的 CRUD 接口。
 
-API **不是** MCP，不涉及沙盒或代码执行。API 是纯数据：
+API **不是** MCP，不涉及沙箱或代码执行。API 是纯数据：
 - \`schema\` — 描述管理哪些表、哪些字段
 - \`operations\` — 声明式 SQL 操作（参数化查询）
 
@@ -31,23 +31,24 @@ API **不是** MCP，不涉及沙盒或代码执行。API 是纯数据：
 
 ### 1. 设计数据模型
 
-根据用户需求确定表结构。记住 XTDB 特性：
-- **无 CREATE TABLE** — 直接 INSERT 即可，表自动创建
-- **\`_id\` 必须** — 每行必须有 \`_id\` 字段，手动指定
-- **无约束** — 没有 NOT NULL、FOREIGN KEY、UNIQUE
+根据用户需求确定表结构。业务数据库是标准 PostgreSQL：
+- 必须先 \`CREATE TABLE\` 定义表结构
+- 主键统一用 \`id UUID PRIMARY KEY DEFAULT gen_random_uuid()\`
+- 充分使用约束：\`NOT NULL\`、\`UNIQUE\`、\`REFERENCES\`
 
 ### 2. 建立表结构
 
-用 \`biz_db__execute\` INSERT 初始数据，让 XTDB 推断 schema：
+用 \`biz_db__execute\` 创建表：
 
 \\\`\\\`\\\`sql
-INSERT INTO customers (_id, name, email, phone, created_at)
-VALUES (1, 'seed', 'seed@example.com', null, CURRENT_TIMESTAMP);
-DELETE FROM customers WHERE _id = 1;
+CREATE TABLE customers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  phone TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 \\\`\\\`\\\`
-
-先插入再删除 seed 数据即可建立表结构（XTDB 不可变，历史会保留）。
-或者直接让用户的第一条真实数据来建表。
 
 ### 3. 设计 operations
 
@@ -58,10 +59,10 @@ DELETE FROM customers WHERE _id = 1;
   "name": "operation_name",
   "description": "What this operation does",
   "type": "query",
-  "sql": "SELECT * FROM customers WHERE _id = $1",
+  "sql": "SELECT * FROM customers WHERE id = $1",
   "params": ["id"],
   "input": {
-    "id": { "type": "number", "required": true, "description": "Customer ID" }
+    "id": { "type": "string", "required": true, "description": "Customer UUID" }
   }
 }
 \\\`\\\`\\\`
@@ -81,11 +82,11 @@ DELETE FROM customers WHERE _id = 1;
   "schema": {
     "tables": {
       "customers": {
-        "_id": "integer",
-        "name": "string",
-        "email": "string",
-        "phone": "string",
-        "created_at": "timestamp"
+        "id": "uuid",
+        "name": "text",
+        "email": "text",
+        "phone": "text",
+        "created_at": "timestamptz"
       }
     }
   },
@@ -94,7 +95,7 @@ DELETE FROM customers WHERE _id = 1;
       "name": "list",
       "description": "List all customers",
       "type": "query",
-      "sql": "SELECT * FROM customers ORDER BY _id",
+      "sql": "SELECT * FROM customers ORDER BY id",
       "params": [],
       "input": {}
     },
@@ -102,17 +103,17 @@ DELETE FROM customers WHERE _id = 1;
       "name": "get",
       "description": "Get customer by ID",
       "type": "query",
-      "sql": "SELECT * FROM customers WHERE _id = $1",
+      "sql": "SELECT * FROM customers WHERE id = $1",
       "params": ["id"],
       "input": {
-        "id": { "type": "number", "required": true, "description": "Customer ID" }
+        "id": { "type": "string", "required": true, "description": "Customer UUID" }
       }
     },
     {
       "name": "create",
       "description": "Create a new customer",
       "type": "execute",
-      "sql": "INSERT INTO customers (_id, name, email, phone, created_at) VALUES ((SELECT COALESCE(MAX(_id),0)+1 FROM customers), $1, $2, $3, CURRENT_TIMESTAMP)",
+      "sql": "INSERT INTO customers (name, email, phone) VALUES ($1, $2, $3) RETURNING id",
       "params": ["name", "email", "phone"],
       "input": {
         "name": { "type": "string", "required": true, "description": "Customer name" },
@@ -124,23 +125,23 @@ DELETE FROM customers WHERE _id = 1;
       "name": "update",
       "description": "Update customer info",
       "type": "execute",
-      "sql": "UPDATE customers SET name = $1, email = $2, phone = $3 WHERE _id = $4",
+      "sql": "UPDATE customers SET name = $1, email = $2, phone = $3 WHERE id = $4",
       "params": ["name", "email", "phone", "id"],
       "input": {
         "name": { "type": "string", "required": true },
         "email": { "type": "string", "required": true },
         "phone": { "type": "string", "required": false },
-        "id": { "type": "number", "required": true, "description": "Customer ID to update" }
+        "id": { "type": "string", "required": true, "description": "Customer UUID to update" }
       }
     },
     {
       "name": "delete",
       "description": "Delete a customer",
       "type": "execute",
-      "sql": "DELETE FROM customers WHERE _id = $1",
+      "sql": "DELETE FROM customers WHERE id = $1",
       "params": ["id"],
       "input": {
-        "id": { "type": "number", "required": true, "description": "Customer ID to delete" }
+        "id": { "type": "string", "required": true, "description": "Customer UUID to delete" }
       }
     }
   ]
@@ -154,7 +155,7 @@ DELETE FROM customers WHERE _id = 1;
 \\\`\\\`\\\`json
 { "api_name": "customer-api", "operation": "create", "params": { "name": "Alice", "email": "alice@example.com", "phone": "13800138000" } }
 { "api_name": "customer-api", "operation": "list" }
-{ "api_name": "customer-api", "operation": "get", "params": { "id": 1 } }
+{ "api_name": "customer-api", "operation": "get", "params": { "id": "<uuid from create>" } }
 \\\`\\\`\\\`
 
 ## 第三方接入
@@ -194,19 +195,16 @@ API 中的 SQL 表名会根据当前用户自动处理：
 ### 参数化
 所有 SQL 必须使用 \`$1\`, \`$2\` 参数占位符，**禁止字符串拼接**。系统通过 PostgreSQL 参数化查询执行，无注入风险。
 
-### _id 自增
-XTDB 没有 AUTO_INCREMENT。INSERT 时用子查询生成 ID：
-\\\`\\\`\\\`sql
-INSERT INTO table (_id, ...) VALUES ((SELECT COALESCE(MAX(_id),0)+1 FROM table), $1, $2)
-\\\`\\\`\\\`
+### 主键
+所有表统一使用 \`id UUID PRIMARY KEY DEFAULT gen_random_uuid()\`。INSERT 时无需传 id，数据库自动生成。用 \`RETURNING id\` 获取生成的 UUID。
 
 ### SQL Guard 限制
 - \`type: "query"\` 只允许 SELECT / WITH 开头
-- \`type: "execute"\` 只允许 INSERT / UPDATE / DELETE 开头
-- 禁止 ERASE、系统表访问、多语句
+- \`type: "execute"\` 允许 INSERT / UPDATE / DELETE / CREATE / ALTER / DROP / TRUNCATE
+- 禁止系统表访问、多语句、DROP DATABASE / DROP SCHEMA 等危险操作
 
 ### 时间戳
-使用 \`CURRENT_TIMESTAMP\` 由数据库生成，不需要客户端传入。
+使用 \`NOW()\` 或 \`CURRENT_TIMESTAMP\` 由数据库生成，不需要客户端传入。建表时用 \`DEFAULT NOW()\` 自动填充。
 
 ## 版本管理
 

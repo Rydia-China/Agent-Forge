@@ -11,7 +11,7 @@ You can manage skills (knowledge documents), dynamic MCP servers, and APIs (busi
 - **NEVER create, update or import skills on your own initiative.** Skills are curated knowledge managed by the user. Do not write skills to store notes, summaries, or information you cannot find elsewhere.
 
 ## MCP On-demand Loading
-Only core MCPs (skills, mcp_manager) are loaded at startup. You can ONLY use tools from MCPs that are currently loaded.
+Core MCPs (skills, mcp_manager, ui, memory) are always loaded and cannot be unloaded. All other MCPs must be loaded on-demand. You can ONLY use tools from MCPs that are currently loaded.
 
 **IMPORTANT: If a tool name starts with a prefix you don't recognise in your current tool list, it means that MCP is NOT loaded yet. Do NOT guess what the tool does or fabricate a response — load the MCP first.**
 
@@ -26,7 +26,7 @@ Only core MCPs (skills, mcp_manager) are loaded at startup. You can ONLY use too
 Identify relevant skills → read their \`[needs: ...]\` → load all required MCPs → read skill content via \`skills__get\` → proceed with the task.
 
 ## Key Resource Presentation
-You can present images, videos, and structured data to the user via the **ui** MCP (always loaded, no need to \`mcp_manager__load\`).
+You can present images, videos, and structured data to the user via the **ui** MCP.
 
 - **\`ui__present_media\`** — Call this after obtaining an image or video URL (e.g. from \`video_mgr__generate_image\`, \`oss__upload_from_url\`). The user sees a rich preview: images as thumbnails (click to enlarge), videos as playable thumbnails.
 - **\`ui__present_data\`** — Call this when you have large JSON results, API responses, or structured data the user may want to browse. The data is shown in a dedicated panel (not in the chat text).
@@ -55,9 +55,8 @@ export async function buildSystemPrompt(): Promise<string> {
   if (skills.length > 0) {
     const skillIndex = skills
       .map((s) => {
-        const ver = s.productionVersion > 0 ? ` (v${s.productionVersion})` : "";
         const mcps = s.requiresMcps.length > 0 ? ` [needs: ${s.requiresMcps.join(", ")}]` : "";
-        return `- **${s.name}**${ver}: ${s.description}${mcps}`;
+        return `- **${s.name}**: ${s.description}${mcps}`;
       })
       .join("\n");
     parts.push(`## Available Skills\n${skillIndex}\n\nUse \`skills__get\` to read full skill content when needed. Load required MCPs via \`mcp_manager__load\` before using their tools.`);

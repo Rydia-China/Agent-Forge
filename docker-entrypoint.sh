@@ -2,22 +2,27 @@
 set -e
 
 # ── 等待数据库就绪（重试 30 次，间隔 2s）──
-echo "⏳ 等待数据库就绪..."
-MAX_RETRIES=30
-RETRY=0
-until node -e "
-  const { Client } = require('pg');
-  const c = new Client(process.env.DATABASE_URL);
-  c.connect().then(() => { c.end(); process.exit(0); }).catch(() => process.exit(1));
-" 2>/dev/null; do
-  RETRY=$((RETRY + 1))
-  if [ "$RETRY" -ge "$MAX_RETRIES" ]; then
-    echo "❌ 数据库连接超时（${MAX_RETRIES} 次重试）"
-    exit 1
-  fi
-  echo "  重试 $RETRY/$MAX_RETRIES..."
-  sleep 2
-done
+wait_for_db() {
+  local url="$1"
+  local label="$2"
+  echo "⏳ 等待 ${label} 就绪..."
+  local max=30 retry=0
+  until node -e "
+    const { Client } = require('pg');
+    const c = new Client('${url}');
+    c.connect().then(() => { c.end(); process.exit(0); }).catch(() => process.exit(1));
+  " 2>/dev/null; do
+    retry=$((retry + 1))
+    if [ "$retry" -ge "$max" ]; then
+      echo "❌ ${label} 连接超时（${max} 次重试）"
+      exit 1
+    fi
+    echo "  重试 $retry/$max..."
+    sleep 2
+  done
+}
+
+wait_for_db "$DATABASE_URL" "数据库"
 
 echo "📦 执行数据库迁移..."
 npx prisma migrate deploy

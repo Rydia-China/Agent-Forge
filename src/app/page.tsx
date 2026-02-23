@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "antd";
-import { AppstoreOutlined } from "@ant-design/icons";
 import { AgentPanel } from "./components/AgentPanel";
 import { SessionSidebar } from "./components/SessionSidebar";
 import { ResourceDrawer } from "./components/ResourceDrawer";
@@ -77,19 +75,6 @@ export default function Home() {
       />
 
       <section className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center border-b border-slate-800 px-3 py-1.5">
-          <div className="ml-auto">
-            <Button
-              size="small"
-              type={showResources ? "primary" : "default"}
-              ghost={showResources}
-              icon={<AppstoreOutlined />}
-              onClick={() => setShowResources((v) => !v)}
-            >
-              Resources
-            </Button>
-          </div>
-        </header>
         <AgentPanel
           key={panelKey}
           initialSessionId={currentSessionId}
@@ -101,6 +86,8 @@ export default function Home() {
           }}
           onTitleChange={() => {}}
           onRefreshNeeded={handleRefresh}
+          showResources={showResources}
+          onToggleResources={() => setShowResources((v) => !v)}
         />
       </section>
 

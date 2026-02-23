@@ -3,6 +3,7 @@ import { skillsMcp } from "./static/skills-mcp";
 import { mcpManagerMcp } from "./static/mcp-manager";
 import { uiMcp } from "./static/ui";
 import { memoryMcp } from "./static/memory";
+import { bizDbReady } from "@/lib/biz-db";
 
 /**
  * Register core MCP providers only: skills + mcp_manager + ui.
@@ -13,6 +14,9 @@ import { memoryMcp } from "./static/memory";
 export async function initMcp(): Promise<void> {
   if (registry.initialized) return;
   registry.initialized = true;
+
+  // Ensure the biz database exists before any tools can use it
+  await bizDbReady;
 
   // Core providers — always active, protected from custom override
   registry.register(skillsMcp);

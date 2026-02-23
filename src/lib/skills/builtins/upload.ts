@@ -82,17 +82,17 @@ bodyTemplate 支持的占位符：
 
 ### 用户上传小说到第三方系统
 1. 用户说"我想把我的小说上传到 XXX"
-2. 调用 \`upload__request_upload\`，endpoint 填 XXX 的上传接口
+2. 调用 \`ui__request_upload\`，endpoint 填 XXX 的上传接口
 3. 用户在弹窗中选择文件 → 浏览器直传
 4. 你在历史消息中看到 \`[文件上传成功] url: ...\`
 
 ### 用户上传图片到本系统 OSS
-1. 调用 \`upload__request_upload\`，endpoint 填 \`/api/oss/upload\`，accept 填 \`image/*\`
+1. 调用 \`ui__request_upload\`，endpoint 填 \`/api/oss/upload\`，accept 填 \`image/*\`
 2. 用户选择图片 → 上传到 OSS → 你拿到 OSS URL
 
 ### 用户上传视频到外部存储
 1. 用户提供了外部存储的上传接口和认证信息
-2. 调用 \`upload__request_upload\`，填入 endpoint + headers（含认证 token）
+2. 调用 \`ui__request_upload\`，填入 endpoint + headers（含认证 token）
 3. 浏览器直传 → 你拿到结果
 
 ## 与 oss__upload_from_url / oss__upload_base64 的区别

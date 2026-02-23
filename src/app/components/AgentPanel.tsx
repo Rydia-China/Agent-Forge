@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button, Typography } from "antd";
-import { PaperClipOutlined } from "@ant-design/icons";
+import { AppstoreOutlined, PaperClipOutlined } from "@ant-design/icons";
 import type { AgentStatus } from "./StatusBadge";
 import { useChat } from "./hooks/useChat";
 import { useImageUpload } from "./hooks/useImageUpload";
@@ -24,6 +24,8 @@ export interface AgentPanelProps {
   onSessionCreated: (sessionId: string) => void;
   onTitleChange: (title: string) => void;
   onRefreshNeeded: () => void;
+  showResources: boolean;
+  onToggleResources: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -37,6 +39,8 @@ export function AgentPanel({
   onSessionCreated,
   onTitleChange,
   onRefreshNeeded,
+  showResources,
+  onToggleResources,
 }: AgentPanelProps) {
   const chat = useChat(
     initialSessionId,
@@ -75,18 +79,30 @@ export function AgentPanel({
             {chat.sessionId ? chat.sessionId.slice(0, 12) + "…" : "Not created"}
           </Typography.Text>
         </div>
-        {chat.keyResources.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          {chat.keyResources.length > 0 && (
+            <Button
+              size="small"
+              type={showKeyResources ? "primary" : "default"}
+              ghost={showKeyResources}
+              icon={<PaperClipOutlined />}
+              onClick={() => setShowKeyResources((v) => !v)}
+              title="切换关键资源面板"
+            >
+              {chat.keyResources.length}
+            </Button>
+          )}
           <Button
             size="small"
-            type={showKeyResources ? "primary" : "default"}
-            ghost={showKeyResources}
-            icon={<PaperClipOutlined />}
-            onClick={() => setShowKeyResources((v) => !v)}
-            title="切换关键资源面板"
+            type={showResources ? "primary" : "default"}
+            ghost={showResources}
+            icon={<AppstoreOutlined />}
+            onClick={onToggleResources}
+            title="切换资源面板"
           >
-            {chat.keyResources.length}
+            Resources
           </Button>
-        )}
+        </div>
       </header>
 
       {/* Content area: chat + key resources */}

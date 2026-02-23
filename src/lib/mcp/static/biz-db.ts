@@ -2,7 +2,6 @@ import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
 import { bizPool } from "@/lib/biz-db";
 import { guardQuery, guardExecute } from "@/lib/sql-guard";
-import { autoFillId } from "@/lib/auto-id";
 import { getCurrentUserName } from "@/lib/request-context";
 import {
   listVisibleTables,
@@ -11,6 +10,8 @@ import {
   applySqlRewrite,
   upgradeToGlobal,
   findRelatedTables,
+  extractDroppedTableNames,
+  deleteMappings,
   GLOBAL_USER,
 } from "@/lib/biz-db-namespace";
 
@@ -30,13 +31,13 @@ export const bizDbMcp: McpProvider = {
       {
         name: "list_tables",
         description:
-          "List all tables in the business database (XTDB). Shows your tables and global tables.",
+          "List all tables in the business database (PostgreSQL). Shows your tables and global tables.",
         inputSchema: { type: "object" as const, properties: {} },
       },
       {
         name: "describe_table",
         description:
-          "Show the column names and inferred data types of table(s). Pass an array of table names. For a single table, pass a one-element array.",
+          "Show the column names and data types of table(s). Pass an array of table names. For a single table, pass a one-element array.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -67,7 +68,8 @@ export const bizDbMcp: McpProvider = {
       {
         name: "execute",
         description:
-          "Execute a SQL statement (INSERT, UPDATE, DELETE, etc.) on the XTDB immutable database. Tables are created automatically on first INSERT — no CREATE TABLE needed. For INSERT: if _id column is omitted, a UUID is auto-generated and returned.",
+          "Execute a SQL statement (DDL or DML) on the business PostgreSQL database. " +
+          "Supports: CREATE TABLE, ALTER TABLE, DROP TABLE, INSERT, UPDATE, DELETE, TRUNCATE.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -173,21 +175,19 @@ export const bizDbMcp: McpProvider = {
         const check = guardExecute(sql);
         if (!check.ok) return text(check.reason);
 
-        // Auto-fill _id for INSERT without _id
-        const { sql: filledSql, generatedIds } = autoFillId(sql);
-        if (filledSql !== sql) console.log("[biz_db execute] after autoFillId:", filledSql);
-
-        // Write: auto-create mappings for new tables (INSERT)
-        const map = await buildRewriteMap(userName, filledSql, true);
-        const rewritten = applySqlRewrite(filledSql, map);
+        // Write: auto-create mappings for new tables
+        const map = await buildRewriteMap(userName, sql, true);
+        const rewritten = applySqlRewrite(sql, map);
         console.log("[biz_db execute] final SQL:", rewritten);
         const result = await bizPool.query(rewritten);
 
-        let msg = `OK — ${result.rowCount ?? 0} row(s) affected. Command: ${result.command}`;
-        if (generatedIds.length > 0) {
-          msg += `\nAuto-generated _id: ${generatedIds.length === 1 ? generatedIds[0] : JSON.stringify(generatedIds)}`;
+        // Clean up mappings for dropped tables
+        const dropped = extractDroppedTableNames(sql);
+        if (dropped.length > 0) {
+          await deleteMappings(userName, dropped);
         }
-        return text(msg);
+
+        return text(`OK — ${result.rowCount ?? 0} row(s) affected. Command: ${result.command}`);
       }
 
       case "upgrade_global": {

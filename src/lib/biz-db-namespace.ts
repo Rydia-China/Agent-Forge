@@ -3,6 +3,7 @@
  *
  * Each logical table name is mapped to a UUID-based physical name via
  * the BizTableMapping table in the system database (Prisma).
+ * The business database is a standard PostgreSQL instance.
  *
  * Lookup order:
  *   1. (userName, logicalName) — user's own table
@@ -87,6 +88,28 @@ export async function ensureMapping(
 }
 
 // ---------------------------------------------------------------------------
+// Delete mapping (after DROP TABLE)
+// ---------------------------------------------------------------------------
+
+/**
+ * Delete mapping(s) for tables that have been dropped.
+ * Uses resolveTable to find the exact mapping (user → global priority),
+ * then deletes it. Safe to call for non-existent mappings.
+ */
+export async function deleteMappings(
+  userName: string | undefined,
+  logicalNames: string[],
+): Promise<void> {
+  for (const logicalName of logicalNames) {
+    const resolved = await resolveTable(userName, logicalName);
+    if (!resolved) continue;
+    await prisma.bizTableMapping.delete({
+      where: { userName_logicalName: { userName: resolved.owner, logicalName } },
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // List tables visible to a user
 // ---------------------------------------------------------------------------
 
@@ -139,6 +162,22 @@ export function extractTableNames(sql: string): string[] {
   TABLE_REF_RE.lastIndex = 0;
   while ((m = TABLE_REF_RE.exec(code)) !== null) {
     names.push(m[3]!);
+  }
+  return names;
+}
+
+/** Regex for DROP TABLE [IF EXISTS] <name>. */
+const DROP_TABLE_RE =
+  /\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?("?)(\w+)\1/gi;
+
+/** Extract logical table names from DROP TABLE statements. */
+export function extractDroppedTableNames(sql: string): string[] {
+  const names: string[] = [];
+  const code = codeOnly(sql);
+  DROP_TABLE_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = DROP_TABLE_RE.exec(code)) !== null) {
+    names.push(m[2]!);
   }
   return names;
 }
@@ -208,7 +247,7 @@ export async function rewriteSqlWithResolve(
 
 /**
  * Upgrade a user table to global. Changes ownership — no data copy needed.
- * The physical table in biz-db stays the same.
+ * The physical table in biz-db (PostgreSQL) stays the same.
  */
 export async function upgradeToGlobal(
   userName: string,

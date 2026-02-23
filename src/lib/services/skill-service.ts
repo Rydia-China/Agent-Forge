@@ -306,6 +306,7 @@ export async function importSkill(
 }
 
 export async function exportSkill(name: string): Promise<string | null> {
+  if (getBuiltinSkill(name)) throw new Error(`Skill "${name}" is a system built-in and cannot be exported`);
   const skill = await getSkill(name);
   if (!skill) return null;
   return toSkillMd(skill);
@@ -323,8 +324,9 @@ export interface SkillVersionSummary {
 }
 
 export async function listSkillVersions(name: string): Promise<SkillVersionSummary[]> {
+  if (getBuiltinSkill(name)) return []; // builtins are code-defined, no versions
   const skill = await prisma.skill.findUnique({ where: { name } });
-  if (!skill) return []; // builtins have no DB versions
+  if (!skill) return [];
 
   const versions = await prisma.skillVersion.findMany({
     where: { skillId: skill.id },
@@ -361,6 +363,7 @@ export async function getSkillVersion(name: string, version: number): Promise<Sk
 }
 
 export async function setSkillProduction(name: string, version: number): Promise<Skill> {
+  rejectIfBuiltin(name);
   const skill = await prisma.skill.findUnique({ where: { name } });
   if (!skill) throw new Error(`Skill "${name}" not found`);
 
