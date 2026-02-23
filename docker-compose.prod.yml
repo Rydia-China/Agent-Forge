@@ -2,14 +2,9 @@
 # 生产环境 Docker Compose
 #
 # 使用方式:
-#   构建: docker compose -f docker-compose.prod.yml build
-#   启动: docker compose -f docker-compose.prod.yml up -d
-#
-# 镜像分发:
-#   docker save agent-forge-app:latest | gzip > agent-forge.tar.gz
-#   # 目标机器:
-#   docker load < agent-forge.tar.gz
-#   docker compose -f docker-compose.prod.yml up -d
+#   推送镜像: pnpm deploy
+#   服务器部署: docker compose -f docker-compose.prod.yml up -d
+#   服务器需先登录: docker login ghcr.io
 # =============================================================================
 
 services:
@@ -35,16 +30,35 @@ services:
     networks:
       - app-network
 
-  app:
-    image: agent-forge-app:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
+  nginx:
+    image: nginx:alpine
     restart: unless-stopped
     ports:
-      - "${PORT:-8001}:8001"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./cert:/etc/nginx/cert:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-network
+
+  app:
+    image: ghcr.io/rydia-china/agent-forge:latest
+    restart: unless-stopped
+    expose:
+      - "8001"
     env_file: .env
     environment:
+      # 容器内部始终监听 8001，宿主机端口由 .env PORT 控制
+      PORT: "8001"
       # 覆盖 DATABASE_URL 指向容器内 db 服务（同实例不同 database）
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-agent_forge}
       BUSINESS_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/biz

@@ -22,7 +22,10 @@
 
 # misc
 .DS_Store
-*.pem
+
+# SSL 证书：公钥提交，私钥忽略
+cert/*.key
+!cert/*.pem
 
 # debug
 npm-debug.log*
@@ -45,3 +48,4 @@ src/generated
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+agent-forge.tar.gz

@@ -8,7 +8,9 @@
     "start": "next start --port ${PORT:-8001}",
     "lint": "eslint",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push"
+    "db:push": "prisma db push",
+    "release": "docker buildx build --platform linux/amd64 -t ghcr.io/rydia-china/agent-forge:latest -f Dockerfile . --load && docker push ghcr.io/rydia-china/agent-forge:latest && echo '✅ 已推送到 ghcr.io/rydia-china/agent-forge:latest'",
+    "deploy:prod": "ssh root@47.97.112.115 'cd /war/www/soft/agent-forge && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d'"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
