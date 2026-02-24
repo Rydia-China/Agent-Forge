@@ -13,6 +13,7 @@ import {
 } from "@/lib/services/chat-session-service";
 import { buildSystemPrompt } from "./system-prompt";
 import type { ChatMessage, ToolCall } from "./types";
+import { uploadDataUrl } from "@/lib/services/oss-service";
 import {
   ToolCallTracker,
   scanMessages,
@@ -97,16 +98,55 @@ export async function runAgentStream(
   );
 }
 
+/* ------------------------------------------------------------------ */
+/*  Image resolution: data URL → OSS HTTP URL                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Resolve images: upload any base64 data URLs to OSS and return HTTP URLs.
+ * Already-HTTP URLs pass through unchanged. Errors fall back to the data URL.
+ */
+async function resolveImages(images: string[]): Promise<string[]> {
+  return Promise.all(
+    images.map(async (img) => {
+      if (!img.startsWith("data:")) return img;
+      try {
+        return await uploadDataUrl(img, "chat-images");
+      } catch (err) {
+        console.warn("[agent] Failed to upload image to OSS, using data URL fallback:", err);
+        return img;
+      }
+    }),
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  ChatMessage → LlmMessage conversion                                */
+/* ------------------------------------------------------------------ */
+
 /**
  * Convert a ChatMessage to an LlmMessage, building multi-part content
  * when images are present (OpenAI vision format).
+ *
+ * When images exist, a text block mapping each image to its URL is
+ * prepended so the LLM can reference them accurately in tool calls.
  */
 function chatMsgToLlm(msg: ChatMessage): LlmMessage {
-  if (msg.images?.length && msg.content) {
+  if (msg.images?.length) {
+    const userText = msg.content ?? "";
+    const imageMap = msg.images
+      .map((url, i) => `- image_${i + 1}: ${url}`)
+      .join("\n");
+    const annotation =
+      `[${msg.images.length} 张图片已附加，需要在 tool call 中引用图片时请使用以下 URL]\n${imageMap}`;
+    const fullText = userText
+      ? `${userText}\n\n${annotation}`
+      : annotation;
+
     return {
       role: msg.role as "user",
       content: [
-        { type: "text" as const, text: msg.content },
+        { type: "text" as const, text: fullText },
         ...msg.images.map((url) => ({
           type: "image_url" as const,
           image_url: { url },
@@ -147,8 +187,11 @@ async function runAgentInnerCore(
   const tracker = new ToolCallTracker();
   scanMessages(session.messages, tracker);
 
+  // Resolve images: data URLs → OSS HTTP URLs
+  const resolvedImages = images?.length ? await resolveImages(images) : undefined;
+
   const userMsg: ChatMessage = { role: "user", content: userMessage };
-  if (images?.length) userMsg.images = images;
+  if (resolvedImages?.length) userMsg.images = resolvedImages;
   const newMessages: ChatMessage[] = [userMsg];
   let persistedCount = 0;
 
@@ -298,8 +341,11 @@ async function runAgentStreamInnerCore(
   const tracker = new ToolCallTracker();
   scanMessages(session.messages, tracker);
 
+  // Resolve images: data URLs → OSS HTTP URLs
+  const resolvedImages = images?.length ? await resolveImages(images) : undefined;
+
   const userMsg: ChatMessage = { role: "user", content: userMessage };
-  if (images?.length) userMsg.images = images;
+  if (resolvedImages?.length) userMsg.images = resolvedImages;
   const newMessages: ChatMessage[] = [userMsg];
   let persistedCount = 0;
 

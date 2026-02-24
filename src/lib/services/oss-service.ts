@@ -125,6 +125,26 @@ export async function batchUploadFromUrl(
   );
 }
 
+/**
+ * Upload a base64 data URL (e.g. from clipboard/drag-drop) to OSS.
+ * Returns the public HTTP URL.
+ */
+export async function uploadDataUrl(
+  dataUrl: string,
+  folder: string = "chat-images",
+): Promise<string> {
+  const match = dataUrl.match(/^data:([^;]+);base64,([\s\S]+)$/);
+  if (!match) throw new Error("Invalid data URL format");
+
+  const mimeType = match[1]!;
+  const base64Data = match[2]!;
+  const ext = extFromContentType(mimeType) || ".bin";
+  const filename = generateFilename(`upload${ext}`);
+  const buffer = Buffer.from(base64Data, "base64");
+
+  return uploadBuffer(buffer, filename, folder);
+}
+
 export async function batchDelete(
   objectNames: string[],
 ): Promise<Array<{ objectName: string; status: "ok" | "error"; error?: string }>> {

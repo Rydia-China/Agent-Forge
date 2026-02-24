@@ -11,7 +11,7 @@ const StreamRequestSchema = z.object({
   message: z.string().min(1),
   session_id: z.string().optional(),
   user: z.string().optional(),
-  images: z.array(z.string().url()).optional(),
+  images: z.array(z.string()).optional(),
 });
 
 function toSse(event: string, data: unknown): string {

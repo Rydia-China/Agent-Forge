@@ -16,7 +16,7 @@ export interface ChatInputProps {
   isStreaming: boolean;
   pendingImages: string[];
   setPendingImages: React.Dispatch<React.SetStateAction<string[]>>;
-  isUploading: boolean;
+  isProcessing: boolean;
   isDragOver: boolean;
   setIsDragOver: (v: boolean) => void;
   isComposing: boolean;
@@ -36,7 +36,7 @@ export function ChatInput({
   isStreaming,
   pendingImages,
   setPendingImages,
-  isUploading,
+  isProcessing,
   isDragOver,
   setIsDragOver,
   isComposing,
@@ -134,8 +134,8 @@ export function ChatInput({
               size="small"
               icon={<PictureOutlined />}
               onClick={() => fileInputRef.current?.click()}
-              disabled={isSending || isUploading}
-              loading={isUploading}
+              disabled={isSending || isProcessing}
+              loading={isProcessing}
             >
               图片
             </Button>
@@ -165,7 +165,7 @@ export function ChatInput({
               size="small"
               icon={<SendOutlined />}
               onClick={sendMessage}
-              disabled={isSending || input.trim().length === 0}
+              disabled={isSending || (input.trim().length === 0 && pendingImages.length === 0)}
             >
               Send
             </Button>

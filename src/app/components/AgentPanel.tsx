@@ -123,14 +123,18 @@ export function AgentPanel({
             isStreaming={chat.isStreaming}
             pendingImages={imageUpload.pendingImages}
             setPendingImages={imageUpload.setPendingImages}
-            isUploading={imageUpload.isUploading}
+            isProcessing={imageUpload.isProcessing}
             isDragOver={imageUpload.isDragOver}
             setIsDragOver={imageUpload.setIsDragOver}
             isComposing={imageUpload.isComposing}
             setIsComposing={imageUpload.setIsComposing}
             handleImageFiles={imageUpload.handleImageFiles}
             fileInputRef={imageUpload.fileInputRef}
-            sendMessage={() => void chat.sendMessage()}
+            sendMessage={() => {
+              const imgs = imageUpload.pendingImages.slice();
+              imageUpload.setPendingImages([]);
+              void chat.sendMessage(imgs.length > 0 ? imgs : undefined);
+            }}
             stopStreaming={chat.stopStreaming}
             openManualUpload={fileUpload.openManualUpload}
             uploadDialogOpen={!!chat.uploadDialog}

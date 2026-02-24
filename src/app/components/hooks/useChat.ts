@@ -26,7 +26,7 @@ export interface UseChatReturn {
   status: AgentStatus;
   setStatus: (s: AgentStatus) => void;
   keyResources: KeyResourceItem[];
-  sendMessage: () => Promise<void>;
+  sendMessage: (images?: string[]) => Promise<void>;
   stopStreaming: () => void;
   reloadSession: () => Promise<void>;
   sessionIdRef: React.RefObject<string | undefined>;
@@ -337,9 +337,10 @@ export function useChat(
   /*  sendMessage  (submit task)                                       */
   /* ---------------------------------------------------------------- */
 
-  const sendMessage = useCallback(async () => {
+  const sendMessage = useCallback(async (images?: string[]) => {
     const text = input.trim();
-    if (!text || isSending) return;
+    const hasImages = images && images.length > 0;
+    if ((!text && !hasImages) || isSending) return;
     setError(null);
     setIsSending(true);
     activeSendRef.current = true;
@@ -347,12 +348,14 @@ export function useChat(
     const wasNewSession = !sessionIdRef.current;
     const sid = sessionIdRef.current;
 
-    const userMsg: ChatMessage = { role: "user", content: text };
+    const userMsg: ChatMessage = { role: "user", content: text || null };
+    if (hasImages) userMsg.images = images;
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      const payload: Record<string, unknown> = { message: text, user: userName };
+      const payload: Record<string, unknown> = { message: text || "(image)", user: userName };
       if (sid) payload.session_id = sid;
+      if (hasImages) payload.images = images;
 
       const result = await fetchJson<{ task_id: string; session_id: string }>(
         "/api/tasks",
