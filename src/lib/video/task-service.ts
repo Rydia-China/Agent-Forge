@@ -80,15 +80,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-async function pushEvent(
+/**
+ * Per-task serial queue for pushEvent.
+ * Ensures events are written to DB and emitted in call order,
+ * even when callbacks fire in rapid succession (e.g. tool_start → tool_end).
+ */
+const pushQueues = new Map<string, Promise<unknown>>();
+
+function clearPushQueue(taskId: string): void {
+  pushQueues.delete(taskId);
+}
+
+function pushEvent(
   taskId: string,
   type: string,
   data: Prisma.InputJsonValue,
 ): Promise<void> {
-  const row = await prisma.taskEvent.create({
-    data: { taskId, type, data },
+  const prev = pushQueues.get(taskId) ?? Promise.resolve();
+  const next = prev.then(async () => {
+    const row = await prisma.taskEvent.create({
+      data: { taskId, type, data },
+    });
+    emitter.emit(`event:${taskId}`, row);
   });
-  emitter.emit(`event:${taskId}`, row);
+  pushQueues.set(taskId, next);
+  return next;
 }
 
 /* ------------------------------------------------------------------ */
@@ -231,6 +247,7 @@ async function executeVideoTask(
     }
   } finally {
     activeAborts.delete(taskId);
+    clearPushQueue(taskId);
     emitter.emit(`end:${taskId}`);
   }
 }
