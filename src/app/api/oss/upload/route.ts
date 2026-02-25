@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadBuffer } from "@/lib/services/oss-service";
+import { uploadBuffer, generateFilename } from "@/lib/services/oss-service";
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
@@ -9,9 +9,10 @@ export async function POST(request: NextRequest) {
   }
 
   const folder = (formData.get("folder") as string) || "file";
+  const semanticPrefix = formData.get("prefix") as string | undefined;
   const filename =
     (formData.get("filename") as string) ||
-    `${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${file.name}`;
+    generateFilename(file.name, semanticPrefix);
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const url = await uploadBuffer(buffer, filename, folder);

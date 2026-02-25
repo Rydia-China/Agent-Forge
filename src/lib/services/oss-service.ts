@@ -44,9 +44,35 @@ function buildPublicUrl(objectName: string): string {
   return `https://${bucket}.oss-${region}.aliyuncs.com/${objectName}`;
 }
 
-function generateFilename(originalName: string): string {
+/**
+ * Generate filename with semantic prefix + short timestamp + random suffix.
+ * Format: <prefix>-<short-time>-<random>.<ext>
+ * Example: avatar-2k3f7g-a3f7k2p.png
+ *
+ * - Weak timestamp: base36 encoded (8 chars) instead of 13-digit number
+ * - Strong semantic: extract meaningful prefix from original filename
+ * - Short: ~20 chars total
+ */
+export function generateFilename(originalName: string, semanticPrefix?: string): string {
   const ext = path.extname(originalName) || "";
-  return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}${ext}`;
+  const basename = path.basename(originalName, ext);
+
+  // Extract semantic prefix: use provided or first meaningful word from filename
+  let prefix = semanticPrefix || basename.toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .split("-")
+    .filter((w) => w.length > 2)[0] || "file";
+
+  // Limit prefix length
+  prefix = prefix.substring(0, 8);
+
+  // Base36 timestamp (8 chars, no long digit sequences)
+  const shortTime = Date.now().toString(36);
+
+  // Random suffix (6 chars)
+  const random = Math.random().toString(36).substring(2, 8);
+
+  return `${prefix}-${shortTime}-${random}${ext}`;
 }
 
 /** Guess extension from Content-Type header. */

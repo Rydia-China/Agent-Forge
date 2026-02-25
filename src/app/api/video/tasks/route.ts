@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { submitVideoTask } from "@/lib/video/task-service";
+import { submitTask } from "@/lib/services/task-service";
+import { VideoContextProvider } from "@/lib/video/context-provider";
+import { ensureVideoSchema } from "@/lib/video/schema";
 
 const VideoContextSchema = z.object({
   novelId: z.string().min(1),
@@ -34,18 +36,23 @@ export async function POST(req: NextRequest) {
 
   const { message, session_id, user, images, video_context, preload_mcps, skills } = parsed.data;
 
-  const result = await submitVideoTask({
+  const contextProvider = new VideoContextProvider({
+    novelId: video_context.novelId,
+    novelName: video_context.novelName,
+    scriptKey: video_context.scriptKey,
+  });
+
+  const result = await submitTask({
     message,
     sessionId: session_id,
     user,
     images,
-    videoContext: {
-      novelId: video_context.novelId,
-      novelName: video_context.novelName,
-      scriptKey: video_context.scriptKey,
+    agentConfig: {
+      contextProvider,
+      preloadMcps: preload_mcps,
+      skills,
     },
-    preloadMcps: preload_mcps,
-    skills,
+    beforeRun: () => ensureVideoSchema(),
   });
 
   return NextResponse.json({

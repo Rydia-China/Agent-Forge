@@ -1,5 +1,8 @@
 import { registry } from "@/lib/mcp/registry";
 import { initMcp } from "@/lib/mcp/init";
+import { isCatalogEntry, loadFromCatalog } from "@/lib/mcp/catalog";
+import { sandboxManager } from "@/lib/mcp/sandbox";
+import * as mcpService from "@/lib/services/mcp-service";
 import {
   chatCompletion,
   chatCompletionStream,
@@ -12,6 +15,8 @@ import {
   stripDanglingToolCalls,
 } from "@/lib/services/chat-session-service";
 import { buildSystemPrompt } from "./system-prompt";
+import { getSkill } from "@/lib/services/skill-service";
+import type { ContextProvider } from "./context-provider";
 import type { ChatMessage, ToolCall } from "./types";
 import { uploadDataUrl } from "@/lib/services/oss-service";
 import {
@@ -37,9 +42,13 @@ export interface KeyResourceEvent {
 const IMAGE_RE = /https?:\/\/\S+\.(?:png|jpe?g|gif|webp|svg)(?:[?#]\S*)?/gi;
 const VIDEO_RE = /https?:\/\/\S+\.(?:mp4|webm|mov)(?:[?#]\S*)?/gi;
 
+/** Minimum content length to consider for JSON key-resource detection. */
+const MIN_JSON_KR_SIZE = 200;
+
 /**
- * Scan tool result text for media URLs. System-driven — no tool
- * participation required. Every tool result is scanned automatically.
+ * Scan tool result text for media URLs and structured JSON data.
+ * System-driven — no tool participation required.
+ * Every tool result is scanned automatically.
  */
 export function detectMediaResources(toolName: string, content: string): KeyResourceEvent[] {
   const out: KeyResourceEvent[] = [];
@@ -56,7 +65,96 @@ export function detectMediaResources(toolName: string, content: string): KeyReso
     seen.add(url);
     out.push({ id: crypto.randomUUID(), mediaType: "video", url, title: toolName });
   }
+
+  // JSON detection: query results with non-empty rows, or non-trivial arrays
+  if (content.length >= MIN_JSON_KR_SIZE) {
+    try {
+      const parsed: unknown = JSON.parse(content);
+      // Pattern 1: { rows: [...], rowCount: N } — biz_db query result
+      if (isRecord(parsed) && Array.isArray(parsed.rows) && parsed.rows.length > 0) {
+        out.push({
+          id: crypto.randomUUID(),
+          mediaType: "json",
+          data: parsed.rows,
+          title: toolName,
+        });
+      }
+      // Pattern 2: top-level array of objects (e.g. structured tool output)
+      else if (Array.isArray(parsed) && parsed.length > 0 && isRecord(parsed[0])) {
+        out.push({
+          id: crypto.randomUUID(),
+          mediaType: "json",
+          data: parsed,
+          title: toolName,
+        });
+      }
+    } catch { /* not JSON, skip */ }
+  }
+
   return out;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Agent configuration                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Optional configuration for the agent loop.
+ * When provided, enables domain-specific context refresh, MCP pre-loading,
+ * and skill injection — without forking the core loop.
+ */
+export interface AgentConfig {
+  /** Dynamic context provider — called every iteration to refresh context. */
+  contextProvider?: ContextProvider;
+  /** MCP names to pre-load before the loop starts. */
+  preloadMcps?: string[];
+  /** Skill names whose full content should be injected into the system prompt. */
+  skills?: string[];
+}
+
+/* ------------------------------------------------------------------ */
+/*  MCP pre-loading                                                    */
+/* ------------------------------------------------------------------ */
+
+async function preloadMcps(names: string[]): Promise<void> {
+  for (const name of names) {
+    try {
+      if (registry.getProvider(name)) continue;
+      if (isCatalogEntry(name)) {
+        loadFromCatalog(name);
+      } else {
+        const code = await mcpService.getMcpCode(name);
+        if (!code) {
+          console.warn(`[agent] MCP "${name}" has no production code, skipping`);
+          continue;
+        }
+        const provider = await sandboxManager.load(name, code);
+        registry.replace(provider);
+      }
+    } catch (err) {
+      console.warn(`[agent] Failed to preload MCP "${name}":`, err);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Skill-enriched system prompt                                       */
+/* ------------------------------------------------------------------ */
+
+async function buildEnrichedSystemPrompt(config?: AgentConfig): Promise<string> {
+  const base = await buildSystemPrompt();
+  if (!config?.skills?.length) return base;
+
+  const skillParts: string[] = [];
+  for (const skillName of config.skills) {
+    const skill = await getSkill(skillName);
+    if (skill) {
+      skillParts.push(`### Skill: ${skill.name}\n${skill.content}`);
+    }
+  }
+
+  if (skillParts.length === 0) return base;
+  return base + "\n\n## Pre-loaded Skills (full content — no need to call skills__get)\n\n" + skillParts.join("\n\n---\n\n");
 }
 
 /* ------------------------------------------------------------------ */
@@ -135,12 +233,19 @@ export async function runAgentStream(
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
   images?: string[],
+  config?: AgentConfig,
 ): Promise<AgentResponse> {
   await initMcp();
+
+  // Pre-load MCPs if configured
+  if (config?.preloadMcps?.length) {
+    await preloadMcps(config.preloadMcps);
+  }
+
   const session = await getOrCreateSession(sessionId, userName);
   callbacks.onSession?.(session.id);
   return withSessionLock(session.id, () =>
-    runAgentStreamInner(userMessage, session, callbacks, signal, images),
+    runAgentStreamInner(userMessage, session, callbacks, signal, images, config),
   );
 }
 
@@ -368,11 +473,12 @@ async function runAgentStreamInner(
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
   images?: string[],
+  config?: AgentConfig,
 ): Promise<AgentResponse> {
   const parentStore = requestContext.getStore() ?? {};
   return requestContext.run(
     { ...parentStore, sessionId: session.id },
-    () => runAgentStreamInnerCore(userMessage, session, callbacks, signal, images),
+    () => runAgentStreamInnerCore(userMessage, session, callbacks, signal, images, config),
   );
 }
 
@@ -382,8 +488,10 @@ async function runAgentStreamInnerCore(
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
   images?: string[],
+  config?: AgentConfig,
 ): Promise<AgentResponse> {
-  const systemPrompt = await buildSystemPrompt();
+  // Build base system prompt once (with skill injection if configured)
+  const baseSystemPrompt = await buildEnrichedSystemPrompt(config);
 
   const tracker = new ToolCallTracker();
   scanMessages(session.messages, tracker);
@@ -409,6 +517,14 @@ async function runAgentStreamInnerCore(
 
   while (true) {
     if (signal?.aborted) break;
+
+    // If a ContextProvider is set, refresh dynamic context every iteration
+    const dynamicContext = config?.contextProvider
+      ? await config.contextProvider.build()
+      : null;
+    const systemPrompt = dynamicContext
+      ? dynamicContext + "\n\n---\n\n" + baseSystemPrompt
+      : baseSystemPrompt;
 
     // Rebuild compressed LLM context each iteration
     const allRaw = [...session.messages, ...newMessages];

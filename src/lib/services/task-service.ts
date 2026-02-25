@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { EventEmitter } from "node:events";
 import { runAgentStream } from "@/lib/agent/agent";
-import type { StreamCallbacks, KeyResourceEvent } from "@/lib/agent/agent";
+import type { StreamCallbacks, KeyResourceEvent, AgentConfig } from "@/lib/agent/agent";
 import type { ToolCall } from "@/lib/agent/types";
 import { addKeyResource } from "@/lib/services/key-resource-service";
 import { requestContext } from "@/lib/request-context";
@@ -105,6 +105,10 @@ export interface SubmitTaskInput {
   sessionId?: string;
   user?: string;
   images?: string[];
+  /** Optional agent configuration (context provider, preload MCPs, skills). */
+  agentConfig?: AgentConfig;
+  /** Optional pre-task initialization hook (e.g. ensureVideoSchema). */
+  beforeRun?: () => Promise<void>;
 }
 
 export interface SubmitTaskResult {
@@ -157,6 +161,11 @@ async function executeTask(
   activeAborts.set(taskId, ac);
 
   try {
+    // Run pre-task initialization if provided (e.g. ensureVideoSchema)
+    if (input.beforeRun) {
+      await input.beforeRun();
+    }
+
     await prisma.task.update({
       where: { id: taskId },
       data: { status: "running" },
@@ -182,26 +191,22 @@ async function executeTask(
         void pushEvent(taskId, "upload_request", req as Prisma.InputJsonValue);
       },
       onKeyResource: (resource: KeyResourceEvent) => {
-        if (resource.mediaType === "json") {
-          // JSON → persist to DB (source of truth), then emit SSE
-          void addKeyResource(sessionId, {
-            mediaType: resource.mediaType,
-            data: resource.data as Prisma.InputJsonValue | undefined,
-            title: resource.title,
+        // Persist all resource types (image/video/json) to DB, then emit SSE
+        void addKeyResource(sessionId, {
+          mediaType: resource.mediaType,
+          url: resource.url,
+          data: resource.data as Prisma.InputJsonValue | undefined,
+          title: resource.title,
+        })
+          .then((row) => {
+            void pushEvent(taskId, "key_resource", {
+              ...resource,
+              id: row.id,
+            } as unknown as Prisma.InputJsonValue);
           })
-            .then((row) => {
-              void pushEvent(taskId, "key_resource", {
-                ...resource,
-                id: row.id,
-              } as unknown as Prisma.InputJsonValue);
-            })
-            .catch(() => {
-              void pushEvent(taskId, "key_resource", resource as unknown as Prisma.InputJsonValue);
-            });
-        } else {
-          // Media → SSE only, derived from messages on re-fetch
-          void pushEvent(taskId, "key_resource", resource as unknown as Prisma.InputJsonValue);
-        }
+          .catch(() => {
+            void pushEvent(taskId, "key_resource", resource as unknown as Prisma.InputJsonValue);
+          });
       },
     };
 
@@ -215,6 +220,7 @@ async function executeTask(
           callbacks,
           ac.signal,
           input.images,
+          input.agentConfig,
         ),
     );
 
