@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useCallback } from "react";
 import { Button, Input, Alert } from "antd";
-import { SendOutlined, StopOutlined, LoadingOutlined } from "@ant-design/icons";
+import { SendOutlined, StopOutlined, LoadingOutlined, PictureOutlined, CloseCircleFilled } from "@ant-design/icons";
 import { StatusBadge } from "@/app/components/StatusBadge";
 import { MessageList } from "@/app/components/MessageList";
+import { useImageUpload } from "@/app/components/hooks/useImageUpload";
 import { useVideoChat } from "../hooks/useVideoChat";
-import type { KeyResourceItem } from "@/app/types";
 import type { VideoContext } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -24,13 +24,6 @@ export interface VideoChatProps {
   onRefreshNeeded: () => void;
   /** If set, auto-send this message on mount (e.g. after EP upload). */
   autoMessage?: string;
-  /** Notify parent when key resources change. */
-  onKeyResourcesChange?: (resources: KeyResourceItem[]) => void;
-  /** Expose key resource CRUD to parent. */
-  onKeyResourceHandlers?: (handlers: {
-    update: (id: string, data: unknown, title?: string) => Promise<void>;
-    delete: (id: string) => Promise<void>;
-  }) => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -45,8 +38,6 @@ export function VideoChat({
   onSessionCreated,
   onRefreshNeeded,
   autoMessage,
-  onKeyResourcesChange,
-  onKeyResourceHandlers,
 }: VideoChatProps) {
   const userName = videoContext
     ? `video:${videoContext.novelId}:${videoContext.scriptKey}`
@@ -63,28 +54,13 @@ export function VideoChat({
     autoMessage,
   );
 
-  // Notify parent of key resources changes
-  const krChangeRef = useRef(onKeyResourcesChange);
-  krChangeRef.current = onKeyResourcesChange;
-  useEffect(() => {
-    krChangeRef.current?.(chat.keyResources);
-  }, [chat.keyResources]);
-
-  // Expose handlers once
-  const handlersRef = useRef(onKeyResourceHandlers);
-  handlersRef.current = onKeyResourceHandlers;
-  useEffect(() => {
-    handlersRef.current?.({
-      update: chat.updateKeyResource,
-      delete: chat.deleteKeyResource,
-    });
-  }, [chat.updateKeyResource, chat.deleteKeyResource]);
-
-  const [isComposing, setIsComposing] = useState(false);
+  const img = useImageUpload((msg) => chat.setError(msg));
 
   const handleSend = useCallback(() => {
-    void chat.sendMessage();
-  }, [chat]);
+    const images = img.pendingImages.length > 0 ? [...img.pendingImages] : undefined;
+    img.setPendingImages([]);
+    void chat.sendMessage(images);
+  }, [chat, img]);
 
   if (!videoContext) {
     return (
@@ -95,7 +71,7 @@ export function VideoChat({
   }
 
   return (
-    <div className="flex h-full flex-col border-t border-slate-800 bg-slate-950/60">
+    <div className="flex h-full flex-col bg-slate-950/60">
       {/* Chat error */}
       {chat.error && (
         <Alert
@@ -132,15 +108,55 @@ export function VideoChat({
       )}
 
       {/* Input */}
-      <footer className="border-t border-slate-800 px-3 py-2">
-        <div className="flex items-end gap-2">
+      <footer className="px-3 py-2.5">
+        {/* Pending image previews */}
+        {img.pendingImages.length > 0 && (
+          <div className="mb-1.5 flex flex-wrap gap-1.5">
+            {img.pendingImages.map((url, i) => (
+              <div key={url} className="group relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={`Pending ${i + 1}`} className="h-12 w-12 rounded border border-slate-700 object-cover" />
+                <CloseCircleFilled
+                  className="absolute -right-1 -top-1 cursor-pointer text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-rose-400"
+                  style={{ fontSize: 14 }}
+                  onClick={() => img.setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+        <div
+          className={`flex items-end gap-2 rounded-xl border bg-slate-900/60 px-3 py-2 transition ${
+            img.isDragOver ? "border-emerald-400 bg-emerald-500/10" : "border-slate-700"
+          }`}
+          onDragOver={(e) => { e.preventDefault(); img.setIsDragOver(true); }}
+          onDragLeave={() => img.setIsDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); img.setIsDragOver(false); void img.handleImageFiles(Array.from(e.dataTransfer.files)); }}
+        >
+          {/* Hidden file input */}
+          <input
+            ref={img.fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => { void img.handleImageFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }}
+          />
+          <Button
+            type="text"
+            size="small"
+            icon={<PictureOutlined />}
+            onClick={() => img.fileInputRef.current?.click()}
+            disabled={chat.isSending}
+            className="shrink-0 !text-slate-400 hover:!text-slate-200"
+          />
           <Input.TextArea
             autoSize={{ minRows: 1, maxRows: 4 }}
-            placeholder="Chat with video agent…"
+            placeholder={img.isDragOver ? "松开以上传图片…" : "Chat with video agent…"}
             value={chat.input}
             onChange={(e) => chat.setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (isComposing) return;
+              if (img.isComposing) return;
               const native = e.nativeEvent;
               const composing =
                 typeof native === "object" &&
@@ -153,8 +169,15 @@ export function VideoChat({
                 handleSend();
               }
             }}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={() => setIsComposing(false)}
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData.files);
+              if (files.some((f) => f.type.startsWith("image/"))) {
+                e.preventDefault();
+                void img.handleImageFiles(files);
+              }
+            }}
+            onCompositionStart={() => img.setIsComposing(true)}
+            onCompositionEnd={() => img.setIsComposing(false)}
             disabled={chat.isSending}
             variant="borderless"
             style={{ fontSize: 12 }}
@@ -175,7 +198,7 @@ export function VideoChat({
                 size="small"
                 icon={<SendOutlined />}
                 onClick={handleSend}
-                disabled={chat.isSending || chat.input.trim().length === 0}
+                disabled={chat.isSending || (chat.input.trim().length === 0 && img.pendingImages.length === 0)}
               />
             )}
           </div>

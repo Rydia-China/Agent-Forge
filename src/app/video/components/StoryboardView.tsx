@@ -93,7 +93,7 @@ export function StoryboardView({ scenes, isLoading, scriptKey, episodeId }: Stor
         title="EP Content"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        width={520}
+        size={520}
       >
         {loadingContent ? (
           <div className="flex justify-center py-8"><Spin /></div>

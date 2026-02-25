@@ -82,11 +82,25 @@ export interface ShotImageResource {
   imageUrl: string;
 }
 
+export interface JsonResource {
+  id: string;
+  title: string;
+  data: unknown;
+}
+
+export interface OtherImageResource {
+  id: string;
+  url: string;
+  title: string | null;
+}
+
 export interface EpisodeResources {
   characters: CharacterResource[];
   costumes: CostumeResource[];
   sceneImages: SceneDetail[];
   shotImages: ShotImageResource[];
+  jsonData: JsonResource[];
+  otherImages: OtherImageResource[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -274,16 +288,17 @@ export async function getResources(
   scriptId: string,
   novelId: string,
 ): Promise<EpisodeResources> {
-  const [tCharacters, tCostumes, tScenes, tShots] = await Promise.all([
+  const [tCharacters, tCostumes, tScenes, tShots, tScripts] = await Promise.all([
     physical("novel_characters"),
     physical("script_costumes"),
     physical("script_scenes"),
     physical("script_shots"),
+    physical("novel_scripts"),
   ]);
 
-  const [charResult, costumeResult, sceneResult, shotResult] = await Promise.all([
+  const [charResult, costumeResult, sceneResult, shotResult, scriptResult] = await Promise.all([
     bizPool.query(
-      `SELECT id, character_name, physical_traits, portrait_url
+      `SELECT id, character_name, physical_traits, portrait_url, card_raw
        FROM "${tCharacters}"
        WHERE novel_id = $1
        ORDER BY created_at`,
@@ -309,7 +324,84 @@ export async function getResources(
        ORDER BY scene_index, shot_index`,
       [scriptId],
     ),
+    bizPool.query(
+      `SELECT id, script_key, storyboard_raw
+       FROM "${tScripts}"
+       WHERE id = $1 LIMIT 1`,
+      [scriptId],
+    ),
   ]);
+
+  // Collect fixed JSON resources from known columns
+  const jsonData: JsonResource[] = [];
+
+  // Character card_raw
+  for (const r of charResult.rows as Array<Record<string, unknown>>) {
+    const raw = r.card_raw as string | null;
+    if (!raw) continue;
+    try {
+      const data: unknown = JSON.parse(raw);
+      jsonData.push({
+        id: `char:${r.id as string}`,
+        title: (r.character_name as string) ?? "Character",
+        data,
+      });
+    } catch { /* not valid JSON */ }
+  }
+
+  // Storyboard raw
+  const scriptRow = scriptResult.rows[0] as Record<string, unknown> | undefined;
+  if (scriptRow?.storyboard_raw) {
+    const raw = scriptRow.storyboard_raw as string;
+    try {
+      const data: unknown = JSON.parse(raw);
+      jsonData.push({
+        id: `storyboard:${scriptRow.id as string}`,
+        title: "Storyboard",
+        data,
+      });
+    } catch { /* not valid JSON */ }
+  }
+
+  // Collect all known image URLs from domain tables
+  const knownUrls = new Set<string>();
+  for (const r of charResult.rows as Array<Record<string, unknown>>) {
+    if (r.portrait_url) knownUrls.add(r.portrait_url as string);
+  }
+  for (const r of costumeResult.rows as Array<Record<string, unknown>>) {
+    if (r.costume_image_url) knownUrls.add(r.costume_image_url as string);
+  }
+  for (const r of sceneResult.rows as Array<Record<string, unknown>>) {
+    if (r.scene_image_url) knownUrls.add(r.scene_image_url as string);
+  }
+  for (const r of shotResult.rows as Array<Record<string, unknown>>) {
+    if (r.image_url) knownUrls.add(r.image_url as string);
+  }
+
+  // Query "other" images from KeyResource via session lookup
+  let otherImages: OtherImageResource[] = [];
+  const scriptKey = scriptRow?.script_key as string | undefined;
+  if (scriptKey) {
+    const userName = `video:${novelId}:${scriptKey}`;
+    const user = await prisma.user.findUnique({ where: { name: userName } });
+    if (user) {
+      const keyResources = await prisma.keyResource.findMany({
+        where: {
+          session: { userId: user.id },
+          mediaType: "image",
+          url: { not: null },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+      otherImages = keyResources
+        .filter((kr) => kr.url && !knownUrls.has(kr.url))
+        .map((kr) => ({
+          id: kr.id,
+          url: kr.url!,
+          title: kr.title,
+        }));
+    }
+  }
 
   return {
     characters: (charResult.rows as Array<Record<string, unknown>>).map((r) => ({
@@ -336,12 +428,39 @@ export async function getResources(
       shotIndex: r.shot_index as string | null,
       imageUrl: r.image_url as string,
     })),
+    jsonData,
+    otherImages,
   };
 }
 
 /* ------------------------------------------------------------------ */
 /*  Episode status (single)                                            */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Update a pinned JSON resource by composite id.
+ * Composite id format: "char:<character_id>" or "storyboard:<script_id>"
+ */
+export async function updateJsonResource(
+  compositeId: string,
+  data: unknown,
+): Promise<void> {
+  const json = JSON.stringify(data);
+  const sep = compositeId.indexOf(":");
+  if (sep < 0) throw new Error(`Invalid JSON resource id: ${compositeId}`);
+  const kind = compositeId.slice(0, sep);
+  const rowId = compositeId.slice(sep + 1);
+
+  if (kind === "char") {
+    const t = await physical("novel_characters");
+    await bizPool.query(`UPDATE "${t}" SET card_raw = $1 WHERE id = $2`, [json, rowId]);
+  } else if (kind === "storyboard") {
+    const t = await physical("novel_scripts");
+    await bizPool.query(`UPDATE "${t}" SET storyboard_raw = $1 WHERE id = $2`, [json, rowId]);
+  } else {
+    throw new Error(`Unknown JSON resource kind: ${kind}`);
+  }
+}
 
 export async function getEpisodeContent(scriptId: string): Promise<string | null> {
   const tScripts = await physical("novel_scripts");

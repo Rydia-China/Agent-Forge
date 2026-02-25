@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ConfigProvider, theme as antTheme } from "antd";
 import { useSessions } from "@/app/components/hooks/useSessions";
@@ -9,7 +9,6 @@ import { EpisodeList } from "../components/EpisodeList";
 import { StoryboardView } from "../components/StoryboardView";
 import { ResourcePanel } from "../components/ResourcePanel";
 import { VideoChat } from "../components/VideoChat";
-import type { KeyResourceItem } from "@/app/types";
 import type { VideoContext } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -109,13 +108,6 @@ setAutoMessage("请根据EP内容，执行全部视频工作流");
     void sessionsHook.refreshSessions();
   }, [data, sessionsHook]);
 
-  /* ---- Key resources ---- */
-  const [keyResources, setKeyResources] = useState<KeyResourceItem[]>([]);
-  const krHandlersRef = useRef<{
-    update: (id: string, data: unknown, title?: string) => Promise<void>;
-    delete: (id: string) => Promise<void>;
-  } | null>(null);
-
   return (
     <ConfigProvider
       theme={{
@@ -144,7 +136,7 @@ setAutoMessage("请根据EP内容，执行全部视频工作流");
         {/* Center — Storyboard (left) + Chat (right), side by side */}
         <section className="flex min-w-0 flex-1">
           {data.storyboard.length > 0 && (
-            <div className="h-full w-80 shrink-0 overflow-y-auto border-r border-slate-800">
+            <div className="h-full w-64 shrink-0 overflow-y-auto border-r border-slate-800">
               <StoryboardView
                 scenes={data.storyboard}
                 isLoading={data.isLoadingStoryboard}
@@ -163,8 +155,6 @@ setAutoMessage("请根据EP内容，执行全部视频工作流");
               onSessionCreated={handleSessionCreated}
               onRefreshNeeded={handleRefreshNeeded}
               autoMessage={autoMessage}
-              onKeyResourcesChange={setKeyResources}
-              onKeyResourceHandlers={(h) => { krHandlersRef.current = h; }}
             />
           </div>
         </section>
@@ -173,9 +163,8 @@ setAutoMessage("请根据EP内容，执行全部视频工作流");
         <ResourcePanel
           resources={data.resources}
           isLoading={data.isLoadingResources}
-          keyResources={keyResources}
-          onUpdateKeyResource={(id, d, t) => krHandlersRef.current?.update(id, d, t) ?? Promise.resolve()}
-          onDeleteKeyResource={(id) => krHandlersRef.current?.delete(id) ?? Promise.resolve()}
+          scriptId={data.selectedEpisode?.id ?? null}
+          onRefresh={() => void data.refreshResources()}
         />
       </main>
     </ConfigProvider>

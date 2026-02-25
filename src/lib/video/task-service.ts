@@ -174,26 +174,22 @@ async function executeVideoTask(
         void pushEvent(taskId, "upload_request", req as Prisma.InputJsonValue);
       },
       onKeyResource: (resource: KeyResourceEvent) => {
-        if (resource.mediaType === "json") {
-          // JSON → persist to DB (source of truth), then emit SSE
-          void addKeyResource(sessionId, {
-            mediaType: resource.mediaType,
-            data: resource.data as Prisma.InputJsonValue | undefined,
-            title: resource.title,
+        // Persist all resource types (image/video/json) to DB, then emit SSE
+        void addKeyResource(sessionId, {
+          mediaType: resource.mediaType,
+          url: resource.url,
+          data: resource.data as Prisma.InputJsonValue | undefined,
+          title: resource.title,
+        })
+          .then((row) => {
+            void pushEvent(taskId, "key_resource", {
+              ...resource,
+              id: row.id,
+            } as unknown as Prisma.InputJsonValue);
           })
-            .then((row) => {
-              void pushEvent(taskId, "key_resource", {
-                ...resource,
-                id: row.id,
-              } as unknown as Prisma.InputJsonValue);
-            })
-            .catch(() => {
-              void pushEvent(taskId, "key_resource", resource as unknown as Prisma.InputJsonValue);
-            });
-        } else {
-          // Media → SSE only, derived from messages on re-fetch
-          void pushEvent(taskId, "key_resource", resource as unknown as Prisma.InputJsonValue);
-        }
+          .catch(() => {
+            void pushEvent(taskId, "key_resource", resource as unknown as Prisma.InputJsonValue);
+          });
       },
     };
 

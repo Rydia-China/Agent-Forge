@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Button, Collapse, Drawer, Empty, Input, Spin, Typography, Image, Tag, message } from "antd";
-import { SkinOutlined, PictureOutlined, FileImageOutlined, CodeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
-import type { EpisodeResources } from "../types";
-import type { KeyResourceItem } from "@/app/types";
-import { JsonViewer } from "@/app/components/JsonViewer";
+import { Button, Collapse, Drawer, Empty, Input, Spin, Typography, Image, Tag, App } from "antd";
+import { SkinOutlined, PictureOutlined, FileImageOutlined, CodeOutlined, EditOutlined, AppstoreOutlined } from "@ant-design/icons";
+import type { EpisodeResources, JsonResource } from "../types";
+import { fetchJson } from "@/app/components/client-utils";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -14,12 +13,10 @@ import { JsonViewer } from "@/app/components/JsonViewer";
 export interface ResourcePanelProps {
   resources: EpisodeResources | null;
   isLoading: boolean;
-  /** Session key resources (JSON, images, videos from LLM). */
-  keyResources?: KeyResourceItem[];
-  /** Called to update a JSON key resource's data. */
-  onUpdateKeyResource?: (id: string, data: unknown, title?: string) => Promise<void>;
-  /** Called to delete a key resource. */
-  onDeleteKeyResource?: (id: string) => Promise<void>;
+  /** Script ID needed to call the PATCH API. */
+  scriptId: string | null;
+  /** Called after a JSON resource is saved so parent can refresh. */
+  onRefresh?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -28,22 +25,20 @@ export interface ResourcePanelProps {
 
 const ASIDE_CLASS = "flex h-full w-56 min-w-[200px] shrink-0 flex-col border-l border-slate-800 bg-slate-950/80";
 
-export function ResourcePanel({ resources, isLoading, keyResources, onUpdateKeyResource, onDeleteKeyResource }: ResourcePanelProps) {
+export function ResourcePanel({ resources, isLoading, scriptId, onRefresh }: ResourcePanelProps) {
+  const { message } = App.useApp();
   /* ---- JSON editor drawer state ---- */
-  const [editingKr, setEditingKr] = useState<KeyResourceItem | null>(null);
+  const [editingItem, setEditingItem] = useState<JsonResource | null>(null);
   const [editText, setEditText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
-  const openEditor = useCallback((kr: KeyResourceItem) => {
-    setEditingKr(kr);
-    const json = kr.data != null
-      ? (typeof kr.data === "string" ? kr.data : JSON.stringify(kr.data, null, 2))
-      : "";
-    setEditText(json);
+  const openEditor = useCallback((item: JsonResource) => {
+    setEditingItem(item);
+    setEditText(item.data != null ? JSON.stringify(item.data, null, 2) : "");
   }, []);
 
   const handleSave = useCallback(async () => {
-    if (!editingKr || !onUpdateKeyResource) return;
+    if (!editingItem || !scriptId) return;
     let parsed: unknown;
     try {
       parsed = JSON.parse(editText);
@@ -53,25 +48,20 @@ export function ResourcePanel({ resources, isLoading, keyResources, onUpdateKeyR
     }
     setIsSaving(true);
     try {
-      await onUpdateKeyResource(editingKr.id, parsed);
+      await fetchJson(`/api/video/episodes/${encodeURIComponent(scriptId)}/resources`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resourceId: editingItem.id, data: parsed }),
+      });
       void message.success("Saved");
-      setEditingKr(null);
+      setEditingItem(null);
+      onRefresh?.();
     } catch {
       void message.error("Save failed");
     } finally {
       setIsSaving(false);
     }
-  }, [editingKr, editText, onUpdateKeyResource]);
-
-  const handleDeleteKr = useCallback(async (id: string) => {
-    if (!onDeleteKeyResource) return;
-    try {
-      await onDeleteKeyResource(id);
-      void message.success("Deleted");
-    } catch {
-      void message.error("Delete failed");
-    }
-  }, [onDeleteKeyResource]);
+  }, [editingItem, editText, scriptId, onRefresh]);
 
   if (isLoading) {
     return (
@@ -93,14 +83,15 @@ export function ResourcePanel({ resources, isLoading, keyResources, onUpdateKeyR
     );
   }
 
-  const { costumes, sceneImages, shotImages } = resources;
-  const jsonResources = keyResources?.filter((kr) => kr.mediaType === "json") ?? [];
-  const hasJsonResources = jsonResources.length > 0;
+  const { costumes, sceneImages, shotImages, jsonData, otherImages } = resources;
+  const hasJsonData = jsonData.length > 0;
+  const hasOtherImages = otherImages.length > 0;
   const isEmpty =
     costumes.length === 0 &&
     sceneImages.length === 0 &&
     shotImages.length === 0 &&
-    !hasJsonResources;
+    !hasJsonData &&
+    !hasOtherImages;
 
   if (isEmpty) {
     return (
@@ -114,44 +105,47 @@ export function ResourcePanel({ resources, isLoading, keyResources, onUpdateKeyR
 
   /* Items ordered by pipeline step */
   const items = [
-    // 0. Pinned Data (JSON only — images/videos already shown in other sections)
-    hasJsonResources
+    // 0. Pinned Data (from DB columns like card_raw, storyboard_raw)
+    hasJsonData
       ? {
           key: "pinned-data",
           label: (
             <span className="flex items-center gap-1.5 text-xs font-medium">
               <CodeOutlined /> Pinned Data
               <Tag style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>
-                {jsonResources.length}
+                {jsonData.length}
               </Tag>
             </span>
           ),
           children: (
             <div className="space-y-2">
-              {jsonResources.map((kr) => (
-                <div key={kr.id} className="rounded border border-slate-800 bg-slate-900/50 p-2">
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <div className="truncate text-[10px] font-medium text-slate-200">
-                      {kr.title ?? "JSON"}
-                    </div>
-                    <div className="flex shrink-0 gap-0.5">
-                      {onUpdateKeyResource && (
-                        <Button type="text" size="small" icon={<EditOutlined />}
-                          onClick={() => openEditor(kr)} style={{ fontSize: 10 }} />
-                      )}
-                      {onDeleteKeyResource && (
-                        <Button type="text" size="small" danger icon={<DeleteOutlined />}
-                          onClick={() => void handleDeleteKr(kr.id)} style={{ fontSize: 10 }} />
-                      )}
+              {jsonData.map((item) => {
+                const text = item.data != null
+                  ? (typeof item.data === "string" ? item.data : JSON.stringify(item.data, null, 2))
+                  : "";
+                return (
+                  <div
+                    key={item.id}
+                    className="relative cursor-pointer overflow-hidden rounded-lg bg-slate-900"
+                    onClick={() => openEditor(item)}
+                    title="Click to edit"
+                  >
+                    {/* JSON content — fixed height, overflow hidden */}
+                    <pre className="max-h-32 overflow-hidden whitespace-pre-wrap break-all px-2 pt-2 pb-8 font-mono text-[9px] leading-relaxed text-slate-400">
+                      {text}
+                    </pre>
+                    {/* Bottom gradient overlay with title + edit icon */}
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-2 pb-1.5 pt-6">
+                      <div className="flex items-center justify-between">
+                        <div className="truncate text-[11px] font-medium text-white">
+                          {item.title}
+                        </div>
+                        <EditOutlined className="text-[11px] text-white/70" />
+                      </div>
                     </div>
                   </div>
-                  {kr.data != null && (
-                    <div className="cursor-pointer" onClick={() => openEditor(kr)} title="Click to edit">
-                      <JsonViewer data={kr.data} />
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           ),
         }
@@ -272,6 +266,41 @@ export function ResourcePanel({ resources, isLoading, keyResources, onUpdateKeyR
           ),
         }
       : null,
+    // 5. Other Images (generated but not in any known category)
+    hasOtherImages
+      ? {
+          key: "others",
+          label: (
+            <span className="flex items-center gap-1.5 text-xs font-medium">
+              <AppstoreOutlined /> Others
+              <Tag style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>
+                {otherImages.length}
+              </Tag>
+            </span>
+          ),
+          children: (
+            <div className="grid grid-cols-2 gap-2">
+              {otherImages.map((img) => (
+                <div key={img.id} className="relative overflow-hidden rounded-lg">
+                  <Image
+                    src={img.url}
+                    alt={img.title ?? "Generated"}
+                    width="100%"
+                    style={{ display: "block" }}
+                    placeholder={<div className="aspect-[9/16] w-full bg-slate-800" />}
+                    preview={true}
+                  />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-5">
+                    <div className="truncate text-center text-[11px] font-medium text-white">
+                      {img.title ?? "Generated"}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ),
+        }
+      : null,
   ].filter(Boolean) as { key: string; label: React.ReactNode; children: React.ReactNode }[];
 
   return (
@@ -294,9 +323,9 @@ export function ResourcePanel({ resources, isLoading, keyResources, onUpdateKeyR
 
       {/* JSON Editor Drawer */}
       <Drawer
-        title={editingKr?.title ?? "Edit JSON"}
-        open={!!editingKr}
-        onClose={() => setEditingKr(null)}
+        title={editingItem?.title ?? "Edit JSON"}
+        open={!!editingItem}
+        onClose={() => setEditingItem(null)}
         size={520}
         extra={
           <Button type="primary" size="small" onClick={() => void handleSave()} loading={isSaving}>

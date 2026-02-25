@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getResources } from "@/lib/services/video-workflow-service";
+import { getResources, updateJsonResource } from "@/lib/services/video-workflow-service";
 
 /** GET /api/video/episodes/[scriptId]/resources?novelId=xxx — get episode resources */
 export async function GET(
@@ -16,6 +16,21 @@ export async function GET(
   try {
     const resources = await getResources(scriptId, novelId);
     return NextResponse.json(resources);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/** PATCH /api/video/episodes/[scriptId]/resources — update a pinned JSON resource */
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = (await req.json()) as { resourceId?: string; data?: unknown };
+    if (!body.resourceId || body.data === undefined) {
+      return NextResponse.json({ error: "Missing resourceId or data" }, { status: 400 });
+    }
+    await updateJsonResource(body.resourceId, body.data);
+    return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

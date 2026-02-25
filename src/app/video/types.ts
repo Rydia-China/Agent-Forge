@@ -58,11 +58,25 @@ export interface ShotImageResource {
   imageUrl: string;
 }
 
+export interface JsonResource {
+  id: string;
+  title: string;
+  data: unknown;
+}
+
+export interface OtherImageResource {
+  id: string;
+  url: string;
+  title: string | null;
+}
+
 export interface EpisodeResources {
   characters: CharacterResource[];
   costumes: CostumeResource[];
   sceneImages: SceneDetail[];
   shotImages: ShotImageResource[];
+  jsonData: JsonResource[];
+  otherImages: OtherImageResource[];
 }
 
 export interface VideoContext {

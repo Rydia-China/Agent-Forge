@@ -90,7 +90,7 @@ export function EpisodeList({
   };
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-slate-800 bg-slate-950/80">
+    <aside className="flex h-full w-52 shrink-0 flex-col border-r border-slate-800 bg-slate-950/80">
       {/* Header */}
       <div className="border-b border-slate-800 p-3">
         <Typography.Text strong ellipsis style={{ display: "block", fontSize: 13 }}>

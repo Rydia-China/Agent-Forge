@@ -50,7 +50,7 @@ export interface UseVideoChatReturn {
   keyResources: KeyResourceItem[];
   updateKeyResource: (id: string, data: unknown, title?: string) => Promise<void>;
   deleteKeyResource: (id: string) => Promise<void>;
-  sendMessage: () => Promise<void>;
+  sendMessage: (images?: string[]) => Promise<void>;
   /** Send a specific message directly, bypassing input state. */
   sendDirect: (text: string) => Promise<void>;
   stopStreaming: () => void;
@@ -308,8 +308,18 @@ export function useVideoChat(
   /*  sendMessage — POST to /api/video/tasks                           */
   /* ---------------------------------------------------------------- */
 
-  const submitText = useCallback(async (text: string) => {
-    if (!text || isSending || !videoContext) return;
+  const generateTitleForSession = useCallback(async (sid: string, seed: string) => {
+    try {
+      await fetchJson(`/api/sessions/${sid}/title`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: seed }),
+      });
+    } catch { /* best effort */ }
+  }, []);
+
+  const submitText = useCallback(async (text: string, images?: string[]) => {
+    if ((!text && !images?.length) || isSending || !videoContext) return;
 
     setError(null);
     setIsSending(true);
@@ -317,17 +327,21 @@ export function useVideoChat(
     setInput("");
 
     const sid = sessionIdRef.current;
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    const wasNewSession = !sid;
+    const userMsg: ChatMessage = { role: "user", content: text || null };
+    if (images?.length) userMsg.images = images;
+    setMessages((prev) => [...prev, userMsg]);
 
     try {
       const payload: Record<string, unknown> = {
-        message: text,
+        message: text || "(image)",
         user: userName,
         video_context: videoContext,
         preload_mcps: preloadMcps,
         skills,
       };
       if (sid) payload.session_id = sid;
+      if (images?.length) payload.images = images;
 
       const result = await fetchJson<{ task_id: string; session_id: string }>(
         "/api/video/tasks",
@@ -345,18 +359,22 @@ export function useVideoChat(
       }
 
       connectToTask(result.task_id);
+
+      if (wasNewSession) {
+        void generateTitleForSession(result.session_id, text || "Image upload");
+      }
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to submit video task."));
       setStatus("error");
       setIsSending(false);
       activeSendRef.current = false;
     }
-  }, [isSending, userName, videoContext, preloadMcps, skills, connectToTask]);
+  }, [isSending, userName, videoContext, preloadMcps, skills, connectToTask, generateTitleForSession]);
 
-  const sendMessage = useCallback(async () => {
+  const sendMessage = useCallback(async (images?: string[]) => {
     const text = input.trim();
-    if (!text) return;
-    await submitText(text);
+    if (!text && !images?.length) return;
+    await submitText(text, images);
   }, [input, submitText]);
 
   const sendDirect = useCallback(async (text: string) => {

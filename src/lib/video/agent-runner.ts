@@ -13,7 +13,7 @@
  */
 
 import type { ContextProvider } from "@/lib/agent/context-provider";
-import { type AgentResponse, type StreamCallbacks, detectMediaResources, detectJsonResources } from "@/lib/agent/agent";
+import { type AgentResponse, type StreamCallbacks, detectMediaResources } from "@/lib/agent/agent";
 import type { ChatMessage, ToolCall } from "@/lib/agent/types";
 import {
   chatCompletionStream,
@@ -35,7 +35,6 @@ import * as mcpService from "@/lib/services/mcp-service";
 import { requestContext } from "@/lib/request-context";
 import { uploadDataUrl } from "@/lib/services/oss-service";
 import { getSkill } from "@/lib/services/skill-service";
-import { listKeyResources } from "@/lib/services/key-resource-service";
 import { ensureVideoSchema } from "./schema";
 import crypto from "node:crypto";
 
@@ -204,24 +203,6 @@ async function preloadMcps(names: string[]): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Pinned JSON resources → system prompt section                       */
-/* ------------------------------------------------------------------ */
-
-async function buildPinnedJsonSection(sessionId: string): Promise<string | null> {
-  const resources = await listKeyResources(sessionId);
-  const jsonResources = resources.filter((r) => r.mediaType === "json" && r.data != null);
-  if (jsonResources.length === 0) return null;
-
-  const parts = jsonResources.map((r) => {
-    const title = r.title ?? "Data";
-    const json = typeof r.data === "string" ? r.data : JSON.stringify(r.data, null, 2);
-    return `## ${title}\n\`\`\`json\n${json}\n\`\`\``;
-  });
-
-  return "# Pinned Data (editable by user — always up-to-date, never evicted)\n\n" + parts.join("\n\n");
-}
-
-/* ------------------------------------------------------------------ */
 /*  Public API                                                         */
 /* ------------------------------------------------------------------ */
 
@@ -296,11 +277,8 @@ async function runLoop(
     // ═══════════════════════════════════════════════════════
     const dynamicContext = await config.contextProvider.build();
 
-    // Pinned JSON resources: always at the very top of context, never evicted
-    const pinnedJson = await buildPinnedJsonSection(session.id);
-    const systemPrompt = pinnedJson
-      ? pinnedJson + "\n\n---\n\n" + dynamicContext + "\n\n---\n\n" + baseSystemPrompt
-      : dynamicContext + "\n\n---\n\n" + baseSystemPrompt;
+    // Context provider already injects pinned JSON (card_raw, storyboard_raw) at the top
+    const systemPrompt = dynamicContext + "\n\n---\n\n" + baseSystemPrompt;
 
     // Build compressed LLM context
     const allRaw = [...session.messages, ...newMessages];
@@ -394,12 +372,8 @@ async function runLoop(
           tracker.register(tc.id, tc.function.name, tc.function.arguments, content);
 
           // Auto-detect media resources from tool output
-          for (const kr of detectMediaResources(tc.function.name, content)) {
-            callbacks.onKeyResource?.(kr);
-          }
-
-          // Auto-detect JSON resources from biz_db tool calls
-          for (const kr of detectJsonResources(tc.function.name, tc.function.arguments, content)) {
+          const mediaKrs = detectMediaResources(tc.function.name, content);
+          for (const kr of mediaKrs) {
             callbacks.onKeyResource?.(kr);
           }
 

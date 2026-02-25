@@ -110,11 +110,12 @@ interface CharacterRow {
   character_name: string;
   portrait_url: string | null;
   physical_traits: string | null;
+  card_raw: string | null;
 }
 
 async function queryCharacters(table: string, novelId: string): Promise<CharacterRow[]> {
   const { rows } = await bizPool.query(
-    `SELECT character_name, portrait_url, physical_traits
+    `SELECT character_name, portrait_url, physical_traits, card_raw
      FROM "${table}"
      WHERE novel_id = $1 ORDER BY created_at`,
     [novelId],
@@ -136,6 +137,25 @@ function buildContext(
 ): string {
   const L: string[] = [];
   const push = (s: string) => L.push(s);
+
+  /* ── 0. Pinned Data (editable by user, always up-to-date) ── */
+  const pinnedParts: string[] = [];
+  for (const c of characters) {
+    if (c.card_raw) {
+      pinnedParts.push(`## ${c.character_name} (Character Card)\n\`\`\`json\n${c.card_raw}\n\`\`\``);
+    }
+  }
+  if (script?.storyboard_raw) {
+    pinnedParts.push(`## Storyboard\n\`\`\`json\n${script.storyboard_raw}\n\`\`\``);
+  }
+  if (pinnedParts.length > 0) {
+    push("# Pinned Data (editable by user \u2014 always up-to-date, never evicted)");
+    push("");
+    push(pinnedParts.join("\n\n"));
+    push("");
+    push("---");
+    push("");
+  }
 
   /* ── 1. Identifiers ── */
   push("# Video Workflow Context");
