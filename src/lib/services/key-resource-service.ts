@@ -13,6 +13,11 @@ export interface KeyResourceInput {
   title?: string;
 }
 
+export interface KeyResourceUpdateInput {
+  data: PrismaTypes.InputJsonValue;
+  title?: string;
+}
+
 export interface KeyResourceRow {
   id: string;
   mediaType: string;
@@ -55,4 +60,28 @@ export async function listKeyResources(
     where: { sessionId },
     orderBy: { createdAt: "asc" },
   });
+}
+
+/**
+ * Update the data (and optionally title) of a key resource.
+ * Used for user-editable JSON resources.
+ */
+export async function updateKeyResource(
+  id: string,
+  input: KeyResourceUpdateInput,
+): Promise<KeyResourceRow> {
+  return prisma.keyResource.update({
+    where: { id },
+    data: {
+      data: input.data,
+      ...(input.title !== undefined ? { title: input.title } : {}),
+    },
+  });
+}
+
+/**
+ * Delete a key resource.
+ */
+export async function deleteKeyResource(id: string): Promise<void> {
+  await prisma.keyResource.delete({ where: { id } });
 }

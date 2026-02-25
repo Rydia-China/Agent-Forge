@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { runAgentStream } from "@/lib/agent/agent";
-import type { KeyResourceEvent } from "@/lib/agent/agent";
 import type { ToolCall } from "@/lib/agent/types";
-import { requestContext } from "@/lib/request-context";
+import type { KeyResourceEvent } from "@/lib/agent/agent";
 import { addKeyResource } from "@/lib/services/key-resource-service";
+import { requestContext } from "@/lib/request-context";
 import type { Prisma } from "@/generated/prisma";
 
 const StreamRequestSchema = z.object({
@@ -81,6 +81,8 @@ export async function POST(req: NextRequest) {
           },
           onDelta: (text) => send("delta", { text }),
           onToolCall: (call) => send("tool", { summary: summarizeTool(call) }),
+          onToolStart: (event) => send("tool_start", event),
+          onToolEnd: (event) => send("tool_end", event),
           onUploadRequest: (req) => send("upload_request", req),
           onKeyResource: (resource: KeyResourceEvent) => {
             const sid = resolvedSessionId;
@@ -88,7 +90,7 @@ export async function POST(req: NextRequest) {
               void addKeyResource(sid, {
                 mediaType: resource.mediaType,
                 url: resource.url,
-                data: resource.data as Prisma.InputJsonValue | undefined,
+                data: resource.data as import("@/generated/prisma").Prisma.InputJsonValue | undefined,
                 title: resource.title,
               }).then((row) => {
                 send("key_resource", { ...resource, id: row.id });

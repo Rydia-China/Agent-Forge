@@ -48,6 +48,17 @@
 - 禁止在未尝试 recall 的情况下 re-execute 任何已完成的步骤
 - 长对话中每个关键产物生成后，必须立即持久化到 DB/文件，不得仅依赖上下文保持
 
+### 专项强化模块（Domain Specialization）
+- 系统支持通用能力的 **领域专用裁剪**：将 skills、MCP tools、biz-db、chat、OSS 等通用基础设施组合为面向特定领域的工作台
+- 每个专项模块由以下部分组成：
+  - **领域 Schema** — biz-db 中的领域表（如 video 的 novel_characters / script_scenes / script_shots 等）
+  - **领域 Skills** — 预绑定的 builtin skills（如 video-mgr、novel-video-workflow）
+  - **领域 MCP Tools** — 对应的 static MCP provider（如 video_mgr）
+  - **领域 Context Provider** — 为 agent 注入领域上下文（当前 novel、script 等），使对话天然具备领域感知
+  - **领域 UI** — 专用布局：左侧=最终交付物（storyboard），中间=chat，右侧=按类别分列的资源素材（角色、服装、场景图等）
+- 专项模块不是独立系统，是通用能力的**组合 + 约束**；新增领域时复用同一套 pattern
+- 当前实例：`src/app/video/` + `src/lib/video/` — 小说转视频工作流
+
 ### 兼容性
 - Agent 使用 OpenAI chat/completions 格式 (tool-use loop)
 - Dynamic MCP 统一使用 JS 编写，运行于 QuickJS WebAssembly 沙盒

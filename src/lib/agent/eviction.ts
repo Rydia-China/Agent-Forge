@@ -15,7 +15,7 @@ const EPHEMERAL = new Set([
   "skills__create", "skills__update", "skills__delete",
   "skills__import", "skills__set_production",
   // ui
-  "ui__request_upload", "ui__present_media", "ui__present_data",
+  "ui__request_upload",
   // biz_db
   "biz_db__execute",
   // mcp_manager

@@ -20,6 +20,181 @@ import {
   compressMessages,
 } from "./eviction";
 import { requestContext } from "@/lib/request-context";
+import crypto from "node:crypto";
+
+/* ------------------------------------------------------------------ */
+/*  Auto-detect media resources from tool results                      */
+/* ------------------------------------------------------------------ */
+
+export interface KeyResourceEvent {
+  id: string;
+  mediaType: "image" | "video" | "json";
+  url?: string;
+  data?: unknown;
+  title?: string;
+}
+
+const IMAGE_RE = /https?:\/\/\S+\.(?:png|jpe?g|gif|webp|svg)(?:[?#]\S*)?/gi;
+const VIDEO_RE = /https?:\/\/\S+\.(?:mp4|webm|mov)(?:[?#]\S*)?/gi;
+
+/**
+ * Scan tool result text for media URLs. System-driven — no tool
+ * participation required. Every tool result is scanned automatically.
+ */
+export function detectMediaResources(toolName: string, content: string): KeyResourceEvent[] {
+  const out: KeyResourceEvent[] = [];
+  const seen = new Set<string>();
+  for (const m of content.matchAll(IMAGE_RE)) {
+    const url = m[0];
+    if (seen.has(url)) continue;
+    seen.add(url);
+    out.push({ id: crypto.randomUUID(), mediaType: "image", url, title: toolName });
+  }
+  for (const m of content.matchAll(VIDEO_RE)) {
+    const url = m[0];
+    if (seen.has(url)) continue;
+    seen.add(url);
+    out.push({ id: crypto.randomUUID(), mediaType: "video", url, title: toolName });
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Auto-detect JSON resources from biz_db tool calls                  */
+/* ------------------------------------------------------------------ */
+
+const MIN_JSON_SIZE = 50;
+
+/**
+ * Extract all single-quoted string values from SQL that look like JSON.
+ * Handles SQL escaped quotes ('').
+ */
+function extractJsonStringsFromSql(sql: string): string[] {
+  const results: string[] = [];
+  let i = 0;
+  while (i < sql.length) {
+    if (sql[i] === "'") {
+      i++;
+      let str = "";
+      while (i < sql.length) {
+        if (sql[i] === "'" && sql[i + 1] === "'") {
+          str += "'";
+          i += 2;
+        } else if (sql[i] === "'") {
+          i++;
+          break;
+        } else {
+          str += sql[i];
+          i++;
+        }
+      }
+      if (str.length >= MIN_JSON_SIZE && (str.startsWith("{") || str.startsWith("["))) {
+        results.push(str);
+      }
+    } else {
+      i++;
+    }
+  }
+  return results;
+}
+
+/** Best-effort human-readable title from a DB row. */
+function inferJsonTitle(row?: Record<string, unknown>): string {
+  if (row) {
+    for (const key of ["character_name", "name", "title", "script_name"]) {
+      const val = row[key];
+      if (typeof val === "string" && val.length > 0) return val;
+    }
+  }
+  return "Data";
+}
+
+/**
+ * Scan biz_db tool call args and result for embedded JSON data.
+ * System-driven — every biz_db tool result is scanned automatically.
+ *
+ * Handles two patterns:
+ * 1. biz_db__query: rows may contain JSON string fields (e.g. card_raw)
+ * 2. biz_db__execute INSERT: SQL VALUES may contain JSON string literals
+ */
+export function detectJsonResources(
+  toolName: string,
+  toolArgs: string,
+  content: string,
+): KeyResourceEvent[] {
+  const out: KeyResourceEvent[] = [];
+
+  // Case 1: biz_db__query returns rows with JSON fields
+  if (toolName === "biz_db__query") {
+    try {
+      const parsed: unknown = JSON.parse(content);
+      if (isRecord(parsed) && Array.isArray(parsed.rows)) {
+        for (const row of parsed.rows as unknown[]) {
+          if (!isRecord(row)) continue;
+          for (const val of Object.values(row)) {
+            // String-encoded JSON (TEXT columns containing JSON)
+            if (typeof val === "string" && val.length >= MIN_JSON_SIZE) {
+              if (val.startsWith("{") || val.startsWith("[")) {
+                try {
+                  const data: unknown = JSON.parse(val);
+                  if (isRecord(data) || Array.isArray(data)) {
+                    out.push({
+                      id: crypto.randomUUID(),
+                      mediaType: "json",
+                      data,
+                      title: inferJsonTitle(row),
+                    });
+                  }
+                } catch { /* not valid JSON */ }
+              }
+              continue;
+            }
+            // Native JSONB objects (already parsed by driver)
+            if (typeof val === "object" && val !== null) {
+              const json = JSON.stringify(val);
+              if (json.length >= MIN_JSON_SIZE) {
+                out.push({
+                  id: crypto.randomUUID(),
+                  mediaType: "json",
+                  data: val,
+                  title: inferJsonTitle(row),
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch { /* not JSON content */ }
+  }
+
+  // Case 2: biz_db__execute INSERT with embedded JSON in VALUES
+  if (toolName === "biz_db__execute" && content.startsWith("OK")) {
+    try {
+      const args: unknown = JSON.parse(toolArgs);
+      if (isRecord(args) && typeof args.sql === "string") {
+        const sql = args.sql;
+        if (/INSERT\s+INTO/i.test(sql)) {
+          const jsonStrings = extractJsonStringsFromSql(sql);
+          for (const jsonStr of jsonStrings) {
+            try {
+              const data: unknown = JSON.parse(jsonStr);
+              if (isRecord(data) || Array.isArray(data)) {
+                out.push({
+                  id: crypto.randomUUID(),
+                  mediaType: "json",
+                  data,
+                  title: inferJsonTitle(isRecord(data) ? data : undefined),
+                });
+              }
+            } catch { /* not valid JSON */ }
+          }
+        }
+      }
+    } catch { /* not valid args */ }
+  }
+
+  return out;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Per-session concurrency lock                                       */
@@ -45,18 +220,26 @@ export interface AgentResponse {
   messages: ChatMessage[];
 }
 
-export interface KeyResourceEvent {
-  id: string;
-  mediaType: "image" | "video" | "json";
-  url?: string;
-  data?: unknown;
-  title?: string;
+export interface ToolStartEvent {
+  callId: string;
+  name: string;
+  index: number;
+  total: number;
+}
+
+export interface ToolEndEvent {
+  callId: string;
+  name: string;
+  durationMs: number;
+  error?: string;
 }
 
 export interface StreamCallbacks {
   onSession?: (sessionId: string) => void;
   onDelta?: (text: string) => void;
   onToolCall?: (call: ToolCall) => void;
+  onToolStart?: (event: ToolStartEvent) => void;
+  onToolEnd?: (event: ToolEndEvent) => void;
   onUploadRequest?: (req: unknown) => void;
   onKeyResource?: (resource: KeyResourceEvent) => void;
 }
@@ -250,7 +433,8 @@ async function runAgentInnerCore(
     const fnCalls = assistantMsg.tool_calls.filter(
       (tc): tc is Extract<typeof tc, { type: "function" }> => tc.type === "function",
     );
-    for (const tc of fnCalls) {
+    for (let i = 0; i < fnCalls.length; i++) {
+      const tc = fnCalls[i]!;
       let args: Record<string, unknown> = {};
       try {
         args = JSON.parse(tc.function.arguments);
@@ -420,9 +604,15 @@ async function runAgentStreamInnerCore(
         };
       }
 
-      for (const tc of toolCalls) {
+      for (let i = 0; i < toolCalls.length; i++) {
+        const tc = toolCalls[i]!;
         if (signal?.aborted) break;
         callbacks.onToolCall?.(tc);
+        callbacks.onToolStart?.({
+          callId: tc.id, name: tc.function.name,
+          index: i, total: toolCalls.length,
+        });
+
         let args: Record<string, unknown> = {};
         try {
           const parsed: unknown = JSON.parse(tc.function.arguments);
@@ -431,44 +621,52 @@ async function runAgentStreamInnerCore(
           /* invalid JSON, pass empty */
         }
 
-        const result = await registry.callTool(tc.function.name, args);
+        const t0 = Date.now();
+        let toolError: string | undefined;
+        try {
+          const result = await registry.callTool(tc.function.name, args);
 
-        // Side-channel: upload provider attaches _uploadRequest
-        const uploadReq = (result as Record<string, unknown>)._uploadRequest;
-        if (uploadReq) {
-          callbacks.onUploadRequest?.(uploadReq);
-        }
-
-        // Side-channel: key resources (present_media / present_data)
-        const singleKr = (result as Record<string, unknown>)._keyResource;
-        if (isRecord(singleKr)) {
-          callbacks.onKeyResource?.(singleKr as unknown as KeyResourceEvent);
-        }
-        const batchKr = (result as Record<string, unknown>)._keyResources;
-        if (Array.isArray(batchKr)) {
-          for (const kr of batchKr) {
-            if (isRecord(kr)) {
-              callbacks.onKeyResource?.(kr as unknown as KeyResourceEvent);
-            }
+          // Side-channel: upload provider attaches _uploadRequest
+          const uploadReq = (result as Record<string, unknown>)._uploadRequest;
+          if (uploadReq) {
+            callbacks.onUploadRequest?.(uploadReq);
           }
+
+          const content =
+            result.content
+              ?.map((c: Record<string, unknown>) =>
+                "text" in c ? String(c.text) : JSON.stringify(c),
+              )
+              .join("\n") ?? "";
+
+          // Register with eviction tracker
+          tracker.register(tc.id, tc.function.name, tc.function.arguments, content);
+
+          // Auto-detect media resources from tool output
+          for (const kr of detectMediaResources(tc.function.name, content)) {
+            callbacks.onKeyResource?.(kr);
+          }
+
+          // Auto-detect JSON resources from biz_db tool calls
+          for (const kr of detectJsonResources(tc.function.name, tc.function.arguments, content)) {
+            callbacks.onKeyResource?.(kr);
+          }
+
+          const toolMsg: ChatMessage = {
+            role: "tool",
+            tool_call_id: tc.id,
+            content,
+          };
+          newMessages.push(toolMsg);
+        } catch (toolErr: unknown) {
+          toolError = toolErr instanceof Error ? toolErr.message : String(toolErr);
+          throw toolErr;
+        } finally {
+          callbacks.onToolEnd?.({
+            callId: tc.id, name: tc.function.name,
+            durationMs: Date.now() - t0, error: toolError,
+          });
         }
-
-        const content =
-          result.content
-            ?.map((c: Record<string, unknown>) =>
-              "text" in c ? String(c.text) : JSON.stringify(c),
-            )
-            .join("\n") ?? "";
-
-        // Register with eviction tracker
-        tracker.register(tc.id, tc.function.name, tc.function.arguments, content);
-
-        const toolMsg: ChatMessage = {
-          role: "tool",
-          tool_call_id: tc.id,
-          content,
-        };
-        newMessages.push(toolMsg);
       }
 
       // If aborted mid-execution, strip unmatched tool_calls so

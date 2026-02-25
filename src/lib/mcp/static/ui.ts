@@ -50,65 +50,7 @@ function uploadResult(req: UploadRequest): CallToolResult {
   return result;
 }
 
-/* ================================================================== */
-/*  2. present_media                                                   */
-/* ================================================================== */
-
-const PresentMediaItem = z.object({
-  url: z.string().url(),
-  mediaType: z.enum(["image", "video"]),
-  title: z.string().optional(),
-});
-
-const PresentMediaParams = z.union([
-  // Batch mode: items array
-  z.object({
-    items: z.array(PresentMediaItem).min(1),
-  }),
-  // Single mode: direct fields (backward compat)
-  PresentMediaItem,
-]);
-
-/* ================================================================== */
-/*  3. present_data                                                    */
-/* ================================================================== */
-
-const PresentDataParams = z.object({
-  data: z.union([z.string(), z.record(z.string(), z.unknown()), z.array(z.unknown())]),
-  title: z.string().optional(),
-  format: z.enum(["json", "text"]).optional().default("json"),
-});
-
-/* ================================================================== */
-/*  Key Resource side-channel type                                     */
-/* ================================================================== */
-
-export interface KeyResourcePayload {
-  id: string;
-  mediaType: "image" | "video" | "json";
-  url?: string;
-  data?: unknown;
-  title?: string;
-}
-
-function keyResourceResult(payload: KeyResourcePayload): CallToolResult {
-  const result = text(
-    JSON.stringify({ presented: true, mediaType: payload.mediaType, title: payload.title ?? null }),
-  );
-  (result as Record<string, unknown>)._keyResource = payload;
-  return result;
-}
-
-/** Batch variant: multiple key resources in one tool call. */
-function keyResourceBatchResult(payloads: KeyResourcePayload[]): CallToolResult {
-  const result = text(
-    JSON.stringify({ presented: true, count: payloads.length }),
-  );
-  (result as Record<string, unknown>)._keyResources = payloads;
-  return result;
-}
-
-/* ================================================================== */
+/* ==================================================================
 /*  Provider                                                           */
 /* ================================================================== */
 
@@ -188,76 +130,6 @@ export const uiMcp: McpProvider = {
         },
       },
 
-      /* ---------- present_media ---------- */
-      {
-        name: "present_media",
-        description:
-          "Present image(s) or video(s) to the user in the Key Resources panel. " +
-          "Supports two modes: single item (url + mediaType) or batch (items array). " +
-          "ALWAYS prefer batch mode when presenting multiple media — do NOT call this tool multiple times.",
-        inputSchema: {
-          type: "object" as const,
-          properties: {
-            url: {
-              type: "string",
-              description: "URL of a single image or video (single mode)",
-            },
-            mediaType: {
-              type: "string",
-              enum: ["image", "video"],
-              description: 'Type of media: "image" or "video" (single mode)',
-            },
-            title: {
-              type: "string",
-              description: "Optional title/caption (single mode)",
-            },
-            items: {
-              type: "array",
-              description:
-                "Batch mode: array of media items. Each item has url, mediaType, and optional title. " +
-                "Use this when presenting multiple images/videos at once.",
-              items: {
-                type: "object",
-                properties: {
-                  url: { type: "string" },
-                  mediaType: { type: "string", enum: ["image", "video"] },
-                  title: { type: "string" },
-                },
-                required: ["url", "mediaType"],
-              },
-            },
-          },
-        },
-      },
-
-      /* ---------- present_data ---------- */
-      {
-        name: "present_data",
-        description:
-          "Present structured data (JSON, text) to the user in a browsable panel. " +
-          "The data is NOT included in LLM context — it goes directly to the frontend " +
-          "where the user can expand and browse it in a drawer. " +
-          "Use this for large JSON results, API responses, or structured data the user may want to inspect.",
-        inputSchema: {
-          type: "object" as const,
-          properties: {
-            data: {
-              description:
-                "The data to present. Can be a JSON object, array, or string.",
-            },
-            title: {
-              type: "string",
-              description: "Title for the data panel",
-            },
-            format: {
-              type: "string",
-              enum: ["json", "text"],
-              description: 'Display format. Default: "json"',
-            },
-          },
-          required: ["data"],
-        },
-      },
     ];
   },
 
@@ -273,45 +145,6 @@ export const uiMcp: McpProvider = {
           ...params,
         };
         return uploadResult(req);
-      }
-
-      case "present_media": {
-        const params = PresentMediaParams.parse(args);
-        if ("items" in params) {
-          const payloads = params.items.map((item) => ({
-            id: crypto.randomUUID(),
-            mediaType: item.mediaType,
-            url: item.url,
-            title: item.title,
-          }));
-          return keyResourceBatchResult(payloads);
-        }
-        return keyResourceResult({
-          id: crypto.randomUUID(),
-          mediaType: params.mediaType,
-          url: params.url,
-          title: params.title,
-        });
-      }
-
-      case "present_data": {
-        const params = PresentDataParams.parse(args);
-        const dataValue =
-          typeof params.data === "string" && params.format === "json"
-            ? (() => {
-                try {
-                  return JSON.parse(params.data) as unknown;
-                } catch {
-                  return params.data;
-                }
-              })()
-            : params.data;
-        return keyResourceResult({
-          id: crypto.randomUUID(),
-          mediaType: "json",
-          data: dataValue,
-          title: params.title,
-        });
       }
 
       default:
