@@ -34,7 +34,7 @@ curl -s -X POST http://localhost:8001/api/chat \
 1. agent 看到 system prompt 中 `dynamic-mcp-builder` 的 description，判断相关
 2. agent 调用 `skills__get` 读取 `dynamic-mcp-builder` 全文（返回 production version），获取沙盒规范和代码结构
 3. agent 按规范编写 JS 代码：`module.exports = { tools: [...], async callTool(name, args) {...} }`
-4. agent 使用沙盒全局 `fetch()` 调用外部 API（非 `require` / `http`）
+4. agent 使用沙盒全局 `fetchSync()` 调用外部 API（非 `require` / `http`）
 5. agent 调用 `mcp_manager__create` 提交代码
 6. reply 中确认创建成功（v1，自动提升为 production），且无 loadError
 
@@ -59,7 +59,7 @@ curl -s -X POST http://localhost:8001/api/chat \
 ### 5. 验证创建质量
 检查 `temp/` 日志中 agent 提交的代码是否符合 `dynamic-mcp-builder` 规范：
 - 使用 `module.exports = { tools, callTool }` 结构
-- 使用沙盒全局 `fetch()` 调用外部 API（非 `require("http")` / Node.js API）
+- 使用沙盒全局 `fetchSync()` 调用外部 API（非 `require("http")` / Node.js API）
 - tool description 具体明确
 - inputSchema 中参数有 description
 - 错误处理返回人类可读信息

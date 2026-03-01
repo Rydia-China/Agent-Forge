@@ -32,7 +32,7 @@ function getSkill(name) {
   return __bridge_getSkill(name);
 }
 
-function callTool(name, args) {
+function callToolSync(name, args) {
   var raw = __bridge_callTool(name, JSON.stringify(args || {}));
   return JSON.parse(raw);
 }

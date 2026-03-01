@@ -23,7 +23,7 @@ tags:
 - **不是独立进程** — 代码在 QuickJS WASM 沙盒中执行，与宿主进程完全隔离
 - **无 Node.js API** — 没有 \`require\`、\`fs\`、\`path\`、\`Buffer\`、\`process\` 等
 - **无 npm 依赖** — 只能使用原生 JS（ES2023）
-- **沙盒提供全局 API** — \`fetchSync()\`、\`console.log()\`、\`getSkill()\`、\`callTool()\`
+- **沙盒提供全局 API** — \`fetchSync()\`、\`console.log()\`、\`getSkill()\`、\`callToolSync()\`
 
 ## 沙盒全局 API
 
@@ -68,7 +68,7 @@ if (instructions) {
 }
 \`\`\`
 
-### callTool(name, args)
+### callToolSync(name, args)
 
 调用系统中任意已注册的 MCP tool（包括 static 和 dynamic provider）。同步调用。
 参数 \`name\` 使用 fully-qualified 格式：\`providerName__toolName\`（双下划线分隔）。
@@ -76,21 +76,21 @@ if (instructions) {
 
 \`\`\`js
 // 查询业务数据库
-const result = callTool("biz_db__sql", {
+const result = callToolSync("biz_db__sql", {
   sql: "SELECT * FROM characters WHERE novel_id = 1"
 });
 const rows = JSON.parse(result.content[0].text).rows;
 
 // 写入也用同一个 tool
-callTool("biz_db__sql", {
+callToolSync("biz_db__sql", {
   sql: "INSERT INTO logs (message) VALUES ('hello')"
 });
 
 // 调用其他 MCP provider 的 tool
-const tables = callTool("biz_db__list_tables", {});
+const tables = callToolSync("biz_db__list_tables", {});
 \`\`\`
 
-**注意**：callTool 在沙盒中是同步的（与 fetch/getSkill 相同，底层通过 WASM asyncify 透明挂起）。
+**注意**：命名为 \`callToolSync\` 而非 \`callTool\`，以明确表示这是同步调用（与 \`fetchSync\` 命名规则一致）。
 返回值是完整的 MCP CallToolResult，需要从 \`result.content[0].text\` 取文本内容。
 
 ## 代码结构（必须遵循）
@@ -245,7 +245,7 @@ module.exports = {
 ## 常见错误
 
 ### "xxx is not defined"
-沙盒中没有 Node.js API。不能用 \`require\`、\`Buffer\` 等。可用 \`console.log\`、\`fetchSync\`、\`getSkill\`、\`callTool\`。
+沙盒中没有 Node.js API。不能用 \`require\`、\`Buffer\` 等。可用 \`console.log\`、\`fetchSync\`、\`getSkill\`、\`callToolSync\`。
 
 ### "Script execution timed out" / "interrupted"
 callTool 中的操作超过 30 秒。优化请求或减少循环次数。
