@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider, ToolContext } from "../types";
 import * as keyResourceService from "@/lib/services/key-resource-service";
-import { createResource } from "@/lib/domain/resource-service";
+import { createResource, upsertByKeyResource } from "@/lib/domain/resource-service";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -49,7 +49,7 @@ export const videoMgrMcp: McpProvider = {
       {
         name: "generate_image",
         description:
-          "Generate image(s) from text prompt(s) via FC, with lifecycle tracking. Each item requires a unique `key` (session-scoped) to identify the image across regenerations. Returns an array of results with status, imageUrl, key, and version.",
+          "Generate image(s) from text prompt(s) via FC. Images are automatically persisted to DB on success (both key_resource for version tracking and domain_resources for UI display) — no additional save step needed. Each item requires a unique `key` (session-scoped); re-using an existing key creates a new version. Returns array of {status, imageUrl, key, keyResourceId, version}.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -81,7 +81,7 @@ export const videoMgrMcp: McpProvider = {
       {
         name: "generate_video",
         description:
-          "Store video generation prompt(s) for storyboard shots. Does NOT generate actual video — only persists the prompt and optional source image URL as a video resource. Users can view prompts in the UI and trigger actual generation later.",
+          "Store video generation prompt(s) for storyboard shots. Prompt is automatically persisted to domain_resources (mediaType=video) on success — no additional save step needed. Does NOT generate actual video; users can trigger actual generation later from the UI.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -146,7 +146,7 @@ export const videoMgrMcp: McpProvider = {
             }
             const gen = r.value;
             try {
-              await createResource({
+              await upsertByKeyResource({
                 scopeType: item.scopeType,
                 scopeId: item.scopeId,
                 category: item.category,

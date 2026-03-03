@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getResources, updateResourceData } from "@/lib/services/video-workflow-service";
+import { getResources, updateResourceData, deleteResource } from "@/lib/services/video-workflow-service";
 
 /** GET /api/video/episodes/[scriptId]/resources?novelId=xxx — get episode resources */
 export async function GET(
@@ -31,6 +31,21 @@ export async function PATCH(req: NextRequest) {
     }
     await updateResourceData(body.resourceId, body.data);
     return NextResponse.json({ ok: true });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/** DELETE /api/video/episodes/[scriptId]/resources — delete a single domain resource */
+export async function DELETE(req: NextRequest) {
+  try {
+    const body = (await req.json()) as { resourceId?: string };
+    if (!body.resourceId) {
+      return NextResponse.json({ error: "Missing resourceId" }, { status: 400 });
+    }
+    await deleteResource(body.resourceId);
+    return NextResponse.json({ deleted: body.resourceId });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

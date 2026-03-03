@@ -95,29 +95,27 @@ export function KeyResourcesPanel({
                     </Tag>
                   )}
                 </div>
-                {kr.mediaType === "json" && (
-                  <div className="flex shrink-0 gap-0.5">
-                    {onUpdateJson && (
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<EditOutlined />}
-                        onClick={() => openEditor(kr)}
-                        style={{ fontSize: 10 }}
-                      />
-                    )}
-                    {onDelete && (
-                      <Button
-                        type="text"
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => void handleDelete(kr.id)}
-                        style={{ fontSize: 10 }}
-                      />
-                    )}
-                  </div>
-                )}
+                <div className="flex shrink-0 gap-0.5">
+                  {kr.mediaType === "json" && onUpdateJson && (
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => openEditor(kr)}
+                      style={{ fontSize: 10 }}
+                    />
+                  )}
+                  {onDelete && (
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => void handleDelete(kr.id)}
+                      style={{ fontSize: 10 }}
+                    />
+                  )}
+                </div>
               </div>
               {kr.mediaType === "image" && kr.url && (
                 <Image

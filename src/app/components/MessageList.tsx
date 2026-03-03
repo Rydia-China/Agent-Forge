@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { Alert, Empty, Spin, Tag, Typography } from "antd";
 import { RobotOutlined } from "@ant-design/icons";
 import type { ChatMessage } from "../types";
-import { MessageBubble } from "./MessageBubble";
+import { MessageBubble, stripMemoryLines } from "./MessageBubble";
 
 /* ---- Helpers ---- */
 
@@ -32,6 +32,14 @@ export function mergeStreamingSummaries(summaries: string[]): string {
   if (tools.length > 0) parts.push(`调用了工具：${tools.join("、")}`);
   if (skills.length > 0) parts.push(`使用了 skill：${skills.join("、")}`);
   return parts.join(" · ");
+}
+
+/** Message is a memory-only eviction artefact with no visible content. */
+function isMemoryOnly(m: ChatMessage): boolean {
+  if (m.role !== "assistant") return false;
+  if (m.tool_calls && m.tool_calls.length > 0) return false;
+  if (!m.content) return false;
+  return stripMemoryLines(m.content).length === 0;
 }
 
 /* ---- Component ---- */
@@ -66,12 +74,12 @@ export function MessageList({
         <div className="flex items-center justify-center py-8">
           <Spin description="Loading…" />
         </div>
-      ) : messages.filter((m) => m.role !== "tool" && !m.hidden).length === 0 ? (
+      ) : messages.filter((m) => m.role !== "tool" && !m.hidden && !isMemoryOnly(m)).length === 0 ? (
         <Empty description="Send a message to start." style={{ margin: "32px 0" }} />
       ) : (
         <div className="space-y-3">
           {messages
-            .filter((m) => m.role !== "tool" && !m.hidden)
+            .filter((m) => m.role !== "tool" && !m.hidden && !isMemoryOnly(m))
             .map((msg, idx) => (
               <MessageBubble key={`${msg.role}-${idx}`} message={msg} />
             ))}

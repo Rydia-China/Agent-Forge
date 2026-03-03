@@ -18,7 +18,7 @@ interface VersionRow {
   id: string;
   version: number;
   prompt: string;
-  imageUrl: string | null;
+  url: string | null;
   refUrls: string[];
   createdAt: string;
 }
@@ -29,7 +29,7 @@ interface ImageGenDetail {
   key: string;
   currentVersion: number;
   prompt: string | null;
-  imageUrl: string | null;
+  url: string | null;
   versions: VersionRow[];
   createdAt: string;
   updatedAt: string;
@@ -182,10 +182,10 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
           <div className="flex w-1/2 flex-col gap-3">
             {/* Large Image */}
             <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-lg border border-slate-700 bg-slate-900/30">
-              {viewedVerRow?.imageUrl ? (
+              {viewedVerRow?.url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={viewedVerRow.imageUrl}
+                  src={viewedVerRow.url}
                   alt={detail.key}
                   className="h-full w-full object-contain"
                 />
@@ -215,10 +215,10 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
                           setEditPrompt(ver.prompt);
                         }}
                       >
-                        {ver.imageUrl ? (
+                        {ver.url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
-                            src={ver.imageUrl}
+                            src={ver.url}
                             alt={`v${ver.version}`}
                             className="h-full w-full object-cover"
                           />

@@ -8,6 +8,7 @@
 import { bizPool } from "@/lib/biz-db";
 import { resolveTable, GLOBAL_USER } from "@/lib/biz-db-namespace";
 import { ensureDomainResourcesTable, DOMAIN_RESOURCES_TABLE } from "./resource-schema";
+import { prisma } from "@/lib/db";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -152,6 +153,38 @@ export async function createResource(input: CreateResourceInput): Promise<string
 }
 
 /**
+ * Upsert a resource by keyResourceId — if a row with the same key_resource_id
+ * already exists in the same scope, update it; otherwise insert.
+ */
+export async function upsertByKeyResource(input: CreateResourceInput & { keyResourceId: string }): Promise<string> {
+  const t = await physical();
+  const { rows: existing } = await bizPool.query(
+    `SELECT id FROM "${t}"
+     WHERE scope_type = $1 AND scope_id = $2 AND key_resource_id = $3
+     LIMIT 1`,
+    [input.scopeType, input.scopeId, input.keyResourceId],
+  );
+  if ((existing as Array<{ id: string }>).length > 0) {
+    const id = (existing[0] as { id: string }).id;
+    await bizPool.query(
+      `UPDATE "${t}"
+       SET category = $1, title = $2, url = $3, data = $4, sort_order = $5
+       WHERE id = $6`,
+      [
+        input.category,
+        input.title ?? null,
+        input.url ?? null,
+        input.data != null ? JSON.stringify(input.data) : null,
+        input.sortOrder ?? 0,
+        id,
+      ],
+    );
+    return id;
+  }
+  return createResource(input);
+}
+
+/**
  * Delete all resources for a given scope (used when deleting an episode).
  */
 export async function deleteResourcesByScope(
@@ -163,6 +196,33 @@ export async function deleteResourcesByScope(
     `DELETE FROM "${t}" WHERE scope_type = $1 AND scope_id = $2`,
     [scopeType, scopeId],
   );
+}
+
+/**
+ * Delete a single resource by id.
+ * If the resource has a linked KeyResource, cascade-delete it
+ * (KeyResourceVersion rows are removed by Prisma onDelete: Cascade).
+ */
+export async function deleteResource(id: string): Promise<void> {
+  const t = await physical();
+
+  // Fetch linked key_resource_id before deleting
+  const { rows } = await bizPool.query(
+    `SELECT key_resource_id FROM "${t}" WHERE id = $1 LIMIT 1`,
+    [id],
+  );
+  const row = rows[0] as { key_resource_id: string | null } | undefined;
+  const linkedId = row?.key_resource_id ?? null;
+
+  // Delete the biz-db row
+  await bizPool.query(`DELETE FROM "${t}" WHERE id = $1`, [id]);
+
+  // Cascade-delete linked KeyResource (+ all versions) if present
+  if (linkedId) {
+    await prisma.keyResource.delete({ where: { id: linkedId } }).catch(() => {
+      // KeyResource may already be gone or ID may not match — ignore
+    });
+  }
 }
 
 /**

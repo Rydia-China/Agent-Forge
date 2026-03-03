@@ -12,6 +12,15 @@ import { parseJsonObject } from "./client-utils";
 
 /* ---- Helpers ---- */
 
+/** Strip internal [memory] lines from assistant content (eviction artefact). */
+export function stripMemoryLines(text: string): string {
+  return text
+    .split("\n")
+    .filter((line) => !line.startsWith("[memory] "))
+    .join("\n")
+    .trim();
+}
+
 function summarizeToolCalls(calls: ToolCall[]): string {
   const tools: string[] = [];
   const skills: string[] = [];
@@ -56,11 +65,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           {cfg.label}
         </Tag>
       </div>
-      {message.content ? (
+      {message.content && stripMemoryLines(message.content) ? (
         <Typography.Paragraph
           style={{ marginBottom: 0, fontSize: 12, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
         >
-          {message.content}
+          {stripMemoryLines(message.content)}
         </Typography.Paragraph>
       ) : (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>No content</Typography.Text>

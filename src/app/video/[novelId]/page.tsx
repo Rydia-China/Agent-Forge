@@ -96,6 +96,7 @@ setAutoMessage("EP已上传，请开始小说可视化工作流：人物卡 → 
   const handleSessionCreated = useCallback(
     (sessionId: string) => {
       setCurrentSessionId(sessionId);
+      setAutoMessage(undefined);
       void sessionsHook.refreshSessions();
     },
     [sessionsHook],

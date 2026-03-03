@@ -13,6 +13,7 @@ import {
   getResourcesByScope,
   deleteResourcesByScope,
   updateResourceData,
+  deleteResource,
 } from "@/lib/domain/resource-service";
 import type {
   DomainResource,
@@ -149,13 +150,25 @@ export async function getResources(
   scriptId: string,
   novelId: string,
 ): Promise<DomainResources> {
-  // Get domain_resources for both scopes
+  // Get domain_resources for both scopes, then merge by category
   const [novelGroups, scriptGroups] = await Promise.all([
     getResourcesByScope("novel", novelId),
     getResourcesByScope("script", scriptId),
   ]);
 
-  return { categories: [...novelGroups, ...scriptGroups] };
+  const merged = new Map<string, DomainResource[]>();
+  for (const g of [...novelGroups, ...scriptGroups]) {
+    const existing = merged.get(g.category);
+    if (existing) {
+      existing.push(...g.items);
+    } else {
+      merged.set(g.category, [...g.items]);
+    }
+  }
+
+  return {
+    categories: [...merged.entries()].map(([category, items]) => ({ category, items })),
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -165,7 +178,7 @@ export async function getResources(
 /**
  * Update a domain resource's data field (for JSON editor).
  */
-export { updateResourceData };
+export { updateResourceData, deleteResource };
 
 export async function getEpisodeContent(scriptId: string): Promise<string | null> {
   const tScripts = await physical("novel_scripts");

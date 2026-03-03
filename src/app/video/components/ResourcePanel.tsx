@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Button, Collapse, Drawer, Empty, Input, Spin, Typography, Image, Tag, App } from "antd";
-import { EditOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import type { DomainResources, DomainResource, VideoResourceData } from "../types";
 import { fetchJson } from "@/app/components/client-utils";
 import { ImageDetailDrawer } from "./ImageDetailDrawer";
+import { VideoDetailDrawer } from "./VideoDetailDrawer";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -36,6 +37,13 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
   /* ---- Image detail drawer state ---- */
   const [selectedImageGenId, setSelectedImageGenId] = useState<string | null>(null);
 
+  /* ---- Video detail drawer state ---- */
+  const [selectedVideoResource, setSelectedVideoResource] = useState<DomainResource | null>(null);
+
+  /* ---- Collapse expand state (controlled) ---- */
+  const [activeKeys, setActiveKeys] = useState<string[]>([]);
+  const knownKeysRef = useRef<Set<string>>(new Set());
+
   /* ---- Smart image rendering ---- */
   const renderSmartImage = (url: string, alt: string, keyResourceId?: string | null) => {
     if (keyResourceId) {
@@ -61,6 +69,31 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
       />
     );
   };
+
+  /* ---- Delete handler ---- */
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+
+  const handleDelete = useCallback(async (id: string) => {
+    if (!scriptId) return;
+    setDeletingIds((prev) => new Set(prev).add(id));
+    try {
+      await fetchJson(`/api/video/episodes/${encodeURIComponent(scriptId)}/resources`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resourceId: id }),
+      });
+      void message.success("Deleted");
+      onRefresh?.();
+    } catch {
+      void message.error("Delete failed");
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }, [scriptId, onRefresh]);
 
   /* ---- JSON editor ---- */
   const openEditor = useCallback((item: { id: string; title: string; data: unknown }) => {
@@ -96,8 +129,23 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
 
   /* ---- Per media_type renderers ---- */
 
+  /* ---- Delete overlay button (shared across media types) ---- */
+  const renderDeleteBtn = (id: string) => (
+    <Button
+      type="text"
+      size="small"
+      danger
+      icon={<DeleteOutlined />}
+      loading={deletingIds.has(id)}
+      className="!absolute right-1 top-1 z-10 opacity-0 transition-opacity group-hover/card:opacity-100 !bg-black/60 !text-red-400 hover:!text-red-300"
+      onClick={(e) => { e.stopPropagation(); void handleDelete(id); }}
+      style={{ fontSize: 10, width: 22, height: 22, minWidth: 22 }}
+    />
+  );
+
   const renderImageItem = (r: DomainResource) => (
-    <div key={r.id} className="relative overflow-hidden rounded-lg">
+    <div key={r.id} className="group/card relative overflow-hidden rounded-lg">
+      {renderDeleteBtn(r.id)}
       {r.url ? (
         renderSmartImage(r.url, r.title ?? "Image", r.keyResourceId)
       ) : (
@@ -115,10 +163,18 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
 
   const renderVideoItem = (r: DomainResource) => {
     const vData = r.data as VideoResourceData | null;
+    const handleClick = () => {
+      if (r.keyResourceId) {
+        setSelectedImageGenId(r.keyResourceId);
+      } else {
+        setSelectedVideoResource(r);
+      }
+    };
     return (
-      <div key={r.id} className="overflow-hidden rounded-lg">
+      <div key={r.id} className="group/card relative cursor-pointer overflow-hidden rounded-lg" onClick={handleClick}>
+        {renderDeleteBtn(r.id)}
         {r.url ? (
-          <video src={r.url} controls muted className="aspect-[9/16] w-full object-cover" />
+          <video src={r.url} controls muted className="aspect-[9/16] w-full object-cover" onClick={(e) => e.stopPropagation()} />
         ) : vData?.sourceImageUrl ? (
           <div className="relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -162,10 +218,11 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
     return (
       <div
         key={r.id}
-        className="relative cursor-pointer overflow-hidden rounded-lg bg-slate-900"
+        className="group/card relative cursor-pointer overflow-hidden rounded-lg bg-slate-900"
         onClick={() => openEditor({ id: r.id, title: r.title ?? "JSON", data: r.data })}
         title="Click to edit"
       >
+        {renderDeleteBtn(r.id)}
         <pre className="max-h-32 overflow-hidden whitespace-pre-wrap break-all px-2 pt-2 pb-8 font-mono text-[9px] leading-relaxed text-slate-400">
           {text}
         </pre>
@@ -178,6 +235,17 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
       </div>
     );
   };
+
+  /* ---- Auto-expand newly appeared categories, preserve existing expand state ---- */
+  const categories = resources?.categories ?? [];
+  const categoryKeys = useMemo(() => categories.map((g) => `cat-${g.category}`), [categories]);
+  useEffect(() => {
+    const newKeys = categoryKeys.filter((k) => !knownKeysRef.current.has(k));
+    if (newKeys.length > 0) {
+      for (const k of newKeys) knownKeysRef.current.add(k);
+      setActiveKeys((prev) => [...prev, ...newKeys]);
+    }
+  }, [categoryKeys]);
 
   /* ---- Main render ---- */
 
@@ -199,10 +267,7 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
     );
   }
 
-  const { categories } = resources;
-  const isEmpty = categories.length === 0;
-
-  if (isEmpty) {
+  if (categories.length === 0) {
     return (
       <aside className={ASIDE_CLASS}>
         <div className="flex flex-1 items-center justify-center">
@@ -213,7 +278,6 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
   }
 
   const items = [
-    // Dynamic categories — grouped by LLM-assigned category name
     ...categories.map((g) => {
       const images = g.items.filter((r) => r.mediaType === "image");
       const videos = g.items.filter((r) => r.mediaType === "video");
@@ -245,7 +309,7 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
           <Typography.Text strong style={{ fontSize: 12 }}>Resources</Typography.Text>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
-          <Collapse defaultActiveKey={items.map((i) => i.key)} items={items} size="small" ghost />
+          <Collapse activeKey={activeKeys} onChange={(keys) => setActiveKeys(keys as string[])} items={items} size="small" ghost />
         </div>
       </aside>
 
@@ -253,6 +317,11 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
         imageGenId={selectedImageGenId}
         onClose={() => setSelectedImageGenId(null)}
         onRefresh={() => onRefresh?.()}
+      />
+
+      <VideoDetailDrawer
+        resource={selectedVideoResource}
+        onClose={() => setSelectedVideoResource(null)}
       />
 
       <Drawer
