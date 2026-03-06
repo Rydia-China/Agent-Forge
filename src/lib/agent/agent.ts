@@ -130,7 +130,7 @@ export interface AgentConfig {
 /*  Core MCP names — always in scope                                   */
 /* ------------------------------------------------------------------ */
 
-const CORE_MCPS = new Set(["skills", "mcp_manager", "ui", "memory"]);
+const CORE_MCPS = new Set(["skills", "mcp_manager", "ui", "memory", "sync"]);
 
 /* ------------------------------------------------------------------ */
 /*  Skill → MCP resolution + on-demand loading                         */

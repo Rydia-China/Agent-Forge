@@ -10,7 +10,7 @@ import { getCatalogEntries, isCatalogEntry } from "@/lib/mcp/catalog";
 /* ------------------------------------------------------------------ */
 
 /** Names reserved by core MCPs (always registered at init). */
-const CORE_MCP_NAMES = new Set(["skills", "mcp_manager", "ui", "memory"]);
+const CORE_MCP_NAMES = new Set(["skills", "mcp_manager", "ui", "memory", "sync"]);
 
 /** Check if a name is reserved by the system (core or catalog). */
 function isReservedMcpName(name: string): boolean {
@@ -118,7 +118,7 @@ export interface StaticMcpSummary {
 }
 
 /** Core MCPs — always registered, cannot be unloaded. */
-const CORE_MCPS: readonly string[] = ["skills", "mcp_manager", "ui", "memory"];
+const CORE_MCPS: readonly string[] = ["skills", "mcp_manager", "ui", "memory", "sync"];
 
 /**
  * Return all built-in MCPs (core + catalog) with availability and

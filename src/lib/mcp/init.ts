@@ -3,6 +3,7 @@ import { skillsMcp } from "./static/skills-mcp";
 import { mcpManagerMcp } from "./static/mcp-manager";
 import { uiMcp } from "./static/ui";
 import { memoryMcp } from "./static/memory";
+import { syncMcp } from "./static/sync";
 import { bizDbReady } from "@/lib/biz-db";
 
 /**
@@ -26,9 +27,11 @@ export async function initMcp(): Promise<void> {
   registry.register(mcpManagerMcp);
   registry.register(uiMcp);
   registry.register(memoryMcp);
+  registry.register(syncMcp);
 
   registry.protect(skillsMcp.name);
   registry.protect(mcpManagerMcp.name);
   registry.protect(uiMcp.name);
   registry.protect(memoryMcp.name);
+  registry.protect(syncMcp.name);
 }

@@ -3,17 +3,66 @@ import * as skillService from "./skill-service";
 import * as mcpService from "./mcp-service";
 
 /* ------------------------------------------------------------------ */
-/*  Zod schemas                                                       */
+/*  Hub configuration                                                  */
+/* ------------------------------------------------------------------ */
+
+const DEFAULT_HUB_URL = "https://agent.mob-ai.cn/";
+
+function getHubUrl(): string {
+  return (process.env.FORGE_HUB_URL ?? DEFAULT_HUB_URL).replace(/\/+$/, "");
+}
+
+function isHub(): boolean {
+  return process.env.FORGE_IS_HUB === "true";
+}
+
+/** Normalise URL for comparison (strip trailing slash + protocol). */
+function normaliseUrl(url: string): string {
+  return url.replace(/\/+$/, "").replace(/^https?:\/\//, "");
+}
+
+/** Reject if the target/source URL points to self (hub self-protection). */
+function rejectSelfSync(remoteUrl: string): void {
+  if (!isHub()) return;
+  const self = normaliseUrl(getHubUrl());
+  const remote = normaliseUrl(remoteUrl);
+  if (self === remote) {
+    throw new Error("Hub cannot sync with itself. Provide a different remote URL.");
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Zod schemas                                                        */
 /* ------------------------------------------------------------------ */
 
 export const SyncPushParams = z.object({
   type: z.enum(["skill", "mcp"]),
   name: z.string().min(1),
-  targetUrl: z.string().url(),
+  targetUrl: z.string().url().optional(),
 });
 
+export const SyncPullParams = z.object({
+  type: z.enum(["skill", "mcp"]),
+  name: z.string().min(1),
+  sourceUrl: z.string().url().optional(),
+});
+
+export const SyncDiscoverParams = z.object({
+  type: z.enum(["skill", "mcp"]),
+  tag: z.string().optional(),
+  sourceUrl: z.string().url().optional(),
+});
+
+export const SyncDiffParams = z.object({
+  type: z.enum(["skill", "mcp"]),
+  names: z.array(z.string()).optional(),
+  tag: z.string().optional(),
+  sourceUrl: z.string().url().optional(),
+});
+
+
 /* ------------------------------------------------------------------ */
-/*  Types                                                             */
+/*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
 export interface SyncPushResult {
@@ -23,25 +72,218 @@ export interface SyncPushResult {
   targetUrl: string;
 }
 
+export interface SyncPullResult {
+  action: "created" | "updated";
+  type: "skill" | "mcp";
+  name: string;
+  sourceUrl: string;
+  localVersion: number;
+}
+
+interface RemoteSkillSummary {
+  name: string;
+  description: string;
+  tags: string[];
+  productionVersion: number;
+}
+
+interface RemoteMcpSummary {
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  productionVersion: number;
+}
+
+export interface DiffEntry {
+  name: string;
+  localExists: boolean;
+  remoteExists: boolean;
+  status: "local_only" | "remote_only" | "both";
+}
+
+
 /* ------------------------------------------------------------------ */
-/*  Push to remote                                                    */
+/*  Discover remote                                                    */
+/* ------------------------------------------------------------------ */
+
+export async function discoverRemote(
+  params: z.infer<typeof SyncDiscoverParams>,
+): Promise<RemoteSkillSummary[] | RemoteMcpSummary[]> {
+  const base = (params.sourceUrl ?? getHubUrl()).replace(/\/+$/, "");
+  rejectSelfSync(base);
+
+  if (params.type === "skill") {
+    const url = params.tag
+      ? `${base}/api/skills?tag=${encodeURIComponent(params.tag)}`
+      : `${base}/api/skills`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Remote GET ${url} failed (${res.status})`);
+    return (await res.json()) as RemoteSkillSummary[];
+  }
+
+  const url = `${base}/api/mcps`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Remote GET ${url} failed (${res.status})`);
+  return (await res.json()) as RemoteMcpSummary[];
+}
+
+/* ------------------------------------------------------------------ */
+/*  Diff local vs remote                                               */
+/* ------------------------------------------------------------------ */
+
+export async function diffWithRemote(
+  params: z.infer<typeof SyncDiffParams>,
+): Promise<DiffEntry[]> {
+  const base = (params.sourceUrl ?? getHubUrl()).replace(/\/+$/, "");
+  rejectSelfSync(base);
+
+  if (params.type === "skill") {
+    return diffSkills(base, params.names, params.tag);
+  }
+  return diffMcps(base, params.names);
+}
+
+async function diffSkills(
+  base: string,
+  names?: string[],
+  tag?: string,
+): Promise<DiffEntry[]> {
+  const [localSkills, remoteSkills] = await Promise.all([
+    skillService.listSkills(tag),
+    fetchJson<RemoteSkillSummary[]>(
+      tag ? `${base}/api/skills?tag=${encodeURIComponent(tag)}` : `${base}/api/skills`,
+    ),
+  ]);
+
+  const localNames = new Set(localSkills.map((s) => s.name));
+  const remoteNames = new Set(remoteSkills.map((s) => s.name));
+  const allNames = names?.length
+    ? names
+    : [...new Set([...localNames, ...remoteNames])].sort();
+
+  return allNames.map((name) => ({
+    name,
+    localExists: localNames.has(name),
+    remoteExists: remoteNames.has(name),
+    status: localNames.has(name) && remoteNames.has(name)
+      ? "both" as const
+      : localNames.has(name) ? "local_only" as const : "remote_only" as const,
+  }));
+}
+
+async function diffMcps(
+  base: string,
+  names?: string[],
+): Promise<DiffEntry[]> {
+  const [localMcps, remoteMcps] = await Promise.all([
+    mcpService.listMcpServers(),
+    fetchJson<RemoteMcpSummary[]>(`${base}/api/mcps`),
+  ]);
+
+  const localNames = new Set(localMcps.map((m) => m.name));
+  const remoteNames = new Set(remoteMcps.map((m) => m.name));
+  const allNames = names?.length
+    ? names
+    : [...new Set([...localNames, ...remoteNames])].sort();
+
+  return allNames.map((name) => ({
+    name,
+    localExists: localNames.has(name),
+    remoteExists: remoteNames.has(name),
+    status: localNames.has(name) && remoteNames.has(name)
+      ? "both" as const
+      : localNames.has(name) ? "local_only" as const : "remote_only" as const,
+  }));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Pull from remote                                                   */
+/* ------------------------------------------------------------------ */
+
+export async function pullFromRemote(
+  params: z.infer<typeof SyncPullParams>,
+): Promise<SyncPullResult> {
+  const base = (params.sourceUrl ?? getHubUrl()).replace(/\/+$/, "");
+  rejectSelfSync(base);
+
+  if (params.type === "skill") {
+    return pullSkill(params.name, base);
+  }
+  return pullMcp(params.name, base);
+}
+
+async function pullSkill(name: string, base: string): Promise<SyncPullResult> {
+  const remote = await fetchJson<skillService.SkillDetail>(
+    `${base}/api/skills/${encodeURIComponent(name)}`,
+  );
+
+  const local = await skillService.getSkill(name);
+
+  if (!local) {
+    const { version } = await skillService.createSkill({
+      name: remote.name,
+      description: remote.description,
+      content: remote.content,
+      tags: remote.tags,
+      metadata: remote.metadata ?? undefined,
+    });
+    return { action: "created", type: "skill", name, sourceUrl: base, localVersion: version.version };
+  }
+
+  // Push new version (latest + 1), always safe to revert
+  const { version } = await skillService.updateSkill({
+    name: remote.name,
+    description: remote.description,
+    content: remote.content,
+    tags: remote.tags,
+    metadata: remote.metadata ?? undefined,
+    promote: true,
+  });
+  return { action: "updated", type: "skill", name, sourceUrl: base, localVersion: version.version };
+}
+
+async function pullMcp(name: string, base: string): Promise<SyncPullResult> {
+  const remote = await fetchJson<mcpService.McpDetail>(
+    `${base}/api/mcps/${encodeURIComponent(name)}`,
+  );
+
+  const local = await mcpService.getMcpServer(name);
+
+  if (!local) {
+    const { version } = await mcpService.createMcpServer({
+      name: remote.name,
+      description: remote.description,
+      code: remote.code,
+      enabled: true,
+    });
+    return { action: "created", type: "mcp", name, sourceUrl: base, localVersion: version.version };
+  }
+
+  const { version } = await mcpService.updateMcpServer({
+    name: remote.name,
+    code: remote.code,
+    description: remote.description,
+    promote: true,
+  });
+  return { action: "updated", type: "mcp", name, sourceUrl: base, localVersion: version.version };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Push to remote                                                     */
 /* ------------------------------------------------------------------ */
 
 export async function pushToRemote(
   params: z.infer<typeof SyncPushParams>,
 ): Promise<SyncPushResult> {
-  const { type, name, targetUrl } = params;
-  const base = targetUrl.replace(/\/+$/, "");
+  const base = (params.targetUrl ?? getHubUrl()).replace(/\/+$/, "");
+  rejectSelfSync(base);
 
+  const { type, name } = params;
   if (type === "skill") {
     return pushSkill(name, base);
   }
   return pushMcp(name, base);
 }
-
-/* ------------------------------------------------------------------ */
-/*  Skill push                                                        */
-/* ------------------------------------------------------------------ */
 
 async function pushSkill(name: string, base: string): Promise<SyncPushResult> {
   const local = await skillService.getSkill(name);
@@ -86,10 +328,6 @@ async function pushSkill(name: string, base: string): Promise<SyncPushResult> {
   return { action: "created", type: "skill", name, targetUrl: base };
 }
 
-/* ------------------------------------------------------------------ */
-/*  MCP push                                                          */
-/* ------------------------------------------------------------------ */
-
 async function pushMcp(name: string, base: string): Promise<SyncPushResult> {
   const local = await mcpService.getMcpServer(name);
   if (!local) throw new Error(`Local MCP server "${name}" not found`);
@@ -130,9 +368,19 @@ async function pushMcp(name: string, base: string): Promise<SyncPushResult> {
   return { action: "created", type: "mcp", name, targetUrl: base };
 }
 
+
 /* ------------------------------------------------------------------ */
-/*  Helpers                                                           */
+/*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Remote GET ${url} failed (${res.status}): ${body}`);
+  }
+  return (await res.json()) as T;
+}
 
 async function remoteExists(url: string): Promise<boolean> {
   try {
@@ -142,3 +390,4 @@ async function remoteExists(url: string): Promise<boolean> {
     return false;
   }
 }
+
