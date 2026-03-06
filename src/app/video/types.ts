@@ -43,5 +43,6 @@ export interface VideoResourceData {
 
 export interface VideoContext {
   novelId: string;
+  scriptId: string;
   scriptKey: string;
 }

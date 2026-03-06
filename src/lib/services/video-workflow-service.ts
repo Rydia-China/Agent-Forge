@@ -12,14 +12,15 @@ import { prisma } from "@/lib/db";
 import {
   getResourcesByScope,
   deleteResourcesByScope,
-  updateResourceData,
   deleteResource,
+  updateResourceData,
 } from "@/lib/domain/resource-service";
 import type {
   DomainResource,
   CategoryGroup,
   DomainResources,
 } from "@/lib/domain/resource-service";
+import "@/lib/domain/resource-cleanup"; // register biz-table cleanup hook
 import { initMcp } from "@/lib/mcp/init";
 import { loadFromCatalog, isCatalogEntry } from "@/lib/mcp/catalog";
 import { registry } from "@/lib/mcp/registry";
@@ -199,6 +200,8 @@ export interface InitWorkflowResult {
   scriptKey: string;
   scriptName: string;
   missingCharacters: string[];
+  characters: string[];
+  costumes: Record<string, string>;
   nextStep: string;
 }
 
@@ -224,44 +227,50 @@ async function ensureDynamicMcp(name: string): Promise<void> {
  * Loads MCP infrastructure on demand, executes the tool, and stores
  * the result in novel_scripts.init_result.
  *
- * Returns the init_workflow result, or null if execution fails
- * (the episode is still created — caller should not block on failure).
+ * Throws on failure — init is a prerequisite for all downstream steps.
  */
 export async function runInitWorkflow(
   novelId: string,
   scriptDbId: string,
   scriptContent: string,
-): Promise<InitWorkflowResult | null> {
-  try {
-    await initMcp();
-    await ensureDynamicMcp("biz_db");
-    await ensureDynamicMcp("novel-video-workflow");
+): Promise<InitWorkflowResult> {
+  await initMcp();
+  await ensureDynamicMcp("biz_db");
+  await ensureDynamicMcp("subagent");
+  await ensureDynamicMcp("langfuse");
+  await ensureDynamicMcp("novel-video-workflow");
 
-    const result = await registry.callTool(
-      "novel-video-workflow__init_workflow",
-      { novelId, scriptContent, scriptDbId },
-    );
+  const result = await registry.callTool(
+    "novel-video-workflow__init_workflow",
+    { novelId, scriptContent, scriptDbId },
+  );
 
-    const text = result.content
-      ?.map((c: Record<string, unknown>) =>
-        "text" in c ? String(c.text) : JSON.stringify(c),
-      )
-      .join("\n") ?? "";
+  const text = result.content
+    ?.map((c: Record<string, unknown>) =>
+      "text" in c ? String(c.text) : JSON.stringify(c),
+    )
+    .join("\n") ?? "";
 
-    const parsed = JSON.parse(text) as InitWorkflowResult;
+  const parsed = JSON.parse(text) as InitWorkflowResult;
 
-    // Persist init_result into novel_scripts
-    const tScripts = await physical("novel_scripts");
-    await bizPool.query(
-      `UPDATE "${tScripts}" SET init_result = $1 WHERE id = $2`,
-      [JSON.stringify(parsed), scriptDbId],
-    );
+  // Persist init_result + characters/costumes via parameterized query
+  // (MCP tool may also write these, but this is the reliable fallback)
+  const tScripts = await physical("novel_scripts");
+  await bizPool.query(
+    `UPDATE "${tScripts}"
+     SET init_result = $1,
+         characters = $2::jsonb,
+         costumes   = $3::jsonb
+     WHERE id = $4`,
+    [
+      JSON.stringify(parsed),
+      JSON.stringify(parsed.characters ?? []),
+      JSON.stringify(parsed.costumes ?? {}),
+      scriptDbId,
+    ],
+  );
 
-    return parsed;
-  } catch (err) {
-    console.error("[video-workflow] runInitWorkflow failed:", err);
-    return null;
-  }
+  return parsed;
 }
 
 /**

@@ -18,7 +18,6 @@ export interface VideoChatProps {
   /** undefined = new session */
   initialSessionId: string | undefined;
   videoContext: VideoContext | null;
-  preloadMcps: string[];
   skills: string[];
   onSessionCreated: (sessionId: string) => void;
   /** Called when task completes — parent should refresh data. */
@@ -34,7 +33,6 @@ export interface VideoChatProps {
 export function VideoChat({
   initialSessionId,
   videoContext,
-  preloadMcps,
   skills,
   onSessionCreated,
   onRefreshNeeded,
@@ -50,7 +48,6 @@ export function VideoChat({
     initialSessionId,
     userName,
     videoContext,
-    preloadMcps,
     skills,
     onSessionCreated,
     onRefreshNeeded,
@@ -82,7 +79,7 @@ export function VideoChat({
         {chat.error && (
           <Alert
             type="error"
-            message={chat.error}
+            title={chat.error}
             showIcon
             closable
             onClose={() => chat.setError(null)}

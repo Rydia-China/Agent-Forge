@@ -5,11 +5,10 @@ import {
   updateSessionTitle,
 } from "@/lib/services/chat-session-service";
 import { getActiveTaskForSession } from "@/lib/services/task-service";
-import { listForSession } from "@/lib/services/key-resource-service";
 
 type Params = { params: Promise<{ id: string }> };
 
-/** GET /api/sessions/:id — get session with messages + key resources + active task */
+/** GET /api/sessions/:id — get session with messages + active task */
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
   const session = await getSession(id);
@@ -17,11 +16,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const keyResources = await listForSession(id);
   const activeTask = await getActiveTaskForSession(id);
   return NextResponse.json({
     ...session,
-    keyResources,
     activeTask: activeTask
       ? { id: activeTask.id, status: activeTask.status }
       : null,

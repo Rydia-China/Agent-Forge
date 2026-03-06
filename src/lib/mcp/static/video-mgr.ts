@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider, ToolContext } from "../types";
 import * as keyResourceService from "@/lib/services/key-resource-service";
-import { createResource, upsertByKeyResource } from "@/lib/domain/resource-service";
+import { upsertByKeyResource } from "@/lib/domain/resource-service";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -25,6 +25,10 @@ const GenerateImageParams = z.object({
       title: z.string().optional(),
     }),
   ).min(1),
+});
+
+const ResolveKeyResourceParams = z.object({
+  ids: z.array(z.string().min(1)).min(1),
 });
 
 const GenerateVideoParams = z.object({
@@ -106,6 +110,22 @@ export const videoMgrMcp: McpProvider = {
           required: ["items"],
         },
       },
+      {
+        name: "resolve_key_resource",
+        description:
+          "Resolve one or more KeyResource IDs to their current-version URLs. Use this to look up the actual URL of a resource stored by its key_resource_id in biz tables.",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            ids: {
+              type: "array",
+              items: { type: "string" },
+              description: "Array of KeyResource IDs to resolve",
+            },
+          },
+          required: ["ids"],
+        },
+      },
     ];
   },
 
@@ -116,20 +136,17 @@ export const videoMgrMcp: McpProvider = {
   ): Promise<CallToolResult> {
     switch (name) {
       case "generate_image": {
-        const sessionId = context?.sessionId;
-        if (!sessionId) {
-          return text("Missing sessionId in tool context — generate_image requires a session.");
-        }
         const { items } = GenerateImageParams.parse(args);
         const results = await Promise.allSettled(
-          items.map(({ key, prompt, referenceImageUrls }) =>
-            keyResourceService.generateImage({
-              sessionId,
+          items.map(async ({ key, prompt, referenceImageUrls, scopeType, scopeId }) => {
+            return keyResourceService.generateImage({
+              scopeType,
+              scopeId,
               key,
               prompt,
               refUrls: referenceImageUrls,
-            }),
-          ),
+            });
+          }),
         );
 
         // Auto-writeback: create domain_resources entries for successful generations
@@ -176,23 +193,32 @@ export const videoMgrMcp: McpProvider = {
         const vidOutput = await Promise.all(
           items.map(async (item, i) => {
             try {
-              const resourceId = await createResource({
+              // Create a KeyResource for version tracking
+              const kr = await keyResourceService.upsertResource(
+                item.scopeType,
+                item.scopeId,
+                item.key,
+                "video",
+                {
+                  prompt: item.prompt,
+                  refUrls: item.sourceImageUrl ? [item.sourceImageUrl] : [],
+                },
+              );
+              // Writeback to domain_resources for UI display
+              await upsertByKeyResource({
                 scopeType: item.scopeType,
                 scopeId: item.scopeId,
                 category: item.category,
                 mediaType: "video",
                 title: item.title ?? undefined,
-                data: {
-                  key: item.key,
-                  prompt: item.prompt,
-                  sourceImageUrl: item.sourceImageUrl ?? null,
-                },
+                keyResourceId: kr.id,
               });
               return {
                 index: i,
                 status: "ok" as const,
                 key: item.key,
-                resourceId,
+                keyResourceId: kr.id,
+                version: kr.version,
                 prompt: item.prompt,
                 sourceImageUrl: item.sourceImageUrl ?? null,
                 note: "Prompt stored. No actual video generation — user can trigger later.",
@@ -208,6 +234,25 @@ export const videoMgrMcp: McpProvider = {
           }),
         );
         return json(vidOutput);
+      }
+
+      case "resolve_key_resource": {
+        const { ids } = ResolveKeyResourceParams.parse(args);
+        const results = await Promise.all(
+          ids.map(async (id) => {
+            const detail = await keyResourceService.getById(id);
+            if (!detail) return { id, status: "not_found" as const };
+            return {
+              id,
+              status: "ok" as const,
+              key: detail.key,
+              url: detail.url,
+              mediaType: detail.mediaType,
+              version: detail.currentVersion,
+            };
+          }),
+        );
+        return json(results);
       }
 
       default:

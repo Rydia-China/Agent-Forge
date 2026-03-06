@@ -220,7 +220,7 @@ async function executeTask(
           return;
         }
         // Not yet persisted (e.g. subagent JSON) — write + notify
-        upsertResource(sessionId, resource.key, resource.mediaType, {
+        upsertResource("session", sessionId, resource.key, resource.mediaType, {
           title: resource.title,
           url: resource.url,
           data: resource.data as Prisma.InputJsonValue | undefined,

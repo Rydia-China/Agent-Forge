@@ -54,9 +54,8 @@ export async function POST(
       parsed.data.scriptContent ?? null,
     );
 
-    // If script content is provided, run init_workflow to extract
-    // structured info (characters, costumes, etc.) and store in DB.
-    let initResult = null;
+    // init_workflow is a hard prerequisite — errors must surface to the client.
+    let initResult: Awaited<ReturnType<typeof runInitWorkflow>> | null = null;
     if (parsed.data.scriptContent) {
       initResult = await runInitWorkflow(
         novelId,

@@ -50,7 +50,8 @@ export interface KeyResourceSummary {
 
 export interface KeyResourceDetail {
   id: string;
-  sessionId: string;
+  scopeType: string;
+  scopeId: string;
   key: string;
   mediaType: string;
   currentVersion: number;
@@ -94,19 +95,20 @@ function currentVersionData(
 /* ------------------------------------------------------------------ */
 
 /**
- * Upsert a key resource by (sessionId, key).
+ * Upsert a key resource by (scopeType, scopeId, key).
  * Always creates a new version. Returns the identity row + new version number.
  */
 export async function upsertResource(
-  sessionId: string,
+  scopeType: string,
+  scopeId: string,
   key: string,
   mediaType: string,
   versionData: VersionData,
 ): Promise<KeyResourceRow & { version: number }> {
   // 1. Upsert identity
   const resource = await prisma.keyResource.upsert({
-    where: { sessionId_key: { sessionId, key } },
-    create: { sessionId, key, mediaType },
+    where: { scopeType_scopeId_key: { scopeType, scopeId, key } },
+    create: { scopeType, scopeId, key, mediaType },
     update: {},
   });
 
@@ -138,7 +140,8 @@ export async function upsertResource(
 /* ------------------------------------------------------------------ */
 
 export interface GenerateImageInput {
-  sessionId: string;
+  scopeType: string;
+  scopeId: string;
   key: string;
   prompt: string;
   refUrls?: string[];
@@ -154,12 +157,12 @@ export interface GenerateImageResult {
 export async function generateImage(
   input: GenerateImageInput,
 ): Promise<GenerateImageResult> {
-  const { sessionId, key, prompt, refUrls } = input;
+  const { scopeType, scopeId, key, prompt, refUrls } = input;
 
   // 1. Upsert identity
   const resource = await prisma.keyResource.upsert({
-    where: { sessionId_key: { sessionId, key } },
-    create: { sessionId, key, mediaType: "image" },
+    where: { scopeType_scopeId_key: { scopeType, scopeId, key } },
+    create: { scopeType, scopeId, key, mediaType: "image" },
     update: {},
   });
 
@@ -208,31 +211,33 @@ export async function regenerate(
   id: string,
   promptOverride?: string,
 ): Promise<RegenerateResult> {
-  const resource = await prisma.keyResource.findUniqueOrThrow({
-    where: { id },
-    include: { versions: { orderBy: { version: "desc" }, take: 1 } },
-  });
+  const resource = await prisma.keyResource.findUniqueOrThrow({ where: { id } });
 
-  const lastVer = resource.versions[0];
-  const prompt = promptOverride ?? lastVer?.prompt ?? "";
-  const refUrls = lastVer?.refUrls ?? [];
-
-  const ver = await nextVersion(resource.id);
-  const versionRow = await prisma.keyResourceVersion.create({
-    data: {
-      keyResourceId: resource.id,
-      version: ver,
-      prompt,
-      refUrls,
+  // Find the current version row to derive prompt / refUrls
+  const curVer = await prisma.keyResourceVersion.findUnique({
+    where: {
+      keyResourceId_version: { keyResourceId: resource.id, version: resource.currentVersion },
     },
   });
+  if (!curVer) throw new Error(`Current version ${resource.currentVersion} not found`);
+
+  const prompt = promptOverride ?? curVer.prompt ?? "";
+  const refUrls = curVer.refUrls ?? [];
 
   const imageUrl = await callFcGenerateImage(prompt, refUrls.length > 0 ? refUrls : undefined);
 
+  // Create a NEW version instead of overwriting the current one.
+  // Previous versions remain as rollback targets.
+  const ver = await nextVersion(resource.id);
   await prisma.$transaction([
-    prisma.keyResourceVersion.update({
-      where: { id: versionRow.id },
-      data: { url: imageUrl },
+    prisma.keyResourceVersion.create({
+      data: {
+        keyResourceId: resource.id,
+        version: ver,
+        prompt,
+        url: imageUrl,
+        refUrls: refUrls,
+      },
     }),
     prisma.keyResource.update({
       where: { id: resource.id },
@@ -348,7 +353,8 @@ export async function getById(id: string): Promise<KeyResourceDetail | null> {
 
   return {
     id: resource.id,
-    sessionId: resource.sessionId,
+    scopeType: resource.scopeType,
+    scopeId: resource.scopeId,
     key: resource.key,
     mediaType: resource.mediaType,
     currentVersion: resource.currentVersion,
@@ -368,24 +374,27 @@ export async function getById(id: string): Promise<KeyResourceDetail | null> {
   };
 }
 
-export async function listBySession(
-  sessionId: string,
+export async function listByScope(
+  scopeType: string,
+  scopeId: string,
 ): Promise<KeyResourceSummary[]> {
-  return listResources({ sessionId });
+  return listResources({ scopeType, scopeId });
 }
 
-export async function listByMediaType(
-  sessionId: string,
+export async function listByScopeAndMediaType(
+  scopeType: string,
+  scopeId: string,
   mediaType: string,
 ): Promise<KeyResourceSummary[]> {
-  return listResources({ sessionId, mediaType });
+  return listResources({ scopeType, scopeId, mediaType });
 }
 
 async function listResources(
-  filter: { sessionId?: string; mediaType?: string },
+  filter: { scopeType?: string; scopeId?: string; mediaType?: string },
 ): Promise<KeyResourceSummary[]> {
   const where: PrismaTypes.KeyResourceWhereInput = {};
-  if (filter.sessionId) where.sessionId = filter.sessionId;
+  if (filter.scopeType) where.scopeType = filter.scopeType;
+  if (filter.scopeId) where.scopeId = filter.scopeId;
   if (filter.mediaType) where.mediaType = filter.mediaType;
 
   const resources = await prisma.keyResource.findMany({
@@ -409,11 +418,12 @@ async function listResources(
 }
 
 /**
- * List key resources for a session — flat view for session detail API.
+ * List key resources for a scope — flat view for UI.
  * Returns one entry per resource with current version data resolved.
  */
-export async function listForSession(
-  sessionId: string,
+export async function listForScope(
+  scopeType: string,
+  scopeId: string,
 ): Promise<Array<{
   id: string;
   key: string;
@@ -424,7 +434,7 @@ export async function listForSession(
   data: PrismaTypes.JsonValue;
 }>> {
   const resources = await prisma.keyResource.findMany({
-    where: { sessionId },
+    where: { scopeType, scopeId },
     include: { versions: { orderBy: { version: "asc" } } },
     orderBy: { createdAt: "asc" },
   });

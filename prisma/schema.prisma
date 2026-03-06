@@ -49,7 +49,6 @@ model ChatSession {
   userId       String
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages         ChatMessage[]
-  keyResources     KeyResource[]
   tasks            Task[]
   imageGenerations ImageGeneration[]
   createdAt    DateTime       @default(now())
@@ -74,11 +73,12 @@ model ChatMessage {
   @@index([sessionId, createdAt])
 }
 
-/// KeyResource — 关键资源，版本化，LLM 通过 present 工具展示的图片/视频/JSON，会话隔离
+/// KeyResource — 关键资源，版本化，scope-based（novel / script）
+/// scopeType + scopeId 决定归属，key 在 scope 内唯一
 model KeyResource {
   id             String               @id @default(cuid())
-  sessionId      String
-  session        ChatSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  scopeType      String               // "novel" | "script"
+  scopeId        String               // novel ID / script DB ID
   key            String
   mediaType      String               // "image" | "video" | "json"
   currentVersion Int                  @default(0)
@@ -86,8 +86,8 @@ model KeyResource {
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
 
-  @@unique([sessionId, key])
-  @@index([sessionId])
+  @@unique([scopeType, scopeId, key])
+  @@index([scopeType, scopeId])
 }
 
 /// KeyResourceVersion — 不可变的版本快照

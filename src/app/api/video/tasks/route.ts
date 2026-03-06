@@ -7,6 +7,7 @@ import { resolveModel } from "@/lib/agent/models";
 
 const VideoContextSchema = z.object({
   novelId: z.string().min(1),
+  scriptId: z.string().min(1),
   scriptKey: z.string().min(1),
 });
 
@@ -17,7 +18,6 @@ const SubmitSchema = z.object({
   images: z.array(z.string()).optional(),
   model: z.string().optional(),
   video_context: VideoContextSchema,
-  preload_mcps: z.array(z.string()).optional(),
   skills: z.array(z.string()).optional(),
 });
 
@@ -35,10 +35,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  const { message, session_id, user, images, model, video_context, preload_mcps, skills } = parsed.data;
+  const { message, session_id, user, images, model, video_context, skills } = parsed.data;
 
   const contextProvider = new VideoContextProvider({
     novelId: video_context.novelId,
+    scriptId: video_context.scriptId,
     scriptKey: video_context.scriptKey,
   });
 
@@ -50,7 +51,6 @@ export async function POST(req: NextRequest) {
     model: resolveModel(model),
     agentConfig: {
       contextProvider,
-      preloadMcps: preload_mcps,
       skills,
     },
     beforeRun: () => ensureVideoSchema(),

@@ -1,4 +1,4 @@
-import { listBySession } from "./key-resource-service";
+import { listByScope } from "./key-resource-service";
 
 /**
  * Build the "Resource Registry" context block for LLM injection.
@@ -10,9 +10,10 @@ import { listBySession } from "./key-resource-service";
  * This is a generic utility — any ContextProvider can call it.
  */
 export async function buildResourceRegistryContext(
-  sessionId: string,
+  scopeType: string,
+  scopeId: string,
 ): Promise<string> {
-  const resources = await listBySession(sessionId);
+  const resources = await listByScope(scopeType, scopeId);
   if (resources.length === 0) return "";
 
   const lines = ["## Resource Registry"];

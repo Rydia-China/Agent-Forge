@@ -69,7 +69,6 @@ export function useVideoChat(
   initialSessionId: string | undefined,
   userName: string,
   videoContext: VideoContext | null,
-  preloadMcps: string[],
   skills: string[],
   onSessionCreated: (sessionId: string) => void,
   onRefreshNeeded: () => void,
@@ -151,7 +150,6 @@ export function useVideoChat(
         message: text || "(image)",
         user: userName,
         video_context: videoContext,
-        preload_mcps: preloadMcps,
         skills,
       };
       if (sid) payload.session_id = sid;
@@ -183,7 +181,7 @@ export function useVideoChat(
       stream.setIsSending(false);
       stream.activeSendRef.current = false;
     }
-  }, [stream, userName, videoContext, preloadMcps, skills, generateTitle, model]);
+  }, [stream, userName, videoContext, skills, generateTitle, model]);
 
   const sendMessage = useCallback(async (images?: string[]) => {
     const text = stream.input.trim();

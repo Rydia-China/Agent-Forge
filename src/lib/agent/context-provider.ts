@@ -1,5 +1,5 @@
 import { buildResourceRegistryContext } from "@/lib/services/key-resource-context";
-import { listBySession } from "@/lib/services/key-resource-service";
+import { listByScope } from "@/lib/services/key-resource-service";
 import type { Prisma } from "@/generated/prisma";
 
 /**
@@ -15,37 +15,42 @@ export interface ContextProvider {
   build(): Promise<string>;
 }
 
+export interface ScopeInfo {
+  scopeType: string;
+  scopeId: string;
+}
+
 /**
  * Base ContextProvider — provides key resource state (JSON + registry).
  * Used as the default when no domain-specific provider is configured.
  * Domain providers (e.g. VideoContextProvider) should extend this.
  */
 export class BaseContextProvider implements ContextProvider {
-  constructor(protected readonly sessionId?: string) {}
+  constructor(protected readonly scope?: ScopeInfo) {}
 
-  protected getSessionId(): string | undefined {
-    return this.sessionId;
+  protected getScope(): ScopeInfo | undefined {
+    return this.scope;
   }
 
   async build(): Promise<string> {
-    const sid = this.getSessionId();
-    if (!sid) return "";
+    const scope = this.getScope();
+    if (!scope) return "";
 
     const parts: string[] = [];
 
     // Key JSON resources
-    const keyJsonCtx = await this.buildKeyJsonContext(sid);
+    const keyJsonCtx = await this.buildKeyJsonContext(scope);
     if (keyJsonCtx) parts.push(keyJsonCtx);
 
     // Resource registry (images, videos, etc.)
-    const registryCtx = await buildResourceRegistryContext(sid);
+    const registryCtx = await buildResourceRegistryContext(scope.scopeType, scope.scopeId);
     if (registryCtx) parts.push(registryCtx);
 
     return parts.join("\n\n");
   }
 
-  protected async buildKeyJsonContext(sessionId: string): Promise<string | null> {
-    const resources = await listBySession(sessionId);
+  protected async buildKeyJsonContext(scope: ScopeInfo): Promise<string | null> {
+    const resources = await listByScope(scope.scopeType, scope.scopeId);
     const jsonResources = resources.filter(
       (r) => r.mediaType === "json" && r.data != null,
     );

@@ -24,8 +24,8 @@ wait_for_db() {
 
 wait_for_db "$DATABASE_URL" "数据库"
 
-echo "📦 执行数据库迁移..."
-npx prisma migrate deploy
+echo "📦 同步数据库 schema..."
+npx prisma db push --skip-generate
 
 echo "🚀 启动应用..."
 exec pnpm start

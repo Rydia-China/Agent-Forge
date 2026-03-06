@@ -15,7 +15,6 @@ import type { VideoContext } from "../types";
 /* ------------------------------------------------------------------ */
 
 const DEFAULT_SKILLS = ["novel-video-workflow", "novel-character-card"];
-const DEFAULT_MCPS = ["novel-service"];
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -62,6 +61,7 @@ export default function VideoWorkflowPage() {
     if (!data.selectedEpisode) return null;
     return {
       novelId,
+      scriptId: data.selectedEpisode.id,
       scriptKey: data.selectedEpisode.scriptKey,
     };
   }, [novelId, data.selectedEpisode]);
@@ -139,7 +139,6 @@ setAutoMessage("EP已上传，请开始小说可视化工作流：人物卡 → 
             key={chatKey}
             initialSessionId={currentSessionId}
             videoContext={videoContext}
-            preloadMcps={DEFAULT_MCPS}
             skills={DEFAULT_SKILLS}
             onSessionCreated={handleSessionCreated}
             onRefreshNeeded={handleRefreshNeeded}

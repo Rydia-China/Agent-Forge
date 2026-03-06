@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { regenerate, getById } from "@/lib/services/key-resource-service";
-import { pushMessages } from "@/lib/services/chat-session-service";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -32,16 +31,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     const result = await regenerate(id, parsed.data.prompt);
-
-    const actionDesc = parsed.data.prompt
-      ? `使用新 prompt 重新生成`
-      : `使用原 prompt 重新生成`;
-    await pushMessages(before.sessionId, [{
-      role: "user",
-      content: `[系统通知] 用户手动操作了资源 "${result.key}"：${actionDesc}。当前状态：prompt="${result.prompt}" url=${result.imageUrl} version=${result.version}`,
-      hidden: true,
-    }]);
-
     return NextResponse.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -4,7 +4,6 @@ import type { Prisma, McpServer, McpServerVersion } from "@/generated/prisma";
 import { sandboxManager } from "@/lib/mcp/sandbox";
 import { registry } from "@/lib/mcp/registry";
 import { getCatalogEntries, isCatalogEntry } from "@/lib/mcp/catalog";
-import { sessionMcpTracker } from "@/lib/mcp/session-tracker";
 
 /* ------------------------------------------------------------------ */
 /*  Built-in name protection                                          */
@@ -124,15 +123,9 @@ const CORE_MCPS: readonly string[] = ["skills", "mcp_manager", "ui", "memory"];
 /**
  * Return all built-in MCPs (core + catalog) with availability and
  * active status.
- *
- * When `sessionId` is provided, "active" reflects session-scoped
- * visibility (only MCPs the session has loaded).
- * Without `sessionId`, falls back to global registry state.
  */
-export function listStaticMcpProviders(sessionId?: string): StaticMcpSummary[] {
-  const isActive = sessionId
-    ? (name: string) => sessionMcpTracker.isVisible(sessionId, name)
-    : (name: string) => !!registry.getProvider(name);
+export function listStaticMcpProviders(): StaticMcpSummary[] {
+  const isActive = (name: string) => !!registry.getProvider(name);
 
   const core: StaticMcpSummary[] = CORE_MCPS.map((name) => ({
     name,

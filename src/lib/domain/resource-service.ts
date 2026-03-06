@@ -64,6 +64,9 @@ function toResource(row: Record<string, unknown>): DomainResource {
 
 /**
  * Get all resources for a given scope, grouped by category.
+ * When a resource is linked to a KeyResource (keyResourceId), resolve
+ * the URL from the KeyResource's current version so the panel always
+ * reflects the active version (after rollback / regenerate).
  */
 export async function getResourcesByScope(
   scopeType: string,
@@ -77,9 +80,35 @@ export async function getResourcesByScope(
     [scopeType, scopeId],
   );
 
+  const resources = (rows as Array<Record<string, unknown>>).map(toResource);
+
+  // Collect linked KeyResource IDs to resolve current-version URLs in a single query
+  const linkedIds = resources
+    .map((r) => r.keyResourceId)
+    .filter((id): id is string => id != null);
+
+  if (linkedIds.length > 0) {
+    const keyResources = await prisma.keyResource.findMany({
+      where: { id: { in: linkedIds } },
+      include: { versions: { orderBy: { version: "asc" } } },
+    });
+
+    const urlMap = new Map<string, string | null>();
+    for (const kr of keyResources) {
+      const curVer = kr.versions.find((v) => v.version === kr.currentVersion);
+      urlMap.set(kr.id, curVer?.url ?? null);
+    }
+
+    // Override static url with the current-version url from KeyResource
+    for (const r of resources) {
+      if (r.keyResourceId && urlMap.has(r.keyResourceId)) {
+        r.url = urlMap.get(r.keyResourceId) ?? r.url;
+      }
+    }
+  }
+
   const groups = new Map<string, DomainResource[]>();
-  for (const raw of rows as Array<Record<string, unknown>>) {
-    const r = toResource(raw);
+  for (const r of resources) {
     const list = groups.get(r.category) ?? [];
     list.push(r);
     groups.set(r.category, list);
@@ -186,41 +215,150 @@ export async function upsertByKeyResource(input: CreateResourceInput & { keyReso
 
 /**
  * Delete all resources for a given scope (used when deleting an episode).
+ * Cascade-deletes linked KeyResources, nulls dangling refs,
+ * then notifies registered cleanup hooks.
  */
 export async function deleteResourcesByScope(
   scopeType: string,
   scopeId: string,
 ): Promise<void> {
   const t = await physical();
+
+  // 1. Collect full info before deleting (for hooks + KeyResource cascade)
+  const { rows } = await bizPool.query(
+    `SELECT scope_type, scope_id, media_type, title, url, key_resource_id
+     FROM "${t}" WHERE scope_type = $1 AND scope_id = $2`,
+    [scopeType, scopeId],
+  );
+  const deleted: DeletedResourceInfo[] = (rows as Array<Record<string, unknown>>).map((r) => ({
+    scopeType: r.scope_type as string,
+    scopeId: r.scope_id as string,
+    mediaType: r.media_type as string,
+    title: (r.title as string | null) ?? null,
+    url: (r.url as string | null) ?? null,
+    keyResourceId: (r.key_resource_id as string | null) ?? null,
+  }));
+  const keyResourceIds = deleted
+    .map((d) => d.keyResourceId)
+    .filter((id): id is string => id != null);
+
+  // 2. Delete the biz-db rows
   await bizPool.query(
     `DELETE FROM "${t}" WHERE scope_type = $1 AND scope_id = $2`,
     [scopeType, scopeId],
   );
+
+  // 3. Cascade-cleanup linked KeyResources
+  await cascadeDeleteKeyResources(t, keyResourceIds);
+
+  // 4. Notify hooks
+  await notifyDeleteHooks(deleted);
 }
+
+export interface DeletedResourceInfo {
+  scopeType: string;
+  scopeId: string;
+  mediaType: string;
+  title: string | null;
+  url: string | null;
+  keyResourceId: string | null;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Post-delete hook — business layers register cleanup here           */
+/* ------------------------------------------------------------------ */
+
+export type ResourceDeletedHook = (deleted: DeletedResourceInfo[]) => Promise<void>;
+
+const deleteHooks: ResourceDeletedHook[] = [];
+
+/**
+ * Register a hook that runs after domain_resources are deleted.
+ * Hooks receive the metadata of all deleted rows so they can clean up
+ * denormalized copies in business tables.
+ */
+export function onResourceDeleted(hook: ResourceDeletedHook): void {
+  deleteHooks.push(hook);
+}
+
+async function notifyDeleteHooks(deleted: DeletedResourceInfo[]): Promise<void> {
+  if (deleted.length === 0) return;
+  for (const hook of deleteHooks) {
+    try {
+      await hook(deleted);
+    } catch (e) {
+      console.error("[resource-service] cleanup hook error:", e);
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Delete                                                             */
+/* ------------------------------------------------------------------ */
 
 /**
  * Delete a single resource by id.
- * If the resource has a linked KeyResource, cascade-delete it
- * (KeyResourceVersion rows are removed by Prisma onDelete: Cascade).
+ * Cascade-deletes linked KeyResource, nulls dangling refs,
+ * then notifies registered cleanup hooks.
  */
-export async function deleteResource(id: string): Promise<void> {
+export async function deleteResource(id: string): Promise<DeletedResourceInfo | null> {
   const t = await physical();
 
-  // Fetch linked key_resource_id before deleting
+  // 1. Fetch full row before deleting
   const { rows } = await bizPool.query(
-    `SELECT key_resource_id FROM "${t}" WHERE id = $1 LIMIT 1`,
+    `SELECT scope_type, scope_id, media_type, title, url, key_resource_id
+     FROM "${t}" WHERE id = $1 LIMIT 1`,
     [id],
   );
-  const row = rows[0] as { key_resource_id: string | null } | undefined;
-  const linkedId = row?.key_resource_id ?? null;
+  const row = rows[0] as Record<string, unknown> | undefined;
+  if (!row) return null;
 
-  // Delete the biz-db row
+  const info: DeletedResourceInfo = {
+    scopeType: row.scope_type as string,
+    scopeId: row.scope_id as string,
+    mediaType: row.media_type as string,
+    title: (row.title as string | null) ?? null,
+    url: (row.url as string | null) ?? null,
+    keyResourceId: (row.key_resource_id as string | null) ?? null,
+  };
+
+  // 2. Delete the biz-db row
   await bizPool.query(`DELETE FROM "${t}" WHERE id = $1`, [id]);
 
-  // Cascade-delete linked KeyResource (+ all versions) if present
-  if (linkedId) {
-    await prisma.keyResource.delete({ where: { id: linkedId } }).catch(() => {
-      // KeyResource may already be gone or ID may not match — ignore
+  // 3. Cascade-cleanup linked KeyResource
+  if (info.keyResourceId) {
+    await cascadeDeleteKeyResources(t, [info.keyResourceId]);
+  }
+
+  // 4. Notify hooks
+  await notifyDeleteHooks([info]);
+
+  return info;
+}
+
+/**
+ * Cascade-delete KeyResources and null out any remaining domain_resources
+ * references that point to them.
+ */
+async function cascadeDeleteKeyResources(
+  physicalTable: string,
+  keyResourceIds: string[],
+): Promise<void> {
+  if (keyResourceIds.length === 0) return;
+
+  // Null out key_resource_id in any other domain_resources rows
+  // that still reference these KeyResources
+  await bizPool.query(
+    `UPDATE "${physicalTable}"
+     SET key_resource_id = NULL
+     WHERE key_resource_id = ANY($1::text[])`,
+    [keyResourceIds],
+  );
+
+  // Delete the KeyResources themselves (versions cascade via Prisma FK)
+  for (const krId of keyResourceIds) {
+    await prisma.keyResource.delete({ where: { id: krId } }).catch(() => {
+      // Already gone — ignore
     });
   }
 }

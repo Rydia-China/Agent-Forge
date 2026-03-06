@@ -75,6 +75,26 @@ class McpRegistry {
   }
 
   /**
+   * Collect tools only from the specified providers (scoped).
+   * Used by the agent loop to build a domain-specific tool list.
+   */
+  async listToolsForProviders(names: Iterable<string>): Promise<Tool[]> {
+    const all: Tool[] = [];
+    for (const name of names) {
+      const provider = this.providers.get(name);
+      if (!provider) continue;
+      const tools = await provider.listTools();
+      for (const tool of tools) {
+        all.push({
+          ...tool,
+          name: qualifyToolName(provider.name, tool.name),
+        });
+      }
+    }
+    return all;
+  }
+
+  /**
    * Dispatch a tool call by its fully-qualified name.
    */
   async callTool(
