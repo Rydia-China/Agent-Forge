@@ -36,11 +36,14 @@ const BLOCKED_IDENTIFIERS = [
 /** Allowed first keyword for `query` (read-only) tool. */
 const QUERY_PREFIXES = ["SELECT", "WITH"];
 
-/** Allowed first keyword for `execute` (write) tool. */
-const EXECUTE_PREFIXES = ["INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP", "TRUNCATE"];
+/** Allowed first keyword for `execute` (write) tool — DML only. */
+const EXECUTE_PREFIXES = ["INSERT", "UPDATE", "DELETE", "TRUNCATE"];
 
-/** Dangerous DDL patterns that must never pass through execute. */
+/** DDL patterns blocked from the `sql` tool (must use schema tools instead). */
 const BLOCKED_DDL_PATTERNS = [
+  /\bCREATE\s+TABLE\b/,
+  /\bALTER\s+TABLE\b/,
+  /\bDROP\s+TABLE\b/,
   /\bDROP\s+DATABASE\b/,
   /\bDROP\s+SCHEMA\b/,
   /\bDROP\s+ROLE\b/,
@@ -131,7 +134,7 @@ export function guardQuery(sql: string): SqlCheckResult {
   return { ok: true };
 }
 
-/** Validate SQL for the write `execute` tool. */
+/** Validate SQL for the write `execute` tool (DML only). */
 export function guardExecute(sql: string): SqlCheckResult {
   const n = normalizeSql(sql);
 
@@ -153,7 +156,7 @@ export function guardExecute(sql: string): SqlCheckResult {
     if (pat.test(n))
       return {
         ok: false,
-        reason: `BLOCKED: "${pat.source.replace(/\\[bs]/g, " ").trim()}" is not allowed.`,
+        reason: `BLOCKED: "${pat.source.replace(/\\[bs]/g, " ").trim()}" is not allowed. Use create_table / alter_table / drop_table instead.`,
       };
   }
 
@@ -163,7 +166,7 @@ export function guardExecute(sql: string): SqlCheckResult {
   if (!EXECUTE_PREFIXES.some((p) => n.startsWith(p)))
     return {
       ok: false,
-      reason: "BLOCKED: Only INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, TRUNCATE statements are allowed.",
+      reason: "BLOCKED: Only INSERT, UPDATE, DELETE, TRUNCATE statements are allowed. For DDL use create_table / alter_table / drop_table.",
     };
 
   return { ok: true };

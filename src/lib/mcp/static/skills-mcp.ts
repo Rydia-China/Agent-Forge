@@ -1,6 +1,7 @@
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
 import * as svc from "@/lib/services/skill-service";
+import { appendSchemaDirectiveIfNeeded } from "@/lib/skills/required-schemas";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -125,7 +126,13 @@ export const skillsMcp: McpProvider = {
           names.map(async (n) => {
             const skill = await svc.getSkill(n);
             if (!skill) throw new Error(`Skill "${n}" not found`);
-            return { name: n, content: skill.content };
+
+            const content = await appendSchemaDirectiveIfNeeded(
+              skill.content,
+              skill.metadata,
+            );
+
+            return { name: n, content };
           }),
         );
         const output = results.map((r, i) =>

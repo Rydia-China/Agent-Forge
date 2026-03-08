@@ -206,6 +206,32 @@ model TaskEvent {
   @@index([taskId, id])
 }
 
+/// BizSchema — biz-db 表结构的声明式注册表（版本化）
+/// 实体表保留逻辑表名 + production 指针，结构存在 BizSchemaVersion
+model BizSchema {
+  id                String             @id @default(cuid())
+  tableName         String             @unique
+  productionVersion Int                @default(1)
+  versions          BizSchemaVersion[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+/// BizSchemaVersion — 不可变的表结构快照
+model BizSchemaVersion {
+  id          String    @id @default(cuid())
+  bizSchemaId String
+  bizSchema   BizSchema @relation(fields: [bizSchemaId], references: [id], onDelete: Cascade)
+  version     Int
+  columns     Json      /// [{ name, type, nullable?, default? }]
+  constraints Json?     /// [{ type: "pk"|"unique", columns: string[] }]
+  description String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([bizSchemaId, version])
+  @@index([bizSchemaId])
+}
+
 /// Api — 对外 CRUD 接口，声明式 SQL 操作绑定 biz-db 数据
 /// 实体表保留身份 + 启用状态 + production 指针，内容存在 ApiVersion
 model Api {

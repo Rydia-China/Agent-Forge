@@ -15,7 +15,7 @@ import {
 import { ensureDomainResourcesTable } from "@/lib/domain/resource-schema";
 
 /* ------------------------------------------------------------------ */
-/*  novel_scripts DDL (unchanged)                                      */
+/*  novel_scripts DDL                                                  */
 /* ------------------------------------------------------------------ */
 
 const NOVEL_SCRIPTS_LOGICAL = "novel_scripts";
@@ -26,8 +26,21 @@ const NOVEL_SCRIPTS_DDL = `CREATE TABLE IF NOT EXISTS "$TABLE" (
   script_key TEXT NOT NULL,
   script_name TEXT,
   script_content TEXT,
+  init_result JSONB,
+  characters JSONB,
+  costumes JSONB,
+  storyboard_raw TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 )`;
+
+/** Columns that may be missing on older tables — idempotent migration. */
+const NOVEL_SCRIPTS_MIGRATIONS = [
+  `ALTER TABLE "$TABLE" ADD COLUMN IF NOT EXISTS init_result JSONB`,
+  `ALTER TABLE "$TABLE" ADD COLUMN IF NOT EXISTS characters JSONB`,
+  `ALTER TABLE "$TABLE" ADD COLUMN IF NOT EXISTS costumes JSONB`,
+  `ALTER TABLE "$TABLE" ADD COLUMN IF NOT EXISTS storyboard_raw TEXT`,
+  `ALTER TABLE "$TABLE" ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()`,
+];
 
 /* ------------------------------------------------------------------ */
 /*  Ensure schema exists                                               */
@@ -48,7 +61,7 @@ export async function ensureVideoSchema(): Promise<void> {
   // 1. domain_resources (generic)
   await ensureDomainResourcesTable();
 
-  // 2. novel_scripts (episode container)
+  // 2. novel_scripts (episode container — system-managed, all columns)
   const existing = await resolveTable(GLOBAL_USER, NOVEL_SCRIPTS_LOGICAL);
   let physicalName: string;
   if (existing) {
@@ -60,10 +73,10 @@ export async function ensureVideoSchema(): Promise<void> {
     console.log(`[video-schema] Created table "${NOVEL_SCRIPTS_LOGICAL}" → "${physicalName}"`);
   }
 
-  // 3. Ensure init_result column exists (stores init_workflow output)
-  await bizPool.query(
-    `ALTER TABLE "${physicalName}" ADD COLUMN IF NOT EXISTS init_result JSONB`,
-  );
+  // 3. Idempotent migrations — add columns that may be missing on older tables
+  for (const stmt of NOVEL_SCRIPTS_MIGRATIONS) {
+    await bizPool.query(stmt.replaceAll("$TABLE", physicalName));
+  }
 }
 
 /** The logical names of all video workflow tables. */

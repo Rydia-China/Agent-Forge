@@ -32,22 +32,28 @@ API **不是** MCP，不涉及沙箱或代码执行。API 是纯数据：
 ### 1. 设计数据模型
 
 根据用户需求确定表结构。业务数据库是标准 PostgreSQL：
-- 必须先 \`CREATE TABLE\` 定义表结构
-- 主键统一用 \`id UUID PRIMARY KEY DEFAULT gen_random_uuid()\`
-- 充分使用约束：\`NOT NULL\`、\`UNIQUE\`、\`REFERENCES\`
+- 主键统一用 UUID + gen_random_uuid()
+- 充分使用约束：NOT NULL、UNIQUE
 
 ### 2. 建立表结构
 
-用 \`biz_db__sql\` 创建表：
+用 \`biz_db__create_table\` 声明式创建表（禁止通过 \`biz_db__sql\` 执行 CREATE TABLE）：
 
-\\\`\\\`\\\`sql
-CREATE TABLE customers (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  phone TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+\\\`\\\`\\\`json
+{
+  "tableName": "customers",
+  "columns": [
+    { "name": "id", "type": "uuid", "nullable": false, "default": "gen_random_uuid()" },
+    { "name": "name", "type": "text", "nullable": false },
+    { "name": "email", "type": "text", "nullable": false },
+    { "name": "phone", "type": "text" },
+    { "name": "created_at", "type": "timestamptz", "nullable": false, "default": "NOW()" }
+  ],
+  "constraints": [
+    { "type": "pk", "columns": ["id"] },
+    { "type": "unique", "columns": ["email"] }
+  ]
+}
 \\\`\\\`\\\`
 
 ### 3. 设计 operations
@@ -200,7 +206,7 @@ API 中的 SQL 表名会根据当前用户自动处理：
 
 ### SQL Guard 限制
 - \`type: "query"\` 只允许 SELECT / WITH 开头
-- \`type: "execute"\` 允许 INSERT / UPDATE / DELETE / CREATE / ALTER / DROP / TRUNCATE
+- \`type: "execute"\` 允许 INSERT / UPDATE / DELETE / TRUNCATE（DDL 不允许，表结构通过 \`biz_db__create_table\` 等 schema tools 管理）
 - 禁止系统表访问、多语句、DROP DATABASE / DROP SCHEMA 等危险操作
 
 ### 时间戳

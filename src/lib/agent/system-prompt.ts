@@ -3,6 +3,7 @@ import { getSkill } from "@/lib/services/skill-service";
 import { listMcpServers } from "@/lib/services/mcp-service";
 import { registry } from "@/lib/mcp/registry";
 import { getCatalogEntries } from "@/lib/mcp/catalog";
+import { appendSchemaDirectiveIfNeeded } from "@/lib/skills/required-schemas";
 
 /* ------------------------------------------------------------------ */
 /*  Static behavioural rules                                           */
@@ -139,12 +140,18 @@ async function appendSkillIndex(lines: string[], preloadedSkills?: string[]): Pr
     lines.push(`- **${s.name}**: ${s.description}${mcps}`);
   }
 
-  // Append pre-loaded skill content inline
+  // Append pre-loaded skill content inline (with requiredSchemas check)
   if (preloadedSkills?.length) {
     const loaded: string[] = [];
     for (const name of preloadedSkills) {
       const skill = await getSkill(name);
-      if (skill) loaded.push(`#### ${skill.name}\n${skill.content}`);
+      if (skill) {
+        const content = await appendSchemaDirectiveIfNeeded(
+          skill.content,
+          skill.metadata,
+        );
+        loaded.push(`#### ${skill.name}\n${content}`);
+      }
     }
     if (loaded.length > 0) {
       lines.push("");

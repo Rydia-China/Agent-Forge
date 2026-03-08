@@ -5,6 +5,8 @@ import { isCatalogEntry, loadFromCatalog } from "@/lib/mcp/catalog";
 import { sandboxManager } from "@/lib/mcp/sandbox";
 import * as mcpService from "@/lib/services/mcp-service";
 import { getBuiltinSkill } from "@/lib/skills/builtins";
+import { getSkill } from "@/lib/services/skill-service";
+import { extractRequiredSchemas } from "@/lib/skills/required-schemas";
 import {
   chatCompletion,
   chatCompletionStream,
@@ -143,6 +145,25 @@ function resolveSkillMcps(skillNames: string[]): string[] {
     const builtin = getBuiltinSkill(name);
     if (builtin) {
       for (const mcp of builtin.requiresMcps) mcps.push(mcp);
+    }
+  }
+  return mcps;
+}
+
+/**
+ * Resolve implicit MCP dependencies from DB skills' metadata.
+ * Skills with requiredSchemas implicitly depend on biz_db.
+ */
+async function resolveImplicitMcps(skillNames: string[]): Promise<string[]> {
+  const mcps: string[] = [];
+  for (const name of skillNames) {
+    if (getBuiltinSkill(name)) continue; // already handled by resolveSkillMcps
+    const skill = await getSkill(name);
+    if (!skill) continue;
+    const schemas = extractRequiredSchemas(skill.metadata);
+    if (schemas?.length) {
+      mcps.push("biz_db");
+      break; // only need to add once
     }
   }
   return mcps;
@@ -345,8 +366,10 @@ async function runAgentInnerCore(
   const activeScope = new Set(CORE_MCPS);
   if (config?.skills) {
     const skillMcps = resolveSkillMcps(config.skills);
-    await ensureMcpsLoaded(skillMcps);
-    for (const m of skillMcps) activeScope.add(m);
+    const implicitMcps = await resolveImplicitMcps(config.skills);
+    const allMcps = [...skillMcps, ...implicitMcps];
+    await ensureMcpsLoaded(allMcps);
+    for (const m of allMcps) activeScope.add(m);
   }
 
   const systemPrompt = await buildSystemPrompt(config?.skills, activeScope);
@@ -528,8 +551,10 @@ async function runAgentStreamInnerCore(
   const activeScope = new Set(CORE_MCPS);
   if (config?.skills) {
     const skillMcps = resolveSkillMcps(config.skills);
-    await ensureMcpsLoaded(skillMcps);
-    for (const m of skillMcps) activeScope.add(m);
+    const implicitMcps = await resolveImplicitMcps(config.skills);
+    const allMcps = [...skillMcps, ...implicitMcps];
+    await ensureMcpsLoaded(allMcps);
+    for (const m of allMcps) activeScope.add(m);
   }
 
   const systemPrompt = await buildSystemPrompt(config?.skills, activeScope);
