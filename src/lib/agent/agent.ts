@@ -286,22 +286,23 @@ export async function runAgentStream(
 /**
  * Resolve images: upload any base64 data URLs to OSS and return HTTP URLs.
  * Already-HTTP URLs pass through unchanged.
- * Upload failures are skipped (logged) — data URLs are NOT usable as fallback
- * because the main model never receives image content directly.
+ * Upload failures throw — the caller should surface the error to the user
+ * so they can retry, because the main model never receives image content
+ * directly and a lost image cannot be recovered.
  */
 async function resolveImages(images: string[]): Promise<string[]> {
   const results = await Promise.all(
-    images.map(async (img) => {
+    images.map(async (img, idx) => {
       if (!img.startsWith("data:")) return img;
       try {
         return await uploadDataUrl(img, "chat-images");
       } catch (err) {
-        console.warn("[agent] Failed to upload image to OSS, skipping:", err);
-        return null;
+        const reason = err instanceof Error ? err.message : String(err);
+        throw new Error(`图片 ${idx + 1} 上传失败，请重新发送: ${reason}`);
       }
     }),
   );
-  return results.filter((url): url is string => url !== null);
+  return results;
 }
 
 /* ------------------------------------------------------------------ */
