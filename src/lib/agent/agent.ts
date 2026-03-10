@@ -285,20 +285,23 @@ export async function runAgentStream(
 
 /**
  * Resolve images: upload any base64 data URLs to OSS and return HTTP URLs.
- * Already-HTTP URLs pass through unchanged. Errors fall back to the data URL.
+ * Already-HTTP URLs pass through unchanged.
+ * Upload failures are skipped (logged) — data URLs are NOT usable as fallback
+ * because the main model never receives image content directly.
  */
 async function resolveImages(images: string[]): Promise<string[]> {
-  return Promise.all(
+  const results = await Promise.all(
     images.map(async (img) => {
       if (!img.startsWith("data:")) return img;
       try {
         return await uploadDataUrl(img, "chat-images");
       } catch (err) {
-        console.warn("[agent] Failed to upload image to OSS, using data URL fallback:", err);
-        return img;
+        console.warn("[agent] Failed to upload image to OSS, skipping:", err);
+        return null;
       }
     }),
   );
+  return results.filter((url): url is string => url !== null);
 }
 
 /* ------------------------------------------------------------------ */
@@ -306,11 +309,12 @@ async function resolveImages(images: string[]): Promise<string[]> {
 /* ------------------------------------------------------------------ */
 
 /**
- * Convert a ChatMessage to an LlmMessage, building multi-part content
- * when images are present (OpenAI vision format).
+ * Convert a ChatMessage to an LlmMessage.
  *
- * When images exist, a text block mapping each image to its URL is
- * prepended so the LLM can reference them accurately in tool calls.
+ * Images are NEVER sent as vision content (image_url blocks).
+ * Instead, URLs are appended as plain text so the main model knows
+ * which images are attached and can delegate to a subagent for
+ * visual understanding when needed.
  */
 function chatMsgToLlm(msg: ChatMessage): LlmMessage {
   if (msg.images?.length) {
@@ -319,20 +323,14 @@ function chatMsgToLlm(msg: ChatMessage): LlmMessage {
       .map((url, i) => `- image_${i + 1}: ${url}`)
       .join("\n");
     const annotation =
-      `[${msg.images.length} 张图片已附加，需要在 tool call 中引用图片时请使用以下 URL]\n${imageMap}`;
+      `[${msg.images.length} 张图片已附加]\n${imageMap}\n如需理解图片内容，请使用 subagent 工具查看`;
     const fullText = userText
       ? `${userText}\n\n${annotation}`
       : annotation;
 
     return {
       role: msg.role as "user",
-      content: [
-        { type: "text" as const, text: fullText },
-        ...msg.images.map((url) => ({
-          type: "image_url" as const,
-          image_url: { url },
-        })),
-      ],
+      content: fullText,
     };
   }
   const base: Record<string, unknown> = {
