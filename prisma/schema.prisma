@@ -179,17 +179,20 @@ model BizTableMapping {
 }
 
 /// Task — 一次 agent 调用的生命周期，后端驱动，不依赖前端连接
+/// type="agent" 为主控任务，type="executor" 为执行者任务
 model Task {
-  id        String      @id @default(cuid())
-  sessionId String
-  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  status    String      @default("pending") // pending | running | completed | failed | cancelled
-  input     Json        // { message, images? }
-  reply     String?
-  error     String?
-  events    TaskEvent[]
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id             String      @id @default(cuid())
+  sessionId      String
+  session        ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type           String      @default("agent") // "agent" | "executor"
+  status         String      @default("pending") // pending | running | completed | failed | cancelled
+  input          Json        // { message, images? } or ExecutorTask
+  reply          String?
+  error          String?
+  executorResult Json?       // Structured ExecutorResult (only for type="executor")
+  events         TaskEvent[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   @@index([sessionId, status])
 }
@@ -204,6 +207,21 @@ model TaskEvent {
   createdAt DateTime @default(now())
 
   @@index([taskId, id])
+}
+
+/// ScheduledTask — 定时/周期触发的 executor 任务
+/// 由 croner 在内存中注册 timer，DB 用于持久化和重启恢复
+model ScheduledTask {
+  id          String    @id @default(cuid())
+  sessionId   String?
+  task        Json      // ExecutorTask config
+  cron        String?   // Cron expression (recurring) — mutually exclusive with runAt
+  runAt       DateTime? // One-time scheduled time — mutually exclusive with cron
+  enabled     Boolean   @default(true)
+  lastRunAt   DateTime?
+  lastTaskId  String?   // Last Task.id created by this schedule
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 /// BizSchema — biz-db 表结构的声明式注册表（版本化）

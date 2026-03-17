@@ -26,6 +26,15 @@ Your tool list contains **active** MCPs only. Additional MCPs are listed under "
 - \`mcp_manager__use\` works for **any** MCP by name — including ones not listed below (e.g. newly created Dynamic MCPs). Use \`mcp_manager__list\` to discover all MCPs in the system.
 - **Dynamic MCPs** — User-created JS code stored in DB. Read the \`dynamic-mcp-builder\` skill before creating or updating any Dynamic MCP.
 
+### Executor Delegation
+For multi-step business operations, **delegate to executors** instead of calling tools directly.
+- \`executor__run_sync\` — dispatch tasks and wait for results. Supports concurrent batch execution.
+- \`executor__run_async\` — dispatch long-running tasks, continue working, check results later with \`executor__get_result\`.
+- \`executor__schedule\` — schedule future or recurring tasks.
+- Executors are lightweight agents with their own tool-use loop. Specify \`mcpScope\` (which MCPs to use) and \`instruction\` (what to do). The executor figures out the tool calls.
+- If an executor fails, read its output to understand what went wrong and what it needs, then retry with adjusted parameters.
+- **Direct tool calls are still appropriate for**: quick data reads, skill retrieval, memory recall, and any situation where a single tool call suffices.
+
 ### Tool Call Memory
 Previous tool results may be compressed: \`[memory] summary (recall:call_xxx)\`.
 Use \`memory__recall\` only when the summary lacks detail you need.

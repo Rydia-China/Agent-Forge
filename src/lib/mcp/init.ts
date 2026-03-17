@@ -4,7 +4,9 @@ import { mcpManagerMcp } from "./static/mcp-manager";
 import { uiMcp } from "./static/ui";
 import { memoryMcp } from "./static/memory";
 import { syncMcp } from "./static/sync";
+import { executorMcp } from "./static/executor";
 import { bizDbReady } from "@/lib/biz-db";
+import { restoreSchedules } from "@/lib/services/scheduler-service";
 
 /**
  * Register core MCP providers.
@@ -28,10 +30,17 @@ export async function initMcp(): Promise<void> {
   registry.register(uiMcp);
   registry.register(memoryMcp);
   registry.register(syncMcp);
+  registry.register(executorMcp);
 
   registry.protect(skillsMcp.name);
   registry.protect(mcpManagerMcp.name);
   registry.protect(uiMcp.name);
   registry.protect(memoryMcp.name);
   registry.protect(syncMcp.name);
+  registry.protect(executorMcp.name);
+
+  // Restore scheduled tasks from DB (fire-and-forget, non-blocking)
+  void restoreSchedules().catch((err) =>
+    console.error("[scheduler] Failed to restore schedules:", err),
+  );
 }

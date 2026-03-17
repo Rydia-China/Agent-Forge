@@ -24,7 +24,7 @@ import type {
   KeyResourceItem,
   UploadRequestPayload,
 } from "@/app/types";
-import { useTaskStream } from "@/app/components/hooks/useTaskStream";
+import { useTaskStream, type LlmStats } from "@/app/components/hooks/useTaskStream";
 import type { VideoContext } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -49,6 +49,7 @@ export interface UseVideoChatReturn {
   isLoadingSession: boolean;
   streamingReply: string | null;
   streamingTools: string[];
+  subagentTasks: import("@/app/components/hooks/useTaskStream").SubagentTaskInfo[];
   activeTool: ActiveToolInfo | null;
   status: AgentStatus;
   keyResources: KeyResourceItem[];
@@ -59,6 +60,7 @@ export interface UseVideoChatReturn {
   stopStreaming: () => void;
   uploadDialog: UploadRequestPayload | null;
   setUploadDialog: (req: UploadRequestPayload | null) => void;
+  llmStats: LlmStats;
 }
 
 /* ------------------------------------------------------------------ */
@@ -242,6 +244,7 @@ export function useVideoChat(
     isLoadingSession: stream.isLoadingSession,
     streamingReply: stream.streamingReply,
     streamingTools: stream.streamingTools,
+    subagentTasks: stream.subagentTasks,
     activeTool,
     status: stream.status,
     keyResources: stream.keyResources,
@@ -252,5 +255,6 @@ export function useVideoChat(
     stopStreaming,
     uploadDialog: stream.uploadDialog,
     setUploadDialog: stream.setUploadDialog,
+    llmStats: stream.llmStats,
   };
 }

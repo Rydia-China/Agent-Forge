@@ -9,6 +9,8 @@ export type { Tool, CallToolResult };
 export interface ToolContext {
   sessionId?: string;
   userName?: string;
+  /** Optional progress callback — MCP tools can report incremental progress to the UI. */
+  onProgress?: (event: { type: string; data: unknown }) => void;
 }
 
 /**

@@ -137,6 +137,22 @@ function generateSummary(
     return `oss.upload: ${truncate(result, 150)}`;
   }
 
+  /* executor */
+  if (toolName === "executor__run_sync" || toolName === "executor__run_async") {
+    const parsed = tryParseJson(result);
+    if (Array.isArray(parsed)) {
+      const total = parsed.length;
+      const completed = parsed.filter(
+        (r) => asRecord(r)?.status === "completed",
+      ).length;
+      const totalCalls = parsed.reduce((sum, r) => {
+        const rec = asRecord(r);
+        return sum + (typeof rec?.toolCallCount === "number" ? rec.toolCallCount : 0);
+      }, 0);
+      return `executor(${total} tasks, ${completed} ok, ${totalCalls} tool calls)`;
+    }
+  }
+
   /* Default */
   const shortName = toolName.replace("__", ".");
   return `${shortName}: ${truncate(result, 100)}`;

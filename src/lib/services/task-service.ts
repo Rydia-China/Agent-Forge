@@ -202,6 +202,12 @@ async function executeTask(
       onToolEnd: (event) => {
         pushEvent(taskId, "tool_end", event as unknown as Prisma.InputJsonValue).catch(() => {/* logged in pushEvent */});
       },
+      onProgress: (event) => {
+        pushEvent(taskId, event.type, event.data as Prisma.InputJsonValue).catch(() => {/* logged in pushEvent */});
+      },
+      onUsage: (event) => {
+        pushEvent(taskId, "usage", event as unknown as Prisma.InputJsonValue).catch(() => {/* logged in pushEvent */});
+      },
       onUploadRequest: (req) => {
         pushEvent(taskId, "upload_request", req as Prisma.InputJsonValue).catch(() => {/* logged in pushEvent */});
       },
@@ -332,6 +338,7 @@ export async function getActiveTaskForSession(
   return prisma.task.findFirst({
     where: {
       sessionId,
+      type: "agent",
       status: { in: ["pending", "running"] },
     },
     orderBy: { createdAt: "desc" },

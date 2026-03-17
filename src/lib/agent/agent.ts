@@ -13,6 +13,7 @@ import {
   mcpToolToOpenAI,
   type LlmMessage,
 } from "./llm-client";
+import { resolveModel, MODEL_OPTIONS } from "./models";
 import {
   getOrCreateSession,
   pushMessages,
@@ -132,7 +133,7 @@ export interface AgentConfig {
 /*  Core MCP names — always in scope                                   */
 /* ------------------------------------------------------------------ */
 
-const CORE_MCPS = new Set(["skills", "mcp_manager", "ui", "memory", "sync"]);
+const CORE_MCPS = new Set(["skills", "mcp_manager", "ui", "memory", "sync", "executor"]);
 
 /* ------------------------------------------------------------------ */
 /*  Skill → MCP resolution + on-demand loading                         */
@@ -229,6 +230,14 @@ export interface ToolEndEvent {
   error?: string;
 }
 
+export interface UsageEvent {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  model: string;
+  maxContextTokens: number;
+}
+
 export interface StreamCallbacks {
   onSession?: (sessionId: string) => void;
   onDelta?: (text: string) => void;
@@ -237,6 +246,10 @@ export interface StreamCallbacks {
   onToolEnd?: (event: ToolEndEvent) => void;
   onUploadRequest?: (req: unknown) => void;
   onKeyResource?: (resource: KeyResourceEvent) => void;
+  /** Forwarded from MCP tool's onProgress — used for subagent task progress etc. */
+  onProgress?: (event: { type: string; data: unknown }) => void;
+  /** LLM usage stats emitted after each completion round. */
+  onUsage?: (event: UsageEvent) => void;
 }
 
 /**
@@ -533,7 +546,13 @@ async function runAgentStreamInner(
   images?: string[],
   config?: AgentConfig,
 ): Promise<AgentResponse> {
-  const toolCtx: ToolContext = { sessionId: session.id, userName };
+  const toolCtx: ToolContext = {
+    sessionId: session.id,
+    userName,
+    onProgress: callbacks.onProgress
+      ? (event) => callbacks.onProgress!(event)
+      : undefined,
+  };
   return runAgentStreamInnerCore(userMessage, session, toolCtx, callbacks, signal, images, config);
 }
 
@@ -612,8 +631,13 @@ async function runAgentStreamInnerCore(
     try {
       const stream = await chatCompletionStream(llmMessages, openaiTools, signal, config?.model);
       const toolCallsByIndex = new Map<number, ToolCall>();
+      let lastUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | undefined;
 
       for await (const chunk of stream) {
+        // Capture usage FIRST — the final chunk has usage but empty choices
+        if (chunk.usage) {
+          lastUsage = chunk.usage;
+        }
         const choice = chunk.choices[0];
         if (!choice) continue;
         const delta = choice.delta;
@@ -629,6 +653,19 @@ async function runAgentStreamInnerCore(
       }
 
       lastReply = currentContent;
+
+      // Emit usage
+      const modelId = resolveModel(config?.model);
+      const maxCtx = MODEL_OPTIONS.find((m) => m.id === modelId)?.maxContextTokens ?? 200_000;
+      if (lastUsage) {
+        callbacks.onUsage?.({
+          promptTokens: lastUsage.prompt_tokens,
+          completionTokens: lastUsage.completion_tokens,
+          totalTokens: lastUsage.total_tokens,
+          model: modelId,
+          maxContextTokens: maxCtx,
+        });
+      }
 
       const toolCalls = Array.from(toolCallsByIndex.entries())
         .sort((a, b) => a[0] - b[0])

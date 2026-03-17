@@ -9,7 +9,7 @@ import type {
   SessionDetail,
   UploadRequestPayload,
 } from "../../types";
-import { useTaskStream } from "./useTaskStream";
+import { useTaskStream, type LlmStats } from "./useTaskStream";
 
 export interface UseChatReturn {
   sessionId: string | undefined;
@@ -24,9 +24,11 @@ export interface UseChatReturn {
   isLoadingSession: boolean;
   streamingReply: string | null;
   streamingTools: string[];
+  subagentTasks: import("./useTaskStream").SubagentTaskInfo[];
   status: AgentStatus;
   setStatus: (s: AgentStatus) => void;
   keyResources: KeyResourceItem[];
+  llmStats: LlmStats;
   sendMessage: (images?: string[]) => Promise<void>;
   stopStreaming: () => void;
   reloadSession: () => Promise<void>;
@@ -168,9 +170,11 @@ export function useChat(
     isLoadingSession: stream.isLoadingSession,
     streamingReply: stream.streamingReply,
     streamingTools: stream.streamingTools,
+    subagentTasks: stream.subagentTasks,
     status: stream.status,
     setStatus: stream.setStatus,
     keyResources: stream.keyResources,
+    llmStats: stream.llmStats,
     sendMessage,
     stopStreaming: stream.stopStreaming,
     reloadSession,

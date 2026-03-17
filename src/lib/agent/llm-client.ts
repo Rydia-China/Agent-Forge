@@ -69,6 +69,7 @@ export async function chatCompletionStream(
       messages,
       tools: tools?.length ? tools : undefined,
       stream: true,
+      stream_options: { include_usage: true },
     },
     signal ? { signal } : undefined,
   );

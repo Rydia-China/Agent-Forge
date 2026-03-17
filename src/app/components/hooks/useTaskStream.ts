@@ -24,6 +24,55 @@ import type {
 } from "../../types";
 
 /* ------------------------------------------------------------------ */
+/*  LLM Stats                                                          */
+/* ------------------------------------------------------------------ */
+
+export interface LlmStats {
+  /** Accumulated prompt tokens across all LLM calls in this page session. */
+  totalPromptTokens: number;
+  /** Accumulated completion tokens. */
+  totalCompletionTokens: number;
+  /** Accumulated total tokens. */
+  totalTokens: number;
+  /** Number of LLM completion rounds. */
+  llmCalls: number;
+  /** Last call's prompt tokens — used for context usage %. */
+  lastPromptTokens: number;
+  /** Model context window size. */
+  maxContextTokens: number;
+  /** Current model id. */
+  model: string;
+  /** Total tool call invocations. */
+  toolCallCount: number;
+  /** Tool calls that succeeded (no error). */
+  toolSuccessCount: number;
+  /** Tool calls that failed. */
+  toolErrorCount: number;
+  /** Subagent tool call count. */
+  subagentCallCount: number;
+  /** Subagent calls that errored. */
+  subagentErrorCount: number;
+  /** Number of memory__recall tool calls. */
+  recallCount: number;
+}
+
+const INITIAL_STATS: LlmStats = {
+  totalPromptTokens: 0,
+  totalCompletionTokens: 0,
+  totalTokens: 0,
+  llmCalls: 0,
+  lastPromptTokens: 0,
+  maxContextTokens: 0,
+  model: "",
+  toolCallCount: 0,
+  toolSuccessCount: 0,
+  toolErrorCount: 0,
+  subagentCallCount: 0,
+  subagentErrorCount: 0,
+  recallCount: 0,
+};
+
+/* ------------------------------------------------------------------ */
 /*  Config                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -42,6 +91,16 @@ export interface TaskStreamCallbacks {
 /*  Return type                                                        */
 /* ------------------------------------------------------------------ */
 
+/* ---- Subagent task progress types ---- */
+
+export interface SubagentTaskInfo {
+  index: number;
+  model: string;
+  promptPreview: string;
+  status: "running" | "ok" | "error";
+  durationMs?: number;
+}
+
 export interface TaskStreamReturn {
   /* ---- Read state ---- */
   sessionId: string | undefined;
@@ -53,9 +112,11 @@ export interface TaskStreamReturn {
   isLoadingSession: boolean;
   streamingReply: string | null;
   streamingTools: string[];
+  subagentTasks: SubagentTaskInfo[];
   status: AgentStatus;
   keyResources: KeyResourceItem[];
   uploadDialog: UploadRequestPayload | null;
+  llmStats: LlmStats;
 
   /* ---- State setters (needed by consuming hooks for domain logic) ---- */
   setSessionId: (id: string | undefined) => void;
@@ -94,9 +155,11 @@ export function useTaskStream(
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [streamingReply, setStreamingReply] = useState<string | null>(null);
   const [streamingTools, setStreamingTools] = useState<string[]>([]);
+  const [subagentTasks, setSubagentTasks] = useState<SubagentTaskInfo[]>([]);
   const [status, setStatus] = useState<AgentStatus>("idle");
   const [keyResources, setKeyResources] = useState<KeyResourceItem[]>([]);
   const [uploadDialog, setUploadDialog] = useState<UploadRequestPayload | null>(null);
+  const [llmStats, setLlmStats] = useState<LlmStats>(INITIAL_STATS);
 
   /* ---- Refs ---- */
   const taskIdRef = useRef<string | null>(null);
@@ -136,6 +199,7 @@ export function useTaskStream(
       if (!isReconnect) {
         setStreamingReply("");
         setStreamingTools([]);
+        setSubagentTasks([]);
       }
       setIsStreaming(true);
       setIsSending(true);
@@ -199,6 +263,8 @@ export function useTaskStream(
         try {
           const data: unknown = JSON.parse(e.data as string);
           if (isRecord(data) && typeof data.text === "string") {
+            // New LLM turn started — subagent phase is over
+            setSubagentTasks([]);
             setStreamingReply((prev) => (prev ?? "") + data.text);
           }
         } catch { /* ignore */ }
@@ -254,12 +320,81 @@ export function useTaskStream(
         } catch { /* ignore */ }
       });
 
+      /* ---- Subagent progress events ---- */
+
+      es.addEventListener("subagent_tasks", (e: MessageEvent) => {
+        touchLastMessageTime();
+        try {
+          const data: unknown = JSON.parse(e.data as string);
+          if (isRecord(data) && Array.isArray(data.tasks)) {
+            setSubagentTasks(
+              (data.tasks as Array<Record<string, unknown>>).map((t) => ({
+                index: typeof t.index === "number" ? t.index : 0,
+                model: typeof t.model === "string" ? t.model : "",
+                promptPreview: typeof t.promptPreview === "string" ? t.promptPreview : "",
+                status: "running" as const,
+              })),
+            );
+          }
+        } catch { /* ignore */ }
+      });
+
+      es.addEventListener("subagent_task_done", (e: MessageEvent) => {
+        touchLastMessageTime();
+        try {
+          const data: unknown = JSON.parse(e.data as string);
+          if (isRecord(data) && typeof data.index === "number") {
+            const idx = data.index;
+            const status = data.status === "ok" ? "ok" as const : "error" as const;
+            const durationMs = typeof data.durationMs === "number" ? data.durationMs : undefined;
+            setSubagentTasks((prev) =>
+              prev.map((t) =>
+                t.index === idx ? { ...t, status, durationMs } : t,
+              ),
+            );
+          }
+        } catch { /* ignore */ }
+      });
+
+      /* ---- Usage event (LLM token stats) ---- */
+
+      es.addEventListener("usage", (e: MessageEvent) => {
+        touchLastMessageTime();
+        try {
+          const data: unknown = JSON.parse(e.data as string);
+          if (isRecord(data)) {
+            setLlmStats((prev) => ({
+              ...prev,
+              totalPromptTokens: prev.totalPromptTokens + (typeof data.promptTokens === "number" ? data.promptTokens : 0),
+              totalCompletionTokens: prev.totalCompletionTokens + (typeof data.completionTokens === "number" ? data.completionTokens : 0),
+              totalTokens: prev.totalTokens + (typeof data.totalTokens === "number" ? data.totalTokens : 0),
+              llmCalls: prev.llmCalls + 1,
+              lastPromptTokens: typeof data.promptTokens === "number" ? data.promptTokens : prev.lastPromptTokens,
+              maxContextTokens: typeof data.maxContextTokens === "number" ? data.maxContextTokens : prev.maxContextTokens,
+              model: typeof data.model === "string" ? data.model : prev.model,
+            }));
+          }
+        } catch { /* ignore */ }
+      });
+
       /* ---- Extension: domain-specific events ---- */
 
       es.addEventListener("tool_start", (e: MessageEvent) => {
         touchLastMessageTime();
         try {
           const data: unknown = JSON.parse(e.data as string);
+          if (isRecord(data) && typeof data.name === "string") {
+            setLlmStats((prev) => {
+              const isSubagent = (data.name as string).startsWith("subagent");
+              const isRecall = data.name === "memory__recall";
+              return {
+                ...prev,
+                toolCallCount: prev.toolCallCount + 1,
+                subagentCallCount: isSubagent ? prev.subagentCallCount + 1 : prev.subagentCallCount,
+                recallCount: isRecall ? prev.recallCount + 1 : prev.recallCount,
+              };
+            });
+          }
           cbRef.current.onExtraEvent?.("tool_start", data);
         } catch { /* ignore */ }
       });
@@ -268,6 +403,16 @@ export function useTaskStream(
         touchLastMessageTime();
         try {
           const data: unknown = JSON.parse(e.data as string);
+          if (isRecord(data)) {
+            const hasError = typeof data.error === "string";
+            const isSubagent = typeof data.name === "string" && (data.name as string).startsWith("subagent");
+            setLlmStats((prev) => ({
+              ...prev,
+              toolSuccessCount: hasError ? prev.toolSuccessCount : prev.toolSuccessCount + 1,
+              toolErrorCount: hasError ? prev.toolErrorCount + 1 : prev.toolErrorCount,
+              subagentErrorCount: isSubagent && hasError ? prev.subagentErrorCount + 1 : prev.subagentErrorCount,
+            }));
+          }
           cbRef.current.onExtraEvent?.("tool_end", data);
         } catch { /* ignore */ }
       });
@@ -302,6 +447,7 @@ export function useTaskStream(
         activeSendRef.current = false;
         setStreamingReply(null);
         setStreamingTools([]);
+        setSubagentTasks([]);
         setStatus("done");
         cbRef.current.onStreamEnd?.();
       });
@@ -332,6 +478,7 @@ export function useTaskStream(
           activeSendRef.current = false;
           setStreamingReply(null);
           setStreamingTools([]);
+          setSubagentTasks([]);
           setStatus("error");
           cbRef.current.onStreamEnd?.();
           return;
@@ -352,6 +499,7 @@ export function useTaskStream(
           activeSendRef.current = false;
           setStreamingReply(null);
           setStreamingTools([]);
+          setSubagentTasks([]);
           setError("连接中断，请刷新页面重试");
           setStatus("error");
           cbRef.current.onStreamEnd?.();
@@ -413,6 +561,7 @@ export function useTaskStream(
     activeSendRef.current = false;
     setStreamingReply(null);
     setStreamingTools([]);
+    setSubagentTasks([]);
 
     // Reload session to get persisted state after cancellation
     const sid = sessionIdRef.current;
@@ -456,9 +605,11 @@ export function useTaskStream(
     isLoadingSession,
     streamingReply,
     streamingTools,
+    subagentTasks,
     status,
     keyResources,
     uploadDialog,
+    llmStats,
 
     setSessionId,
     setMessages,

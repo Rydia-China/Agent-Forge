@@ -4,7 +4,9 @@ import { useEffect, useRef } from "react";
 import { Alert, Empty, Spin, Tag, Typography } from "antd";
 import { RobotOutlined } from "@ant-design/icons";
 import type { ChatMessage } from "../types";
+import type { SubagentTaskInfo } from "./hooks/useTaskStream";
 import { MessageBubble, stripMemoryLines } from "./MessageBubble";
+import { SubagentProgress } from "./SubagentProgress";
 
 /* ---- Helpers ---- */
 
@@ -50,6 +52,7 @@ export interface MessageListProps {
   error: string | null;
   streamingReply: string | null;
   streamingTools: string[];
+  subagentTasks?: SubagentTaskInfo[];
 }
 
 export function MessageList({
@@ -58,12 +61,13 @@ export function MessageList({
   error,
   streamingReply,
   streamingTools,
+  subagentTasks,
 }: MessageListProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingReply, streamingTools]);
+  }, [messages, streamingReply, streamingTools, subagentTasks]);
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -97,11 +101,13 @@ export function MessageList({
               ) : (
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>Streaming…</Typography.Text>
               )}
-              {streamingTools.length > 0 && (
+              {subagentTasks && subagentTasks.length > 0 ? (
+                <SubagentProgress tasks={subagentTasks} />
+              ) : streamingTools.length > 0 ? (
                 <div className="mt-2 rounded border border-slate-800 bg-slate-950/70 px-2 py-1.5 text-[10px] text-slate-200">
                   {mergeStreamingSummaries(streamingTools)}
                 </div>
-              )}
+              ) : null}
             </div>
           )}
           <div ref={endRef} />

@@ -12,6 +12,7 @@ import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { UploadDialog } from "./UploadDialog";
 import { ImageLightbox } from "./ImageLightbox";
+import { LlmStatsBar } from "./LlmStatsBar";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -98,13 +99,14 @@ export function AgentPanel({
       {/* Content area: chat + key resources */}
       <div className="flex min-h-0 flex-1">
         {/* Chat column */}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="relative flex min-w-0 flex-1 flex-col">
           <MessageList
             messages={chat.messages}
             isLoadingSession={chat.isLoadingSession}
             error={chat.error}
             streamingReply={chat.streamingReply}
             streamingTools={chat.streamingTools}
+            subagentTasks={chat.subagentTasks}
           />
           <ChatInput
             input={chat.input}
@@ -132,8 +134,9 @@ export function AgentPanel({
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
           />
+          {/* LLM stats floating badge */}
+          <LlmStatsBar stats={chat.llmStats} />
         </div>
-
       </div>
 
       {/* Upload dialog */}

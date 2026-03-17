@@ -2,7 +2,7 @@ import { z } from "zod";
 import OpenAI from "openai";
 import Ajv from "ajv";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
-import type { McpProvider } from "../types";
+import type { McpProvider, ToolContext } from "../types";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -293,14 +293,41 @@ export const subagentMcp: McpProvider = {
   async callTool(
     name: string,
     args: Record<string, unknown>,
+    context?: ToolContext,
   ): Promise<CallToolResult> {
     switch (name) {
       case "run_text": {
         const { tasks } = RunTextParams.parse(args);
         const client = getClient();
 
+        // Emit task list so the UI can show individual subagent cards
+        context?.onProgress?.({
+          type: "subagent_tasks",
+          data: {
+            tasks: tasks.map((t, i) => ({
+              index: i,
+              model: t.model,
+              promptPreview: t.prompt.slice(0, 60),
+            })),
+          },
+        });
+
+        const taskTimers = tasks.map(() => Date.now());
+
         const results = await Promise.allSettled(
-          tasks.map((task) => executeTask(client, task)),
+          tasks.map(async (task, i) => {
+            const result = await executeTask(client, task);
+            // Emit per-task completion
+            context?.onProgress?.({
+              type: "subagent_task_done",
+              data: {
+                index: i,
+                status: result.status,
+                durationMs: Date.now() - taskTimers[i]!,
+              },
+            });
+            return result;
+          }),
         );
 
         const output = results.map((r, i) =>

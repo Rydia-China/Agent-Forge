@@ -8,6 +8,7 @@ import { MessageList } from "@/app/components/MessageList";
 import { useImageUpload } from "@/app/components/hooks/useImageUpload";
 import { useModels } from "@/app/components/hooks/useModels";
 import { useVideoChat } from "../hooks/useVideoChat";
+import { LlmStatsBar } from "@/app/components/LlmStatsBar";
 import type { VideoContext } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -74,7 +75,7 @@ export function VideoChat({
   return (
     <div className="flex h-full bg-slate-950/60">
       {/* Chat column */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
         {/* Chat error */}
         {chat.error && (
           <Alert
@@ -96,6 +97,7 @@ export function VideoChat({
             error={null}
             streamingReply={chat.streamingReply}
             streamingTools={chat.streamingTools}
+            subagentTasks={chat.subagentTasks}
           />
         </div>
 
@@ -217,6 +219,8 @@ export function VideoChat({
           </div>
         </div>
       </footer>
+        {/* LLM stats floating badge */}
+        <LlmStatsBar stats={chat.llmStats} />
       </div>
 
     </div>

@@ -6,6 +6,7 @@ import { fetchJson } from "../client-utils";
 export interface ModelInfo {
   id: string;
   label: string;
+  maxContextTokens: number;
 }
 
 interface ModelsResponse {
