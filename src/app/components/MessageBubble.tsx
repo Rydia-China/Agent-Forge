@@ -7,6 +7,8 @@ import {
   SettingOutlined,
   ToolOutlined,
 } from "@ant-design/icons";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { ChatMessage, ToolCall } from "../types";
 import { parseJsonObject } from "./client-utils";
 
@@ -66,11 +68,50 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         </Tag>
       </div>
       {message.content && stripMemoryLines(message.content) ? (
-        <Typography.Paragraph
-          style={{ marginBottom: 0, fontSize: 12, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
-        >
-          {stripMemoryLines(message.content)}
-        </Typography.Paragraph>
+        <div className="markdown-body" style={{ fontSize: 12, lineHeight: 1.7 }}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              a: ({ href, children }) => (
+                <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: "#58a6ff" }}>
+                  {children}
+                </a>
+              ),
+              p: ({ children }) => (
+                <p style={{ marginBottom: "0.4em" }}>{children}</p>
+              ),
+              table: ({ children }) => (
+                <table style={{ borderCollapse: "collapse", fontSize: 11, margin: "0.5em 0" }}>
+                  {children}
+                </table>
+              ),
+              th: ({ children }) => (
+                <th style={{ border: "1px solid #444", padding: "4px 8px", background: "rgba(255,255,255,0.05)" }}>
+                  {children}
+                </th>
+              ),
+              td: ({ children }) => (
+                <td style={{ border: "1px solid #444", padding: "4px 8px" }}>
+                  {children}
+                </td>
+              ),
+              code: ({ className, children, ...props }) => {
+                const isInline = !className;
+                return isInline ? (
+                  <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 4px", borderRadius: 3, fontSize: 11 }} {...props}>
+                    {children}
+                  </code>
+                ) : (
+                  <pre style={{ background: "rgba(0,0,0,0.4)", padding: 8, borderRadius: 4, overflow: "auto", margin: "0.4em 0" }}>
+                    <code className={className} {...props}>{children}</code>
+                  </pre>
+                );
+              },
+            }}
+          >
+            {stripMemoryLines(message.content)}
+          </ReactMarkdown>
+        </div>
       ) : (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>No content</Typography.Text>
       )}

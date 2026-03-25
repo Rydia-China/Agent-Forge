@@ -2,4 +2,6 @@ ignoredBuiltDependencies:
   - protobufjs
 
 onlyBuiltDependencies:
+  - '@ffmpeg-installer/darwin-arm64'
+  - ffmpeg-static
   - sqlite3

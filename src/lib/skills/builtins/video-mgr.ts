@@ -36,9 +36,64 @@ requires_mcps:
 { "items": [{ "key": "char_alice_portrait", "prompt": "一个穿着蓝色连衣裙的少女站在樱花树下，动漫风格，高清", "category": "角色立绘", "scopeType": "novel", "scopeId": "novel-uuid-here", "title": "Alice" }] }
 \\\`\\\`\\\`
 
-### generate_video — 存储视频 prompt（当前不实际生成）
+### generate_video — 视频生成（Seedance 2.0）
 
-仅持久化运动 prompt 到 domain_resources，用户可在 UI 中未来手动触发生成。\`sourceImageUrl\` 通常传 generate_image 的输出。scopeType/scopeId 规则同上。
+生成视频需要 2-4 分钟。支持多种模式：
+
+- **text_to_video** — 纯文本生成（不传参考素材）
+- **first_frame** — 图生视频（传入 \`sourceImageUrls: [url]\`）
+- **first_last_frame** — 首尾帧插值（传入 2 张图）
+- **multimodal** — 多模态参考（图片/视频/音频）
+
+#### 视频延长/续写流程：
+
+**场景**：视频 A 已生成，需要生成后续视频 B，保持画面连贯。
+
+**步骤**：
+
+1. **裁切参考片段** — 提取视频 A 的最后 2-5 秒作为运动参考：
+   \\\`\\\`\\\`js
+   extract_video_segment({
+     sourceVideoUrl: "video_a_url",
+     startSec: duration_a - 5,  // 最后 5 秒
+     endSec: null,
+     key: "video_a_tail",
+     category: "参考片段",
+     // scopeType/scopeId...
+   })
+   // → 返回 { videoUrl: "tail_clip_url" }
+   \\\`\\\`\\\`
+
+2. **生成续写视频** — 用 tail_clip_url 作为参考：
+   \\\`\\\`\\\`js
+   generate_video({
+     items: [{
+       key: "video_b",
+       prompt: "继续奔跑，穿过森林",
+       generateType: "multimodal",
+       sourceVideoUrls: ["tail_clip_url"],  // 传入裁切的片段
+       duration: 5,
+       // category/scopeType/scopeId...
+     }]
+   })
+   \\\`\\\`\\\`
+
+**串行 + 分支并行**：如果需要生成镜头序列 shot_1 → shot_2 → shot_3，其中 shot_2a 和 shot_2b 同时依赖 shot_1：
+- 先生成 shot_1
+- 裁切 shot_1 尾部
+- 并行生成 shot_2a 和 shot_2b（都用 shot_1 的尾部作为 refer）
+- 继续生成 shot_3a/shot_3b
+
+参数规则同 generate_image。
+
+### extract_video_segment — 按时间范围裁剪视频
+
+从源视频提取指定时间段。支持：
+- 任意范围：\`{ startSec: 3, endSec: 5 }\` → 截取第 3-5 秒
+- 前 N 秒：\`{ startSec: 0, endSec: 3 }\` → 前 3 秒
+- 后 N 秒：\`{ startSec: X, endSec: null }\` → 从第 X 秒截取到结尾（需先计算 duration）
+
+裁剪后的片段自动上传并持久化到 domain_resources。
 
 ### Image Registry
 

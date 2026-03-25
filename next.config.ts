@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["ali-oss"],
+  serverExternalPackages: ["ali-oss", "@ffmpeg-installer/ffmpeg"],
   allowedDevOrigins: ["*"],
   async headers() {
     return [

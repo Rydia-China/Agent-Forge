@@ -21,6 +21,7 @@ export interface VideoDetailDrawerProps {
 export function VideoDetailDrawer({ resource, onClose }: VideoDetailDrawerProps) {
   const vData = resource?.data as VideoResourceData | null;
   const prompt = vData?.prompt ?? "";
+  const hasVideo = !!resource?.url;
 
   return (
     <Drawer
@@ -28,9 +29,11 @@ export function VideoDetailDrawer({ resource, onClose }: VideoDetailDrawerProps)
         resource ? (
           <div className="flex items-center gap-2">
             <span className="truncate text-sm">{resource.title ?? "Video"}</span>
-            <Tag color="orange" style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>
-              待生成
-            </Tag>
+            {!hasVideo && (
+              <Tag color="orange" style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>
+                待生成
+              </Tag>
+            )}
           </div>
         ) : "Video Detail"
       }
@@ -40,12 +43,23 @@ export function VideoDetailDrawer({ resource, onClose }: VideoDetailDrawerProps)
       destroyOnClose
     >
       <div className="flex gap-5" style={{ height: "calc(100vh - 110px)" }}>
-        {/* ── Left Column: Source Image ── */}
+        {/* ── Left Column: Video / Source Image ── */}
         <div className="flex w-1/2 flex-col gap-3">
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-lg border border-slate-700 bg-slate-900/30">
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-sm font-medium text-amber-400">待生成</span>
-            </div>
+            {hasVideo ? (
+              <video
+                key={resource!.url!}
+                src={resource!.url!}
+                controls
+                autoPlay
+                loop
+                className="max-h-full max-w-full"
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-sm font-medium text-amber-400">待生成</span>
+              </div>
+            )}
           </div>
         </div>
 

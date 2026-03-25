@@ -140,11 +140,15 @@ async function callLLM(
   client: OpenAI,
   model: string,
   content: MessageContent,
+  signal?: AbortSignal,
 ): Promise<string> {
-  const res = await client.chat.completions.create({
-    model,
-    messages: [{ role: "user", content }],
-  });
+  const res = await client.chat.completions.create(
+    {
+      model,
+      messages: [{ role: "user", content }],
+    },
+    { signal },
+  );
   return res.choices[0]?.message.content ?? "";
 }
 
@@ -163,9 +167,10 @@ interface TaskResult {
 async function executeTask(
   client: OpenAI,
   task: TaskInput,
+  signal?: AbortSignal,
 ): Promise<TaskResult> {
   const content = buildContent(task.prompt, task.imageUrls);
-  const raw = await callLLM(client, task.model, content);
+  const raw = await callLLM(client, task.model, content, signal);
 
   // No schema → return raw text as before
   if (!task.outputSchema) {
@@ -201,7 +206,7 @@ async function executeTask(
       "Please fix the issues above and output ONLY valid JSON (no markdown fences, no extra text).";
 
     const retryContent = buildContent(retryPrompt, task.imageUrls);
-    const retryRaw = await callLLM(client, task.model, retryContent);
+    const retryRaw = await callLLM(client, task.model, retryContent, signal);
     validation = validateOutput(retryRaw, task.outputSchema);
 
     if (validation.ok) {
@@ -316,7 +321,7 @@ export const subagentMcp: McpProvider = {
 
         const results = await Promise.allSettled(
           tasks.map(async (task, i) => {
-            const result = await executeTask(client, task);
+            const result = await executeTask(client, task, context?.signal);
             // Emit per-task completion
             context?.onProgress?.({
               type: "subagent_task_done",

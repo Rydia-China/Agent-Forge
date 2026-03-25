@@ -164,17 +164,21 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
   const renderVideoItem = (r: DomainResource) => {
     const vData = r.data as VideoResourceData | null;
     const handleClick = () => {
-      if (r.keyResourceId) {
-        setSelectedImageGenId(r.keyResourceId);
-      } else {
-        setSelectedVideoResource(r);
-      }
+      setSelectedVideoResource(r);
     };
     return (
       <div key={r.id} className="group/card relative cursor-pointer overflow-hidden rounded-lg" onClick={handleClick}>
         {renderDeleteBtn(r.id)}
         {r.url ? (
-          <video src={r.url} controls muted className="aspect-[9/16] w-full object-cover" onClick={(e) => e.stopPropagation()} />
+          <video
+            src={r.url}
+            poster={vData?.sourceImageUrl ?? undefined}
+            muted
+            preload="metadata"
+            playsInline
+            className="aspect-[9/16] w-full object-cover"
+            style={{ pointerEvents: "none" }}
+          />
         ) : vData?.sourceImageUrl ? (
           <div className="relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -279,8 +283,9 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
 
   const items = [
     ...categories.map((g) => {
-      const images = g.items.filter((r) => r.mediaType === "image");
-      const videos = g.items.filter((r) => r.mediaType === "video");
+      const isVideoUrl = (url: string | null) => /\.(?:mp4|webm|mov)(?:[?#]|$)/i.test(url ?? "");
+      const images = g.items.filter((r) => r.mediaType === "image" && !isVideoUrl(r.url));
+      const videos = g.items.filter((r) => r.mediaType === "video" || (r.mediaType === "image" && isVideoUrl(r.url)));
       const jsons = g.items.filter((r) => r.mediaType === "json");
 
       return {

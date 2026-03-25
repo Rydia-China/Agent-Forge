@@ -183,12 +183,23 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
             {/* Large Image */}
             <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-lg border border-slate-700 bg-slate-900/30">
               {viewedVerRow?.url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={viewedVerRow.url}
-                  alt={detail.key}
-                  className="h-full w-full object-contain"
-                />
+                /\.(?:mp4|webm|mov)(?:[?#]|$)/i.test(viewedVerRow.url) ? (
+                  <video
+                    key={viewedVerRow.url}
+                    src={viewedVerRow.url}
+                    controls
+                    autoPlay
+                    loop
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={viewedVerRow.url}
+                    alt={detail.key}
+                    className="h-full w-full object-contain"
+                  />
+                )
               ) : (
                 <span className="text-sm text-slate-500">No image yet</span>
               )}
@@ -216,12 +227,23 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
                         }}
                       >
                         {ver.url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={ver.url}
-                            alt={`v${ver.version}`}
-                            className="h-full w-full object-cover"
-                          />
+                          /\.(?:mp4|webm|mov)(?:[?#]|$)/i.test(ver.url) ? (
+                            <video
+                              src={ver.url}
+                              muted
+                              preload="metadata"
+                              playsInline
+                              className="h-full w-full object-cover"
+                              style={{ pointerEvents: "none" }}
+                            />
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={ver.url}
+                              alt={`v${ver.version}`}
+                              className="h-full w-full object-cover"
+                            />
+                          )
                         ) : (
                           <div className="flex h-full w-full items-center justify-center bg-slate-800 text-[10px] text-slate-500">
                             …

@@ -11,6 +11,8 @@ export interface ToolContext {
   userName?: string;
   /** Optional progress callback — MCP tools can report incremental progress to the UI. */
   onProgress?: (event: { type: string; data: unknown }) => void;
+  /** Optional abort signal — when signaled, tools should cancel ongoing operations. */
+  signal?: AbortSignal;
 }
 
 /**

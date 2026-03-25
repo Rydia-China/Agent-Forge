@@ -552,6 +552,7 @@ async function runAgentStreamInner(
     onProgress: callbacks.onProgress
       ? (event) => callbacks.onProgress!(event)
       : undefined,
+    signal,
   };
   return runAgentStreamInnerCore(userMessage, session, toolCtx, callbacks, signal, images, config);
 }
