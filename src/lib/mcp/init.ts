@@ -5,6 +5,9 @@ import { uiMcp } from "./static/ui";
 import { memoryMcp } from "./static/memory";
 import { syncMcp } from "./static/sync";
 import { executorMcp } from "./static/executor";
+import { isCatalogEntry, loadFromCatalog } from "./catalog";
+import { sandboxManager } from "./sandbox";
+import { getMcpCode } from "@/lib/services/mcp-service";
 import { bizDbReady } from "@/lib/biz-db";
 import { restoreSchedules } from "@/lib/services/scheduler-service";
 
@@ -38,6 +41,20 @@ export async function initMcp(): Promise<void> {
   registry.protect(memoryMcp.name);
   registry.protect(syncMcp.name);
   registry.protect(executorMcp.name);
+
+  // Auto-load: when registry.callTool encounters an unknown provider,
+  // try loading it from catalog or DB before returning an error.
+  registry.setAutoLoad(async (name) => {
+    if (isCatalogEntry(name)) {
+      loadFromCatalog(name);
+      return registry.getProvider(name) ?? null;
+    }
+    const code = await getMcpCode(name);
+    if (!code) return null;
+    const provider = await sandboxManager.load(name, code);
+    registry.replace(provider);
+    return provider;
+  });
 
   // Restore scheduled tasks from DB (fire-and-forget, non-blocking)
   void restoreSchedules().catch((err) =>

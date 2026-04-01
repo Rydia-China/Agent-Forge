@@ -7,6 +7,12 @@ import {
 } from "./types";
 
 /**
+ * Callback for auto-loading an MCP provider that isn’t registered yet.
+ * Installed once by init.ts after catalog + sandbox are ready.
+ */
+export type AutoLoadFn = (name: string) => Promise<McpProvider | null>;
+
+/**
  * MCP Registry — global singleton.
  * Aggregates tools from all registered McpProviders (static + dynamic)
  * and dispatches tool calls.
@@ -14,7 +20,13 @@ import {
 class McpRegistry {
   private providers = new Map<string, McpProvider>();
   private protectedNames = new Set<string>();
+  private autoLoad: AutoLoadFn | null = null;
   initialized = false;
+
+  /** Install the auto-load callback (called once during MCP init). */
+  setAutoLoad(fn: AutoLoadFn): void {
+    this.autoLoad = fn;
+  }
 
   register(provider: McpProvider): void {
     if (this.providers.has(provider.name)) {
@@ -96,6 +108,7 @@ class McpRegistry {
 
   /**
    * Dispatch a tool call by its fully-qualified name.
+   * If the provider is not registered, attempts auto-load from catalog/DB.
    */
   async callTool(
     fullToolName: string,
@@ -103,7 +116,21 @@ class McpRegistry {
     context?: ToolContext,
   ): Promise<CallToolResult> {
     const [providerName, toolName] = parseToolName(fullToolName);
-    const provider = this.providers.get(providerName);
+    let provider = this.providers.get(providerName);
+
+    // Auto-load: try catalog / dynamic MCP on first access
+    if (!provider && this.autoLoad) {
+      try {
+        const loaded = await this.autoLoad(providerName);
+        if (loaded) {
+          this.providers.set(providerName, loaded);
+          provider = loaded;
+        }
+      } catch (err) {
+        console.warn(`[registry] auto-load "${providerName}" failed:`, err);
+      }
+    }
+
     if (!provider) {
       return {
         content: [{ type: "text", text: `Unknown MCP provider: ${providerName}` }],

@@ -356,6 +356,30 @@ function chatMsgToLlm(msg: ChatMessage): LlmMessage {
   return base as unknown as LlmMessage;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Anthropic prefix caching — cache_control breakpoints               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Attach `cache_control: { type: "ephemeral" }` to a message.
+ * String content is converted to content-block array format so the
+ * breakpoint can be placed on the content block.
+ * Messages with null content (e.g. assistant with only tool_calls)
+ * are returned unchanged.
+ */
+function withCacheBreakpoint(msg: LlmMessage): LlmMessage {
+  const raw = msg as unknown as Record<string, unknown>;
+  if (typeof raw.content === "string") {
+    return {
+      ...raw,
+      content: [
+        { type: "text", text: raw.content, cache_control: { type: "ephemeral" } },
+      ],
+    } as unknown as LlmMessage;
+  }
+  return msg;
+}
+
 async function runAgentInner(
   userMessage: string,
   session: { id: string; messages: ChatMessage[] },
@@ -415,22 +439,40 @@ async function runAgentInnerCore(
     const stateCtx = await ctxProvider.build();
 
     // Rebuild compressed LLM context each iteration
+    // Order: static system prompt → stable history → dynamic context (maximizes prefix cache)
     const allRaw = [...session.messages, ...newMessages];
     const compressed = compressMessages(allRaw, tracker);
+    const compressedLlm = compressed.map(chatMsgToLlm);
+
+    // Anthropic prefix caching breakpoints:
+    // BP1: system prompt — semi-static, high hit rate across iterations
+    // BP2: last history message — stable boundary before dynamic context pair
+    if (compressedLlm.length > 0) {
+      compressedLlm[compressedLlm.length - 1] = withCacheBreakpoint(
+        compressedLlm[compressedLlm.length - 1]!,
+      );
+    }
+
     const llmMessages: LlmMessage[] = [
-      { role: "system", content: systemPrompt },
-      // Context pair: only present when ContextProvider returns state
+      withCacheBreakpoint({ role: "system", content: systemPrompt } as LlmMessage),
+      ...compressedLlm,
+      // Context pair at the end — dynamic content after stable prefix for cache efficiency
       ...(stateCtx
         ? [
             { role: "assistant" as const, content: "当前系统最新状态是什么？" },
             { role: "user" as const, content: `[real-time system state — 以此为准]\n${stateCtx}` },
           ]
         : []),
-      ...compressed.map(chatMsgToLlm),
     ];
 
     const mcpTools = await registry.listToolsForProviders(activeScope);
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
+    // BP3: last tool — cache tool definitions across iterations
+    if (openaiTools.length > 0) {
+      Object.assign(openaiTools[openaiTools.length - 1]!, {
+        cache_control: { type: "ephemeral" },
+      });
+    }
 
     const completion = await chatCompletion(llmMessages, openaiTools, config?.model);
     const choice = completion.choices[0];
@@ -610,22 +652,37 @@ async function runAgentStreamInnerCore(
     const stateCtx = await ctxProvider.build();
 
     // Rebuild compressed LLM context each iteration
+    // Order: static system prompt → stable history → dynamic context (maximizes prefix cache)
     const allRaw = [...session.messages, ...newMessages];
     const compressed = compressMessages(allRaw, tracker);
+    const compressedLlm = compressed.map(chatMsgToLlm);
+
+    // Anthropic prefix caching breakpoints (same as sync loop)
+    if (compressedLlm.length > 0) {
+      compressedLlm[compressedLlm.length - 1] = withCacheBreakpoint(
+        compressedLlm[compressedLlm.length - 1]!,
+      );
+    }
+
     const llmMessages: LlmMessage[] = [
-      { role: "system", content: systemPrompt },
-      // Context pair: only present when ContextProvider returns state
+      withCacheBreakpoint({ role: "system", content: systemPrompt } as LlmMessage),
+      ...compressedLlm,
+      // Context pair at the end — dynamic content after stable prefix for cache efficiency
       ...(stateCtx
         ? [
             { role: "assistant" as const, content: "当前系统最新状态是什么？" },
             { role: "user" as const, content: `[real-time system state — 以此为准]\n${stateCtx}` },
           ]
         : []),
-      ...compressed.map(chatMsgToLlm),
     ];
 
     const mcpTools = await registry.listToolsForProviders(activeScope);
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
+    if (openaiTools.length > 0) {
+      Object.assign(openaiTools[openaiTools.length - 1]!, {
+        cache_control: { type: "ephemeral" },
+      });
+    }
 
     let currentContent = "";
 
