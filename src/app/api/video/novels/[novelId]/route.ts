@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listEpisodes } from "@/lib/services/video-workflow-service";
+import { deleteNovel } from "@/lib/services/video-workflow-service";
 
-/** GET /api/video/novels/[novelId]/episodes — list all episodes for a novel */
-export async function GET(
+/** DELETE /api/video/novels/[novelId] — delete a novel and all its episodes */
+export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ novelId: string }> },
 ) {
   const { novelId } = await params;
   try {
-    const episodes = await listEpisodes(novelId);
-    return NextResponse.json(episodes);
+    await deleteNovel(novelId);
+    return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

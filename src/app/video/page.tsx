@@ -1,20 +1,25 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Empty, Spin, Typography, Button, ConfigProvider, theme as antTheme } from "antd";
-import { ReloadOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import {
+  ReloadOutlined,
+  VideoCameraOutlined,
+  UploadOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
 import { fetchJson } from "@/app/components/client-utils";
 
 /* ------------------------------------------------------------------ */
-/*  Types (mirrors remote novel service response)                      */
+/*  Types (local novels)                                               */
 /* ------------------------------------------------------------------ */
 
 interface NovelItem {
-  id: number;
+  id: string;
   name: string;
-  content_length?: number;
-  created_at?: string;
+  episodeCount: number;
+  createdAt: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -23,16 +28,18 @@ interface NovelItem {
 
 export default function VideoNovelListPage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [novels, setNovels] = useState<NovelItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadNovels = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchJson<{ novels: NovelItem[] }>("/api/video/novels");
-      setNovels(data.novels);
+      const data = await fetchJson<NovelItem[]>("/api/video/novels");
+      setNovels(data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load novels");
     } finally {
@@ -46,6 +53,61 @@ export default function VideoNovelListPage() {
 
   const handleSelect = (novel: NovelItem) => {
     router.push(`/video/${novel.id}?name=${encodeURIComponent(novel.name)}`);
+  };
+
+  const handleDelete = async (novel: NovelItem) => {
+    if (!confirm(`Delete "${novel.name}"? All episodes and resources will be removed.`)) return;
+    try {
+      await fetchJson(`/api/video/novels/${encodeURIComponent(novel.id)}`, {
+        method: "DELETE",
+      });
+      await loadNovels();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete novel");
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".json")) {
+      alert("Only .json files are accepted");
+      e.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const jsonData: unknown = JSON.parse(reader.result as string);
+        // Derive novel name from filename: "complete_script_ep1_ep20.json" → "complete_script_ep1_ep20"
+        const novelName = file.name.replace(/\.json$/i, "");
+        void doUpload(novelName, jsonData);
+      } catch {
+        alert("Invalid JSON file");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const doUpload = async (name: string, episodes: unknown) => {
+    setIsUploading(true);
+    try {
+      const result = await fetchJson<{ novelId: string }>("/api/video/novels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, episodes }),
+      });
+      await loadNovels();
+      // Navigate to the new novel
+      router.push(`/video/${result.novelId}?name=${encodeURIComponent(name)}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to upload script");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -64,13 +126,31 @@ export default function VideoNovelListPage() {
               Video Workflow
             </Typography.Title>
           </div>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => void loadNovels()}
-            loading={isLoading}
-          >
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              icon={<UploadOutlined />}
+              onClick={() => fileInputRef.current?.click()}
+              loading={isUploading}
+              disabled={isUploading}
+              type="primary"
+            >
+              {isUploading ? "Uploading…" : "Upload Script JSON"}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleFileUpload}
+              style={{ display: "none" }}
+            />
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => void loadNovels()}
+              loading={isLoading}
+            >
+              Refresh
+            </Button>
+          </div>
         </header>
 
         {/* Content */}
@@ -86,7 +166,7 @@ export default function VideoNovelListPage() {
 <Spin description="Loading novels…" size="large" />
             </div>
           ) : novels.length === 0 ? (
-            <Empty description="No novels found" style={{ marginTop: 80 }} />
+            <Empty description="No novels. Click Upload Script JSON to get started." style={{ marginTop: 80 }} />
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {novels.map((novel) => (
@@ -102,14 +182,22 @@ export default function VideoNovelListPage() {
                     borderColor: "rgb(51, 65, 85)",
                   }}
                 >
-                  <Typography.Text strong style={{ fontSize: 14 }}>
-                    {novel.name}
-                  </Typography.Text>
+                  <div className="flex items-start justify-between">
+                    <Typography.Text strong style={{ fontSize: 14 }}>
+                      {novel.name}
+                    </Typography.Text>
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={(e) => { e.stopPropagation(); void handleDelete(novel); }}
+                      style={{ width: 24, height: 24, minWidth: 24 }}
+                    />
+                  </div>
                   <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-400">
-                    <span>ID: {novel.id}</span>
-                    {novel.content_length != null && (
-                      <span>{(novel.content_length / 1000).toFixed(0)}k chars</span>
-                    )}
+                    <span>{novel.episodeCount} episodes</span>
+                    <span>{new Date(novel.createdAt).toLocaleDateString()}</span>
                   </div>
                 </Card>
               ))}

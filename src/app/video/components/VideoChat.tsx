@@ -2,14 +2,14 @@
 
 import { useCallback } from "react";
 import { Button, Input, Select, Alert } from "antd";
-import { SendOutlined, StopOutlined, LoadingOutlined, PictureOutlined, CloseCircleFilled } from "@ant-design/icons";
+import { SendOutlined, StopOutlined, LoadingOutlined, PictureOutlined, CloseCircleFilled, PlayCircleOutlined } from "@ant-design/icons";
 import { StatusBadge } from "@/app/components/StatusBadge";
 import { MessageList } from "@/app/components/MessageList";
 import { useImageUpload } from "@/app/components/hooks/useImageUpload";
 import { useModels } from "@/app/components/hooks/useModels";
 import { useVideoChat } from "../hooks/useVideoChat";
 import { LlmStatsBar } from "@/app/components/LlmStatsBar";
-import type { VideoContext } from "../types";
+import type { VideoContext, EpStatus } from "../types";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -23,8 +23,8 @@ export interface VideoChatProps {
   onSessionCreated: (sessionId: string) => void;
   /** Called when task completes — parent should refresh data. */
   onRefreshNeeded: () => void;
-  /** If set, auto-send this message on mount (e.g. after EP upload). */
-  autoMessage?: string;
+  /** Current episode status — shows "Start Task" button when "uploaded". */
+  episodeStatus?: EpStatus;
 }
 
 /* ------------------------------------------------------------------ */
@@ -37,7 +37,7 @@ export function VideoChat({
   skills,
   onSessionCreated,
   onRefreshNeeded,
-  autoMessage,
+  episodeStatus,
 }: VideoChatProps) {
   const userName = videoContext
     ? `video:${videoContext.novelId}:${videoContext.scriptKey}`
@@ -52,7 +52,6 @@ export function VideoChat({
     skills,
     onSessionCreated,
     onRefreshNeeded,
-    autoMessage,
     selectedModel,
   );
 
@@ -114,6 +113,19 @@ export function VideoChat({
 
       {/* Input */}
       <footer className="px-3 py-2.5">
+        {episodeStatus === "uploaded" && !initialSessionId && chat.messages.length === 0 && !chat.isSending ? (
+          /* Episode uploaded but no task started — show start button */
+          <Button
+            type="primary"
+            block
+            size="large"
+            icon={<PlayCircleOutlined />}
+            onClick={() => void chat.sendDirect("开始处理本集视频制作")}
+          >
+            开始任务
+          </Button>
+        ) : (
+          <>
         {/* Pending image previews */}
         {img.pendingImages.length > 0 && (
           <div className="mb-1.5 flex flex-wrap gap-1.5">
@@ -218,6 +230,8 @@ export function VideoChat({
             )}
           </div>
         </div>
+          </>
+        )}
       </footer>
         {/* LLM stats floating badge */}
         <LlmStatsBar stats={chat.llmStats} />

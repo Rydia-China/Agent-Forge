@@ -15,6 +15,19 @@ import {
 import { ensureDomainResourcesTable } from "@/lib/domain/resource-schema";
 
 /* ------------------------------------------------------------------ */
+/*  novels DDL                                                         */
+/* ------------------------------------------------------------------ */
+
+const NOVELS_LOGICAL = "novels";
+
+const NOVELS_DDL = `CREATE TABLE IF NOT EXISTS "$TABLE" (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  episode_count INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+)`;
+
+/* ------------------------------------------------------------------ */
 /*  novel_scripts DDL                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -61,7 +74,17 @@ export async function ensureVideoSchema(): Promise<void> {
   // 1. domain_resources (generic)
   await ensureDomainResourcesTable();
 
-  // 2. novel_scripts (episode container — system-managed, all columns)
+  // 2. novels (local novel registry)
+  const existingNovels = await resolveTable(GLOBAL_USER, NOVELS_LOGICAL);
+  if (existingNovels) {
+    await bizPool.query(NOVELS_DDL.replace("$TABLE", existingNovels.physicalName));
+  } else {
+    const pn = await ensureMapping(GLOBAL_USER, NOVELS_LOGICAL);
+    await bizPool.query(NOVELS_DDL.replace("$TABLE", pn));
+    console.log(`[video-schema] Created table "${NOVELS_LOGICAL}" → "${pn}"`);
+  }
+
+  // 3. novel_scripts (episode container — system-managed, all columns)
   const existing = await resolveTable(GLOBAL_USER, NOVEL_SCRIPTS_LOGICAL);
   let physicalName: string;
   if (existing) {
@@ -80,4 +103,4 @@ export async function ensureVideoSchema(): Promise<void> {
 }
 
 /** The logical names of all video workflow tables. */
-export const VIDEO_TABLE_NAMES = ["domain_resources", "novel_scripts"];
+export const VIDEO_TABLE_NAMES = ["domain_resources", "novels", "novel_scripts"];

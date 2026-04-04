@@ -14,7 +14,7 @@ import type { VideoContext } from "../types";
 /*  Default skills & MCPs for video workflow                           */
 /* ------------------------------------------------------------------ */
 
-const DEFAULT_SKILLS = ["novel-video-workflow", "novel-character-card"];
+const DEFAULT_SKILLS = ["ep-video-workflow"];
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -37,7 +37,6 @@ export default function VideoWorkflowPage() {
   const sessionsHook = useSessions(userName, () => {}, () => {});
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
   const [chatKey, setChatKey] = useState(() => crypto.randomUUID());
-  const [autoMessage, setAutoMessage] = useState<string | undefined>();
 
   const switchSession = useCallback((sessionId?: string) => {
     setCurrentSessionId(sessionId);
@@ -71,24 +70,7 @@ export default function VideoWorkflowPage() {
     (ep: typeof data.episodes[number]) => {
       data.selectEpisode(ep);
       setCurrentSessionId(undefined);
-      setAutoMessage(undefined);
       setChatKey(crypto.randomUUID());
-    },
-    [data],
-  );
-
-  const handleUpload = useCallback(
-    async (scriptKey: string, scriptName: string | null, content: string | null) => {
-      await data.uploadEpisode(scriptKey, scriptName, content);
-      // Auto-select the newly uploaded EP and trigger first chat
-      const refreshed = await data.refreshEpisodes();
-      const newEp = refreshed.find((ep) => ep.scriptKey === scriptKey);
-      if (newEp) {
-        data.selectEpisode(newEp);
-        setCurrentSessionId(undefined);
-setAutoMessage("EP已上传，请开始小说可视化工作流：人物卡 → 分镜 → 图片 → 视频，逐步推进");
-        setChatKey(crypto.randomUUID());
-      }
     },
     [data],
   );
@@ -96,7 +78,6 @@ setAutoMessage("EP已上传，请开始小说可视化工作流：人物卡 → 
   const handleSessionCreated = useCallback(
     (sessionId: string) => {
       setCurrentSessionId(sessionId);
-      setAutoMessage(undefined);
       void sessionsHook.refreshSessions();
     },
     [sessionsHook],
@@ -120,12 +101,10 @@ setAutoMessage("EP已上传，请开始小说可视化工作流：人物卡 → 
           novelName={novelName}
           episodes={data.episodes}
           isLoading={data.isLoadingEpisodes}
-          isUploading={data.isUploading}
           selectedEpisode={data.selectedEpisode}
           onSelectEpisode={handleSelectEpisode}
           onDeleteEpisode={(ep) => { if (confirm(`Delete ${ep.scriptKey}?`)) void data.deleteEpisode(ep.id); }}
           onRefresh={() => void data.refreshEpisodes()}
-          onUpload={(key, name, content) => void handleUpload(key, name, content)}
           sessions={sessionsHook.sessions}
           currentSessionId={currentSessionId}
           onSelectSession={switchSession}
@@ -142,7 +121,7 @@ setAutoMessage("EP已上传，请开始小说可视化工作流：人物卡 → 
             skills={DEFAULT_SKILLS}
             onSessionCreated={handleSessionCreated}
             onRefreshNeeded={handleRefreshNeeded}
-            autoMessage={autoMessage}
+            episodeStatus={data.selectedEpisode?.status}
           />
         </section>
 

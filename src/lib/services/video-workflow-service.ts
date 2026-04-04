@@ -1,8 +1,7 @@
 /**
  * Video Workflow Service — data access for the video UI.
  *
- * Uses domain_resources (generic) + novel_scripts (episode container).
- * No business concepts (characters, costumes, scenes, shots) in code.
+ * Uses novels (local registry) + novel_scripts (episodes) + domain_resources.
  */
 
 import { bizPool } from "@/lib/biz-db";
@@ -21,11 +20,7 @@ import type {
   DomainResources,
 } from "@/lib/domain/resource-service";
 import "@/lib/domain/resource-cleanup"; // register biz-table cleanup hook
-import { initMcp } from "@/lib/mcp/init";
-import { loadFromCatalog, isCatalogEntry } from "@/lib/mcp/catalog";
-import { registry } from "@/lib/mcp/registry";
-import { sandboxManager } from "@/lib/mcp/sandbox";
-import * as mcpService from "@/lib/services/mcp-service";
+import type { ScriptEpisode } from "@/lib/video/script-upload-schema";
 
 export type { DomainResource, CategoryGroup, DomainResources };
 
@@ -46,6 +41,13 @@ async function physical(logicalName: string): Promise<string> {
 
 export type EpStatus = "empty" | "uploaded" | "has_resources";
 
+export interface NovelSummary {
+  id: string;
+  name: string;
+  episodeCount: number;
+  createdAt: string;
+}
+
 export interface EpisodeSummary {
   id: string;
   novelId: string;
@@ -53,6 +55,45 @@ export interface EpisodeSummary {
   scriptName: string | null;
   status: EpStatus;
   createdAt: string;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Novels (local CRUD)                                                */
+/* ------------------------------------------------------------------ */
+
+export async function listNovels(): Promise<NovelSummary[]> {
+  const tNovels = await physical("novels");
+  const { rows } = await bizPool.query(
+    `SELECT id, name, episode_count, created_at
+     FROM "${tNovels}"
+     ORDER BY created_at DESC`,
+  );
+  return (rows as Array<Record<string, unknown>>).map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    episodeCount: r.episode_count as number,
+    createdAt: String(r.created_at),
+  }));
+}
+
+export async function deleteNovel(novelId: string): Promise<void> {
+  const tNovels = await physical("novels");
+  const tScripts = await physical("novel_scripts");
+
+  // Cascade-delete all episodes
+  const { rows: epRows } = await bizPool.query(
+    `SELECT id FROM "${tScripts}" WHERE novel_id = $1`,
+    [novelId],
+  );
+  for (const row of epRows as Array<{ id: string }>) {
+    await deleteEpisode(row.id);
+  }
+
+  // Delete novel-scoped domain_resources
+  await deleteResourcesByScope("novel", novelId);
+
+  // Delete novel record
+  await bizPool.query(`DELETE FROM "${tNovels}" WHERE id = $1`, [novelId]);
 }
 
 /* ------------------------------------------------------------------ */
@@ -97,26 +138,6 @@ export async function listEpisodes(novelId: string): Promise<EpisodeSummary[]> {
   return episodes;
 }
 
-export async function createEpisode(
-  novelId: string,
-  scriptKey: string,
-  scriptName: string | null,
-  scriptContent: string | null,
-): Promise<{ id: string }> {
-  const tScripts = await physical("novel_scripts");
-
-  const { rows } = await bizPool.query(
-    `INSERT INTO "${tScripts}" (novel_id, script_key, script_name, script_content)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id`,
-    [novelId, scriptKey, scriptName, scriptContent],
-  );
-
-  const row = rows[0] as { id: string } | undefined;
-  if (!row) throw new Error("Failed to create episode");
-  return row;
-}
-
 export async function deleteEpisode(scriptId: string): Promise<void> {
   const tScripts = await physical("novel_scripts");
 
@@ -141,6 +162,111 @@ export async function deleteEpisode(scriptId: string): Promise<void> {
       await prisma.chatSession.deleteMany({ where: { userId: user.id } });
     }
   }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Batch upload (per-Job)                                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Create a new novel and insert all episodes from a validated JSON upload.
+ * Returns the novel ID and created episodes.
+ */
+export async function createNovelWithScript(
+  name: string,
+  episodes: ScriptEpisode[],
+): Promise<{ novelId: string; episodes: EpisodeSummary[] }> {
+  const tNovels = await physical("novels");
+  const tScripts = await physical("novel_scripts");
+
+  // 1. Create novel
+  const { rows: novelRows } = await bizPool.query(
+    `INSERT INTO "${tNovels}" (name, episode_count) VALUES ($1, $2) RETURNING id`,
+    [name, episodes.length],
+  );
+  const novelRow = novelRows[0] as { id: string } | undefined;
+  if (!novelRow) throw new Error("Failed to create novel");
+  const novelId = novelRow.id;
+
+  // 2. Batch insert episodes
+  const created = await insertEpisodes(tScripts, novelId, episodes);
+  return { novelId, episodes: created };
+}
+
+/**
+ * Replace all episodes for an existing novel with data from a validated JSON upload.
+ */
+export async function replaceNovelScript(
+  novelId: string,
+  episodes: ScriptEpisode[],
+): Promise<EpisodeSummary[]> {
+  const tNovels = await physical("novels");
+  const tScripts = await physical("novel_scripts");
+
+  // 1. Delete existing episodes
+  const { rows: existingRows } = await bizPool.query(
+    `SELECT id FROM "${tScripts}" WHERE novel_id = $1`,
+    [novelId],
+  );
+  for (const row of existingRows as Array<{ id: string }>) {
+    await deleteEpisode(row.id);
+  }
+
+  // 2. Batch insert new episodes
+  const created = await insertEpisodes(tScripts, novelId, episodes);
+
+  // 3. Update episode count
+  await bizPool.query(
+    `UPDATE "${tNovels}" SET episode_count = $1 WHERE id = $2`,
+    [created.length, novelId],
+  );
+
+  return created;
+}
+
+/** Internal: insert episodes into novel_scripts. */
+async function insertEpisodes(
+  tScripts: string,
+  novelId: string,
+  episodes: ScriptEpisode[],
+): Promise<EpisodeSummary[]> {
+  const created: EpisodeSummary[] = [];
+  for (const ep of episodes) {
+    const scriptKey =
+      ep.variant_kind === "mainline"
+        ? `EP${ep.ep_num}`
+        : `EP${ep.ep_num}-${ep.variant_kind}`;
+
+    const { rows } = await bizPool.query(
+      `INSERT INTO "${tScripts}"
+        (novel_id, script_key, script_name, script_content,
+         init_result, characters, costumes)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
+       RETURNING id, created_at`,
+      [
+        novelId,
+        scriptKey,
+        ep.output.episode_title,
+        ep.output.pre_choice_script,
+        JSON.stringify(ep.output),
+        JSON.stringify(ep.output.characters),
+        JSON.stringify(ep.output.character_outfits),
+      ],
+    );
+
+    const row = rows[0] as { id: string; created_at: string } | undefined;
+    if (!row) throw new Error(`Failed to insert episode ${scriptKey}`);
+
+    created.push({
+      id: row.id,
+      novelId,
+      scriptKey,
+      scriptName: ep.output.episode_title,
+      status: "uploaded",
+      createdAt: String(row.created_at),
+    });
+  }
+  return created;
 }
 
 /* ------------------------------------------------------------------ */
@@ -191,107 +317,22 @@ export async function getEpisodeContent(scriptId: string): Promise<string | null
   return row?.script_content ?? null;
 }
 
-/* ------------------------------------------------------------------ */
-/*  init_workflow integration                                          */
-/* ------------------------------------------------------------------ */
-
-export interface InitWorkflowResult {
-  scriptId: string;
-  scriptKey: string;
-  scriptName: string;
-  missingCharacters: string[];
-  characters: string[];
-  costumes: Record<string, string>;
-  nextStep: string;
-}
-
 /**
- * Load a dynamic MCP by name (from DB → QuickJS sandbox).
- * No-op if already loaded.
+ * Read the stored init_result (full episode output JSON) for an episode.
  */
-async function ensureDynamicMcp(name: string): Promise<void> {
-  if (registry.getProvider(name)) return;
-  if (isCatalogEntry(name)) {
-    loadFromCatalog(name);
-    return;
-  }
-  const code = await mcpService.getMcpCode(name);
-  if (!code) throw new Error(`MCP "${name}" not found in DB`);
-  const provider = await sandboxManager.load(name, code);
-  registry.replace(provider);
-}
-
-/**
- * Run the novel-video-workflow MCP's init_workflow tool.
- *
- * Loads MCP infrastructure on demand, executes the tool, and stores
- * the result in novel_scripts.init_result.
- *
- * Throws on failure — init is a prerequisite for all downstream steps.
- */
-export async function runInitWorkflow(
-  novelId: string,
-  scriptDbId: string,
-  scriptContent: string,
-): Promise<InitWorkflowResult> {
-  await initMcp();
-  await ensureDynamicMcp("biz_db");
-  await ensureDynamicMcp("subagent");
-  await ensureDynamicMcp("langfuse");
-  await ensureDynamicMcp("novel-video-workflow");
-
-  const result = await registry.callTool(
-    "novel-video-workflow__init_workflow",
-    { novelId, scriptContent, scriptDbId },
-  );
-
-  const text = result.content
-    ?.map((c: Record<string, unknown>) =>
-      "text" in c ? String(c.text) : JSON.stringify(c),
-    )
-    .join("\n") ?? "";
-
-  const parsed = JSON.parse(text) as InitWorkflowResult;
-
-  // Persist init_result + characters/costumes via parameterized query
-  // (MCP tool may also write these, but this is the reliable fallback)
-  const tScripts = await physical("novel_scripts");
-  await bizPool.query(
-    `UPDATE "${tScripts}"
-     SET init_result = $1,
-         characters = $2::jsonb,
-         costumes   = $3::jsonb
-     WHERE id = $4`,
-    [
-      JSON.stringify(parsed),
-      JSON.stringify(parsed.characters ?? []),
-      JSON.stringify(parsed.costumes ?? {}),
-      scriptDbId,
-    ],
-  );
-
-  return parsed;
-}
-
-/**
- * Read the stored init_result for an episode.
- */
-export async function getInitResult(
-  novelId: string,
-  scriptKey: string,
-): Promise<InitWorkflowResult | null> {
+export async function getEpisodeOutput(
+  scriptId: string,
+): Promise<Record<string, unknown> | null> {
   const tScripts = await physical("novel_scripts");
   const { rows } = await bizPool.query(
-    `SELECT init_result FROM "${tScripts}"
-     WHERE novel_id = $1 AND script_key = $2
-     LIMIT 1`,
-    [novelId, scriptKey],
+    `SELECT init_result FROM "${tScripts}" WHERE id = $1 LIMIT 1`,
+    [scriptId],
   );
   const row = rows[0] as { init_result: unknown } | undefined;
   if (!row?.init_result) return null;
   return (typeof row.init_result === "string"
     ? JSON.parse(row.init_result)
-    : row.init_result) as InitWorkflowResult;
+    : row.init_result) as Record<string, unknown>;
 }
 
 export async function getEpisodeStatus(scriptId: string): Promise<EpStatus> {

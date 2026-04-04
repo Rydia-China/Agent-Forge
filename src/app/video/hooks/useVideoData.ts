@@ -10,7 +10,6 @@ import type {
 export interface UseVideoDataReturn {
   episodes: EpisodeSummary[];
   isLoadingEpisodes: boolean;
-  isUploading: boolean;
   selectedEpisode: EpisodeSummary | null;
   selectEpisode: (ep: EpisodeSummary | null) => void;
   resources: DomainResources | null;
@@ -18,7 +17,6 @@ export interface UseVideoDataReturn {
   refreshEpisodes: () => Promise<EpisodeSummary[]>;
   refreshResources: () => Promise<void>;
   refreshAll: () => Promise<void>;
-  uploadEpisode: (scriptKey: string, scriptName: string | null, content: string | null) => Promise<void>;
   deleteEpisode: (scriptId: string) => Promise<void>;
   error: string | null;
   setError: (e: string | null) => void;
@@ -30,7 +28,6 @@ export function useVideoData(novelId: string): UseVideoDataReturn {
   const [selectedEpisode, setSelectedEpisode] = useState<EpisodeSummary | null>(null);
   const [resources, setResources] = useState<DomainResources | null>(null);
   const [isLoadingResources, setIsLoadingResources] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refreshEpisodes = useCallback(async (): Promise<EpisodeSummary[]> => {
@@ -80,28 +77,6 @@ export function useVideoData(novelId: string): UseVideoDataReturn {
     setResources(null);
   }, []);
 
-  const uploadEpisode = useCallback(
-    async (scriptKey: string, scriptName: string | null, content: string | null) => {
-      setIsUploading(true);
-      try {
-        await fetchJson(
-          `/api/video/novels/${encodeURIComponent(novelId)}/episodes`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ scriptKey, scriptName, scriptContent: content }),
-          },
-        );
-        await refreshEpisodes();
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to create episode");
-      } finally {
-        setIsUploading(false);
-      }
-    },
-    [novelId, refreshEpisodes],
-  );
-
   const deleteEpisode = useCallback(
     async (scriptId: string) => {
       try {
@@ -137,7 +112,6 @@ export function useVideoData(novelId: string): UseVideoDataReturn {
   return {
     episodes,
     isLoadingEpisodes,
-    isUploading,
     selectedEpisode,
     selectEpisode,
     resources,
@@ -145,7 +119,6 @@ export function useVideoData(novelId: string): UseVideoDataReturn {
     refreshEpisodes,
     refreshResources,
     refreshAll,
-    uploadEpisode,
     deleteEpisode,
     error,
     setError,

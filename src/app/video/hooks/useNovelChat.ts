@@ -1,15 +1,11 @@
 "use client";
 
 /**
- * Video-specific chat hook.
+ * Novel-level chat hook.
  *
- * Composes useTaskStream for SSE infrastructure, adds video-domain features:
- * - POST to /api/video/tasks with video_context, preload_mcps, skills
- * - activeTool tracking (tool_start / tool_end events)
- * - sendDirect (bypass input state)
- * - autoMessage (auto-send on first mount)
- * - key resource CRUD
- * - debounced refresh on tool completion
+ * Similar to useVideoChat but simplified for novel-level resource management:
+ * - POST to /api/video/novel/[novelId]/chat with novelId, skills
+ * - No video_context needed
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -25,7 +21,6 @@ import type {
   UploadRequestPayload,
 } from "@/app/types";
 import { useTaskStream, type LlmStats } from "@/app/components/hooks/useTaskStream";
-import type { VideoContext } from "../types";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -37,7 +32,7 @@ export interface ActiveToolInfo {
   total: number;
 }
 
-export interface UseVideoChatReturn {
+export interface UseNovelChatReturn {
   sessionId: string | undefined;
   messages: ChatMessage[];
   input: string;
@@ -67,15 +62,14 @@ export interface UseVideoChatReturn {
 /*  Hook                                                               */
 /* ------------------------------------------------------------------ */
 
-export function useVideoChat(
+export function useNovelChat(
   initialSessionId: string | undefined,
-  userName: string,
-  videoContext: VideoContext | null,
+  novelId: string,
   skills: string[],
   onSessionCreated: (sessionId: string) => void,
   onRefreshNeeded: () => void,
   model?: string,
-): UseVideoChatReturn {
+): UseNovelChatReturn {
   const [activeTool, setActiveTool] = useState<ActiveToolInfo | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onRefreshNeededRef = useRef(onRefreshNeeded);
@@ -106,7 +100,7 @@ export function useVideoChat(
     },
   });
 
-  /* ---- Reset session when switching episodes ---- */
+  /* ---- Reset session when switching ---- */
   useEffect(() => {
     if (!initialSessionId && !stream.activeSendRef.current) {
       stream.setSessionId(undefined);
@@ -115,7 +109,7 @@ export function useVideoChat(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialSessionId]);
 
-  /* ---- sendMessage — POST to /api/video/tasks ---- */
+  /* ---- sendMessage — POST to /api/video/novel/[novelId]/chat ---- */
 
   const generateTitle = useCallback(async (sid: string, seed: string) => {
     try {
@@ -128,7 +122,8 @@ export function useVideoChat(
   }, []);
 
   const submitText = useCallback(async (text: string, images?: string[]) => {
-    if ((!text && !images?.length) || stream.isSending || !videoContext) return;
+    if (!text && !images?.length) return;
+    if (stream.isSending) return;
 
     stream.setError(null);
     stream.setIsSending(true);
@@ -144,8 +139,6 @@ export function useVideoChat(
     try {
       const payload: Record<string, unknown> = {
         message: text || "(image)",
-        user: userName,
-        video_context: videoContext,
         skills,
       };
       if (sid) payload.session_id = sid;
@@ -153,7 +146,7 @@ export function useVideoChat(
       if (model) payload.model = model;
 
       const result = await fetchJson<{ task_id: string; session_id: string }>(
-        "/api/video/tasks",
+        `/api/video/novel/${novelId}/chat`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -172,12 +165,12 @@ export function useVideoChat(
         void generateTitle(result.session_id, text || "Image upload");
       }
     } catch (err: unknown) {
-      stream.setError(getErrorMessage(err, "Failed to submit video task."));
+      stream.setError(getErrorMessage(err, "Failed to submit novel chat task."));
       stream.setStatus("error");
       stream.setIsSending(false);
       stream.activeSendRef.current = false;
     }
-  }, [stream, userName, videoContext, skills, generateTitle, model]);
+  }, [stream, novelId, skills, generateTitle, model]);
 
   const sendMessage = useCallback(async (images?: string[]) => {
     const text = stream.input.trim();
