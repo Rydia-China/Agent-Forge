@@ -39,12 +39,16 @@ export interface EpisodeListProps {
   onSelectEpisode: (ep: EpisodeSummary) => void;
   onDeleteEpisode: (ep: EpisodeSummary) => void;
   onRefresh: () => void;
-  /** Sessions for the currently selected EP. */
+  /** Sessions for the currently selected EP or novel-level. */
   sessions: SessionSummary[];
   currentSessionId: string | undefined;
   onSelectSession: (sessionId: string) => void;
   onNewSession: () => void;
   onDeleteSession: (sessionId: string) => void;
+  /** Whether novel-level (not EP-level) is selected. */
+  isNovelLevelSelected: boolean;
+  /** Callback when user selects novel-level resource management. */
+  onSelectNovelLevel: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -64,6 +68,8 @@ export function EpisodeList({
   onSelectSession,
   onNewSession,
   onDeleteSession,
+  isNovelLevelSelected,
+  onSelectNovelLevel,
 }: EpisodeListProps) {
   const [jsonViewEp, setJsonViewEp] = useState<EpisodeSummary | null>(null);
   const [jsonContent, setJsonContent] = useState<unknown>(null);
@@ -96,6 +102,74 @@ export function EpisodeList({
         <Typography.Text strong ellipsis style={{ display: "block", fontSize: 13 }}>
           {novelName}
         </Typography.Text>
+      </div>
+
+      {/* Novel-level resource management */}
+      <div className="border-b border-slate-700 p-2">
+        <button
+          type="button"
+          className={`w-full rounded border px-2.5 py-2 text-left transition ${
+            isNovelLevelSelected
+              ? "border-purple-400/60 bg-purple-500/10"
+              : "border-slate-800 bg-slate-900/40 hover:border-slate-600"
+          }`}
+          onClick={onSelectNovelLevel}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-100">📚 小说资源</span>
+            <Tag color="purple" style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>novel</Tag>
+          </div>
+          <div className="mt-0.5 text-[10px] text-slate-400">角色 · 场景</div>
+        </button>
+
+        {/* Novel-level sessions */}
+        {isNovelLevelSelected && (
+          <div className="ml-2.5 mt-1 mb-1 border-l-2 border-purple-500/40 pl-2">
+            <div className="mb-1 flex items-center justify-between">
+              <Typography.Text type="secondary" style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Sessions
+              </Typography.Text>
+              <Button type="text" size="small" icon={<PlusOutlined />} onClick={onNewSession} title="New Chat" style={{ width: 18, height: 18, minWidth: 18 }} />
+            </div>
+            {sessions.length === 0 ? (
+              <div className="py-1 text-center text-[9px] text-slate-500">
+                No sessions. Click + to start.
+              </div>
+            ) : (
+              <div className="space-y-0.5">
+                {sessions.map((s) => {
+                  const isCurrent = currentSessionId === s.id;
+                  return (
+                    <div key={s.id} className="group/s relative">
+                      <button
+                        type="button"
+                        className={`w-full rounded px-2 py-1 text-left text-[10px] transition ${
+                          isCurrent
+                            ? "bg-purple-500/15 text-purple-200"
+                            : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
+                        }`}
+                        onClick={() => onSelectSession(s.id)}
+                      >
+                        <div className="truncate pr-5">
+                          {s.title?.trim() || "Untitled"}
+                        </div>
+                      </button>
+                      <Button
+                        type="text"
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        className="!absolute right-0 top-0.5 opacity-0 group-hover/s:opacity-100"
+                        onClick={(e) => { e.stopPropagation(); onDeleteSession(s.id); }}
+                        style={{ width: 18, height: 18, minWidth: 18 }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Episodes */}
