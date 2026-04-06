@@ -5,8 +5,9 @@
  * 由 builtins/index.ts 统一加载解析。
  */
 export const raw = `---
-name: business-database
-description: Manage business data using the PostgreSQL business database via biz_db tools. Use when asked to create tables, store data, query data, or build any business data structure.
+name: database-operator
+provider: biz_db
+description: Operate the PostgreSQL business database — create/alter tables via declarative schemas, read/write data via parameterized SQL. Use when asked to model data, build tables, or query/mutate records.
 tags:
   - core
   - database

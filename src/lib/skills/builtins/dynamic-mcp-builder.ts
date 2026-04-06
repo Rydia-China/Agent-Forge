@@ -6,6 +6,7 @@
  */
 export const raw = `---
 name: dynamic-mcp-builder
+provider: mcp_manager
 description: Create dynamic MCP servers that run in this system's QuickJS WebAssembly sandbox. Use when asked to build integrations, tools, API connectors, or any new MCP capability.
 tags:
   - meta
@@ -117,9 +118,9 @@ const tables = callToolSync("biz_db__list_tables", {});
 - 未配置时返回明确错误：\`Tool error: Langfuse 未配置 (...)\`
 - 工具名：\`langfuse__list_prompts\`、\`langfuse__get_prompts\`（注意有 **s**）、\`langfuse__compile_prompts\`
 
-### video_mgr__*
+### video_workflow__*
 
-- \`video_mgr__generate_image\` 需要 session 上下文（sessionId），在沙盒中可正常使用（session context 已由框架穿透）
+- \`video_workflow__generate_portrait\` 等生成工具需要 session 上下文（sessionId），在沙盒中可正常使用（session context 已由框架穿透）
 - 沙盒中使用时确保调用来自真实 agent 请求（task execution），而非直接测试调用
 
 ## 代码结构（必须遵循）

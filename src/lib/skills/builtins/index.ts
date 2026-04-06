@@ -6,30 +6,26 @@ import matter from "gray-matter";
 
 import { raw as skillCreator } from "./skill-creator";
 import { raw as dynamicMcpBuilder } from "./dynamic-mcp-builder";
-import { raw as businessDatabase } from "./business-database";
+import { raw as databaseOperator } from "./database-operator";
 import { raw as apiBuilder } from "./api-builder";
-import { raw as videoMgr } from "./video-mgr";
-import { raw as novelResourceMgr } from "./novel-resource-mgr";
-import { raw as epVideoWorkflow } from "./ep-video-workflow";
-import { raw as langfuse } from "./langfuse";
-import { raw as subagent } from "./subagent";
-import { raw as oss } from "./oss";
-import { raw as upload } from "./upload";
+import { raw as promptCompiler } from "./prompt-compiler";
+import { raw as promptDelegator } from "./prompt-delegator";
+import { raw as storageUploader } from "./storage-uploader";
+import { raw as clientUploader } from "./client-uploader";
 import { raw as forgeSync } from "./forge-sync";
+import { raw as stylePreset } from "./style-preset";
 
 const RAW_SKILLS: readonly string[] = [
   skillCreator,
   dynamicMcpBuilder,
-  businessDatabase,
+  databaseOperator,
   apiBuilder,
-  videoMgr,
-  novelResourceMgr,
-  epVideoWorkflow,
-  langfuse,
-  subagent,
-  oss,
-  upload,
+  promptCompiler,
+  promptDelegator,
+  storageUploader,
+  clientUploader,
   forgeSync,
+  stylePreset,
 ];
 
 /* ------------------------------------------------------------------ */
@@ -41,6 +37,7 @@ export interface BuiltinSkill {
   readonly description: string;
   readonly content: string;
   readonly tags: readonly string[];
+  readonly provider: string;
   readonly requiresMcps: readonly string[];
 }
 
@@ -52,11 +49,14 @@ function parse(raw: string): BuiltinSkill {
   const { data, content } = matter(raw);
   const name = String(data.name ?? "");
   if (!name) throw new Error("Built-in skill missing 'name' in frontmatter");
+  const provider = String(data.provider ?? "");
+  if (!provider) throw new Error(`Built-in skill "${name}" missing 'provider' in frontmatter`);
   return {
     name,
     description: String(data.description ?? ""),
     content: content.trim(),
     tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
+    provider,
     requiresMcps: Array.isArray(data.requires_mcps) ? (data.requires_mcps as string[]) : [],
   };
 }

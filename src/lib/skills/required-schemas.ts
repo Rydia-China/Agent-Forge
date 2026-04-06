@@ -2,7 +2,7 @@ import type { ColumnDef, ConstraintDef } from "@/lib/biz-schema-ddl";
 import { getSchema } from "@/lib/services/biz-schema-service";
 
 // ---------------------------------------------------------------------------
-// requiredSchemas — shared helpers for skills__get and system-prompt preload
+// requiredSchemas — shared helpers for get_skill and system-prompt preload
 // ---------------------------------------------------------------------------
 
 export interface RequiredSchema {

@@ -6,6 +6,7 @@
  */
 export const raw = `---
 name: api-builder
+provider: apis
 description: Create APIs that expose business database operations as versioned, documentated endpoints for third-party access. Use when asked to build CRUD interfaces, data APIs, or public endpoints.
 tags:
   - core

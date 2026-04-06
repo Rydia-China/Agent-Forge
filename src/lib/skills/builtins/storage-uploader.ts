@@ -5,8 +5,9 @@
  * 由 builtins/index.ts 统一加载解析。
  */
 export const raw = `---
-name: oss
-description: Upload files (images, videos, documents) to Alibaba Cloud OSS for permanent storage. Use when you need to persist generated content or external resources.
+name: storage-uploader
+provider: oss
+description: Upload files to Alibaba Cloud OSS for permanent server-side storage. Use when you need to persist generated images, videos, or external resources as permanent URLs.
 tags:
   - core
   - storage

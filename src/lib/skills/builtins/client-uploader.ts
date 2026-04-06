@@ -5,8 +5,9 @@
  * 由 builtins/index.ts 统一加载解析。
  */
 export const raw = `---
-name: upload
-description: Upload local files (images, videos, documents, novels) to any endpoint — files never pass through LLM context.
+name: client-uploader
+provider: ui
+description: Request user to upload local files via browser UI — files transfer directly to target endpoint without passing through LLM context. Use for large files (novels, videos) or when user needs to select files from their device.
 tags:
   - core
   - upload

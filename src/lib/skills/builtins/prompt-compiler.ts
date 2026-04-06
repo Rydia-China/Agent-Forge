@@ -5,8 +5,9 @@
  * 由 builtins/index.ts 统一加载解析。
  */
 export const raw = `---
-name: langfuse
-description: Manage prompt templates via Langfuse. Use when you need to fetch, inspect, or compile prompts for subagent execution.
+name: prompt-compiler
+provider: langfuse
+description: Fetch and compile prompt templates from Langfuse with variable substitution. Use when you need to prepare prompts for subagent execution or inspect available prompt templates.
 tags:
   - core
   - prompt
@@ -33,21 +34,17 @@ Langfuse 是外部 prompt 版本管理系统。prompt 模板由运营人员在 L
 
 Langfuse prompt 使用 \`{{variableName}}\` 语法标记变量占位符。
 
-模板示例：
-\\\`\\\`\\\`
-{{style}}，请根据以下剧情生成场景描述：{{scene_description}}
-\\\`\\\`\\\`
+**重要：风格词、比例、约束等全部由 Langfuse 模板控制，禁止在代码或对话中硬编码任何风格词。**
 
-编译调用：
-\\\`\\\`\\\`json
+编译调用示例：
+\\\\\`\\\\\`\\\\\`json
 {
   "name": "common__gen_scenery_shot__prompt",
   "variables": {
-    "style": "高质量日漫风格，赛璐璐",
-    "scene_description": "樱花树下的告别场景"
+    "nodeContent": "“前情提要 + 当前节点内容”"
   }
 }
-\\\`\\\`\\\`
+\\\\\`\\\\\`\\\\\`
 
 ## Prompt 命名约定
 
@@ -65,10 +62,12 @@ Prompt 名称遵循 \`{workflow}__{step}__{type}\` 格式：
 ## 典型工作流
 
 1. 调用 \`langfuse__list_prompts\` 发现可用 prompt
-2. 调用 \`langfuse__compile_prompts\` 编译（传入变量数组）
-3. 将编译后的 prompt 传给 \`subagent__run_text\` 执行
+2. 调用 \`langfuse__get_prompts\` 查看模板原文，确认实际变量名
+3. 调用 \`langfuse__compile_prompts\` 编译（传入变量数组）
+4. 将编译后的 prompt 传给 \`subagent__run_text\` 执行
 
-**不要** 调用 \`langfuse__get_prompts\` 后自行拼接变量。compile_prompts 一步完成，更可靠。
+**禁止猜测变量名** — 必须先通过 \`get_prompts\` 查看实际模板，确认 \`{{variable}}\` 名称后再调用 compile_prompts。
+**禁止硬编码风格词** — 风格词由运营在 Langfuse 控制台维护，代码和对话中不得出现任何风格词字面量。
 
 ## 约束
 

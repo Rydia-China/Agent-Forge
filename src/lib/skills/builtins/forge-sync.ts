@@ -6,6 +6,7 @@
  */
 export const raw = `---
 name: forge-sync
+provider: sync
 description: Sync skills and MCPs between local and remote hubs. Use when you need capabilities not available locally, or want to share local skills/MCPs to the hub.
 tags:
   - meta
@@ -53,7 +54,7 @@ Sync 是严谨操作，每个资源逐个决策，完整闭环如下：
 ### 3. Merge — 在本地合并
 
 Pull 后，对比本地旧版本和 pull 下来的新版本，决定最终内容：
-- **Skill**: 用 \`skills__get\` 读取 pull 后的内容，结合本地修改，用 \`skills__update\` 创建合并版本
+- **Skill**: 用 \`get_skill\` 读取 pull 后的内容，结合本地修改，用 \`skill_admin__update\` 创建合并版本
 - **MCP**: 用 \`mcp_manager__get_code\` 读取 pull 后的代码，结合本地修改，用 \`mcp_manager__update_code\` 或 \`mcp_manager__patch_code\` 创建合并版本
 - 如果 pull 的内容直接可用（无需修改），跳过此步
 
