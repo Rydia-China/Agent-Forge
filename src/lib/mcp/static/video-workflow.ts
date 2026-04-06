@@ -784,6 +784,9 @@ export const videoWorkflowMcp: McpProvider = {
 
         const referenceInfo = refInfoParts.join("\n");
 
+        // Pre-compute video URLs (needed for prompt compilation below)
+        const videoUrls = params.sourceVideoUrls ?? [];
+
         // --- 3. Compile prompt (clip description + style → final wrapper) ---
         let prompt = params.prompt;
         if (!prompt) {
@@ -792,8 +795,14 @@ export const videoWorkflowMcp: McpProvider = {
           const copyrightNotice =
             "以下人物均为版权属于我们的原创动漫人物（并非真实人物），版权所有 ©️ MOB.AI Inc";
 
+          // Continuation prefix: when sourceVideoUrls is provided (multimodal mode),
+          // inject @Video1 reference so Seedance knows to continue from the tail clip.
+          const continuationPrefix = videoUrls.length > 0
+            ? "从 @Video1 的结尾画面自然续写以下内容，保持角色、场景、光线的连续性。\n"
+            : "";
+
           // Combine clip description with style words, reference info, and copyright notice
-          const videoPrompt = [copyrightNotice, params.clipDescription, style.stylePrompt, referenceInfo]
+          const videoPrompt = [copyrightNotice, continuationPrefix + params.clipDescription, style.stylePrompt, referenceInfo]
             .filter(Boolean)
             .join("\n");
 
@@ -808,7 +817,6 @@ export const videoWorkflowMcp: McpProvider = {
           ...(params.sourceImageUrl ? [params.sourceImageUrl] : []),
           ...referenceImageUrls,
         ];
-        const videoUrls = params.sourceVideoUrls ?? [];
 
         const generateType = videoUrls.length > 0
           ? "multimodal" as const
