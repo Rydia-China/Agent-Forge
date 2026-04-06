@@ -94,8 +94,28 @@ export async function getSession(
   };
 }
 
-/** Delete a session and all its messages. */
+/** Delete a session and all its messages.
+ *  Cancels any active tasks first to avoid FK violations from in-flight executors.
+ */
 export async function deleteSession(sessionId: string): Promise<void> {
+  // Cancel all active tasks before cascade-deleting the session
+  const activeTasks = await prisma.task.findMany({
+    where: {
+      sessionId,
+      status: { in: ["pending", "running"] },
+    },
+    select: { id: true },
+  });
+
+  if (activeTasks.length > 0) {
+    const { cancelTask } = await import("@/lib/services/task-service");
+    await Promise.allSettled(
+      activeTasks.map((t) => cancelTask(t.id)),
+    );
+    // Give executors a moment to finish their abort handlers
+    await new Promise((r) => setTimeout(r, 500));
+  }
+
   await prisma.chatSession.delete({ where: { id: sessionId } });
 }
 
@@ -151,27 +171,55 @@ export async function getMessages(
   return rows.map(dbMsgToChat);
 }
 
+/**
+ * Replace ALL messages in a session (used by context checkpoint).
+ * Deletes existing messages and inserts the new set atomically.
+ */
+export async function replaceMessages(
+  sessionId: string,
+  msgs: ChatMessage[],
+): Promise<void> {
+  const data: Prisma.ChatMessageCreateManyInput[] = msgs.map((m) => ({
+    sessionId,
+    role: m.role,
+    content: m.content ?? null,
+    images: m.images?.length ? m.images : [],
+    toolCalls: m.tool_calls ? (m.tool_calls as unknown as Prisma.InputJsonValue) : undefined,
+    toolCallId: m.tool_call_id ?? null,
+    hidden: m.hidden ?? false,
+  }));
+
+  await prisma.$transaction([
+    prisma.chatMessage.deleteMany({ where: { sessionId } }),
+    prisma.chatMessage.createMany({ data }),
+  ]);
+}
+
 /* ------------------------------------------------------------------ */
-/*  Recall — retrieve original tool result from DB                     */
+/*  Notifications — append external change hints to a session          */
 /* ------------------------------------------------------------------ */
 
 /**
- * Recall the original content of a tool call result by its tool_call_id.
- * Returns null if no matching tool message is found.
+ * Append a notification message to a session.
+ *
+ * Used when an external system modifies resources (e.g. image regenerated
+ * outside the chat). The LLM sees a lightweight hint on the next turn
+ * and decides whether to re-query via tools.
+ *
+ * The message intentionally does NOT include the actual change data —
+ * the single source of truth is always the tools.
  */
-export async function recallToolResult(
+export async function pushNotification(
   sessionId: string,
-  toolCallId: string,
-): Promise<string | null> {
-  const row = await prisma.chatMessage.findFirst({
-    where: {
-      sessionId,
-      role: "tool",
-      toolCallId,
+  category: string,
+): Promise<void> {
+  await pushMessages(sessionId, [
+    {
+      role: "user",
+      content: `[system-notification] ${category} 已在外部更新，相关数据可能已过时，请在需要时重新查询。`,
+      hidden: true,
     },
-    select: { content: true },
-  });
-  return row?.content ?? null;
+  ]);
 }
 
 /* ------------------------------------------------------------------ */

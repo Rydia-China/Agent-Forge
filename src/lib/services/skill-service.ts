@@ -36,6 +36,7 @@ export const SkillCreateParams = z.object({
   description: z.string(),
   content: z.string(),
   tags: z.array(z.string()).optional().default([]),
+  provider: z.string().min(1),
   metadata: z.unknown().optional(),
 });
 
@@ -55,6 +56,7 @@ export const SkillDeleteParams = z.object({
 export const SkillImportParams = z.object({
   skillMd: z.string().min(1),
   tags: z.array(z.string()).optional(),
+  provider: z.string().min(1),
 });
 
 export const SkillExportParams = z.object({
@@ -105,17 +107,28 @@ export function toSkillMd(skill: { name: string; description: string; content: s
 /*  Service functions                                                 */
 /* ------------------------------------------------------------------ */
 
+export interface SkillListOptions {
+  tag?: string;
+  /** When set, only return skills belonging to this provider + global skills. */
+  provider?: string;
+}
+
 export interface SkillSummary {
   name: string;
   description: string;
   tags: string[];
+  provider: string;
   requiresMcps: string[];
   productionVersion: number;
 }
 
-export async function listSkills(tag?: string): Promise<SkillSummary[]> {
+export async function listSkills(opts?: SkillListOptions): Promise<SkillSummary[]> {
+  const where: Record<string, unknown> = {};
+  if (opts?.tag) where.tags = { has: opts.tag };
+  if (opts?.provider) where.provider = opts.provider;
+
   const skills = await prisma.skill.findMany({
-    where: tag ? { tags: { has: tag } } : undefined,
+    where: Object.keys(where).length > 0 ? where : undefined,
     include: { versions: { orderBy: { version: "desc" as const }, take: 1 } },
     orderBy: { name: "asc" },
   });
@@ -123,24 +136,26 @@ export async function listSkills(tag?: string): Promise<SkillSummary[]> {
   const dbSkills: SkillSummary[] = skills
     .filter((s) => s.versions.length > 0)
     .map((s) => {
-      // Use production version's description; fall back to latest
       const prodVer = s.versions.find((v) => v.version === s.productionVersion) ?? s.versions[0]!;
       return {
         name: s.name,
         description: prodVer.description,
         tags: s.tags,
+        provider: s.provider,
         requiresMcps: [],
         productionVersion: s.productionVersion,
       };
     });
 
-  // Merge: builtins take precedence over DB skills with the same name
+  // Merge builtins — each has a provider, same filtering rules as DB skills
   const builtinList = listBuiltinSkills()
-    .filter((b) => !tag || b.tags.includes(tag))
+    .filter((b) => !opts?.tag || b.tags.includes(opts.tag))
+    .filter((b) => !opts?.provider || b.provider === opts.provider)
     .map((b): SkillSummary => ({
       name: b.name,
       description: b.description,
       tags: [...b.tags],
+      provider: b.provider,
       requiresMcps: [...b.requiresMcps],
       productionVersion: 0,
     }));
@@ -155,6 +170,7 @@ export interface SkillDetail {
   description: string;
   content: string;
   tags: string[];
+  provider: string;
   metadata: Prisma.JsonValue | null;
   version: number;
   productionVersion: number;
@@ -178,6 +194,7 @@ export async function getSkill(name: string): Promise<SkillDetail | null> {
     description: ver.description,
     content: ver.content,
     tags: skill.tags,
+    provider: skill.provider,
     metadata: ver.metadata,
     version: ver.version,
     productionVersion: skill.productionVersion,
@@ -190,6 +207,7 @@ function builtinToSkillShape(b: BuiltinSkill): SkillDetail {
     description: b.description,
     content: b.content,
     tags: [...b.tags],
+    provider: b.provider,
     metadata: null,
     version: 0,
     productionVersion: 0,
@@ -209,6 +227,7 @@ export async function createSkill(
     data: {
       name: params.name,
       tags: params.tags,
+      provider: params.provider,
       productionVersion: 1,
       versions: {
         create: {
@@ -291,6 +310,7 @@ export async function importSkill(
       description: parsed.description,
       content: parsed.content,
       tags: params.tags ?? [],
+      provider: params.provider,
       metadata: parsed.metadata ?? undefined,
     });
   }
@@ -356,6 +376,7 @@ export async function getSkillVersion(name: string, version: number): Promise<Sk
     description: ver.description,
     content: ver.content,
     tags: skill.tags,
+    provider: skill.provider,
     metadata: ver.metadata,
     version: ver.version,
     productionVersion: skill.productionVersion,

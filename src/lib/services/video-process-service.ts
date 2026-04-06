@@ -62,6 +62,55 @@ async function probeDuration(inputPath: string): Promise<number> {
  * const duration = await probeDuration(...);
  * extractVideoSegment(url, duration - 5, null)
  */
+/**
+ * Concatenate multiple video clips into one via ffmpeg concat demuxer.
+ * Downloads each clip, writes a concat list, merges, returns the buffer.
+ */
+export async function concatVideos(urls: string[]): Promise<Buffer> {
+  if (urls.length === 0) throw new Error("No video URLs to concat");
+  if (urls.length === 1) {
+    const res = await fetch(urls[0]!);
+    if (!res.ok) throw new Error(`下载视频失败: ${res.status}`);
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  const id = randomUUID();
+  const dir = join(tmpdir(), `concat-${id}`);
+  const { mkdir } = await import("node:fs/promises");
+  await mkdir(dir, { recursive: true });
+
+  const inputPaths: string[] = [];
+  try {
+    // Download all clips
+    for (let i = 0; i < urls.length; i++) {
+      const p = join(dir, `clip_${i}.mp4`);
+      const res = await fetch(urls[i]!);
+      if (!res.ok) throw new Error(`下载视频 ${i} 失败: ${res.status}`);
+      await writeFile(p, Buffer.from(await res.arrayBuffer()));
+      inputPaths.push(p);
+    }
+
+    // Write concat list
+    const listPath = join(dir, "list.txt");
+    const listContent = inputPaths.map((p) => `file '${p}'`).join("\n");
+    await writeFile(listPath, listContent);
+
+    // Concat
+    const outputPath = join(dir, "output.mp4");
+    await execFileAsync(ffmpegPath, [
+      "-f", "concat", "-safe", "0",
+      "-i", listPath,
+      "-c", "copy", "-y", outputPath,
+    ]);
+
+    return await readFile(outputPath);
+  } finally {
+    // Cleanup
+    const { rm } = await import("node:fs/promises");
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 export async function extractVideoSegment(
   sourceUrl: string,
   startSec: number,

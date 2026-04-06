@@ -1,7 +1,6 @@
 import { Cron } from "croner";
 import { prisma } from "@/lib/db";
-import { runExecutor } from "@/lib/agent/executor";
-import type { ExecutorTask, ExecutorResult } from "@/lib/agent/executor";
+import { runSubAgent, type SubAgentConfig } from "@/lib/agent/subagent";
 import type { Prisma } from "@/generated/prisma";
 
 /* ------------------------------------------------------------------ */
@@ -21,8 +20,8 @@ const jobs = (g.__schedulerJobs ??= new Map<string, Cron>());
 /* ------------------------------------------------------------------ */
 
 export interface ScheduleInput {
-  /** ExecutorTask to run when triggered. */
-  task: ExecutorTask;
+  /** SubAgent config to run when triggered. */
+  task: SubAgentConfig;
   /** Cron expression for recurring schedules (e.g. "0 9 * * *"). */
   cron?: string;
   /** ISO datetime for one-time execution. Mutually exclusive with cron. */
@@ -136,8 +135,8 @@ export async function restoreSchedules(): Promise<void> {
     if (row.runAt && row.runAt <= new Date()) {
       // Already past — run it now if never executed, then disable
       if (!row.lastRunAt) {
-        const task = row.task as unknown as ExecutorTask;
-        void fireExecutor(row.id, task, row.sessionId);
+      const task = row.task as unknown as SubAgentConfig;
+        void fireSubAgent(row.id, task, row.sessionId);
       }
       await prisma.scheduledTask.update({
         where: { id: row.id },
@@ -146,7 +145,7 @@ export async function restoreSchedules(): Promise<void> {
       continue;
     }
 
-    const task = row.task as unknown as ExecutorTask;
+    const task = row.task as unknown as SubAgentConfig;
     registerJob(row.id, task, {
       cron: row.cron,
       runAt: row.runAt,
@@ -169,7 +168,7 @@ interface JobOpts {
 
 function registerJob(
   scheduleId: string,
-  task: ExecutorTask,
+  task: SubAgentConfig,
   opts: JobOpts,
 ): void {
   // Stop existing job if re-registering
@@ -180,7 +179,7 @@ function registerJob(
   }
 
   const handler = () => {
-    void fireExecutor(scheduleId, task, opts.sessionId);
+    void fireSubAgent(scheduleId, task, opts.sessionId);
   };
 
   let job: Cron;
@@ -202,19 +201,18 @@ function registerJob(
 /*  Internal: fire executor on trigger                                 */
 /* ------------------------------------------------------------------ */
 
-async function fireExecutor(
+async function fireSubAgent(
   scheduleId: string,
-  task: ExecutorTask,
+  task: SubAgentConfig,
   sessionId: string | null,
 ): Promise<void> {
   try {
-    // Create a Task record for tracking
     let taskId: string | null = null;
     if (sessionId) {
       const taskRow = await prisma.task.create({
         data: {
           sessionId,
-          type: "executor",
+          type: "subagent",
           status: "running",
           input: task as unknown as Prisma.InputJsonValue,
         },
@@ -222,9 +220,8 @@ async function fireExecutor(
       taskId = taskRow.id;
     }
 
-    const result = await runExecutor(task);
+    const result = await runSubAgent(task);
 
-    // Persist result to Task if we have one
     if (taskId) {
       await prisma.task.update({
         where: { id: taskId },
@@ -232,18 +229,17 @@ async function fireExecutor(
           status: result.status === "completed" ? "completed" : "failed",
           reply: result.output || null,
           error: result.error ?? null,
+          // Persist full result including trace for post-mortem debugging
           executorResult: result as unknown as Prisma.InputJsonValue,
         },
       });
     }
 
-    // Update schedule metadata
     const updateData: Prisma.ScheduledTaskUpdateInput = {
       lastRunAt: new Date(),
       ...(taskId ? { lastTaskId: taskId } : {}),
     };
 
-    // One-time schedules: auto-disable after execution
     const schedule = await prisma.scheduledTask.findUnique({
       where: { id: scheduleId },
       select: { runAt: true },
@@ -263,11 +259,11 @@ async function fireExecutor(
     });
 
     console.log(
-      `[scheduler:${scheduleId}] Executor completed: ${result.status}, ` +
+      `[scheduler:${scheduleId}] SubAgent completed: ${result.status}, ` +
         `${result.toolCallCount} tool calls, ${result.durationMs}ms`,
     );
   } catch (err) {
-    console.error(`[scheduler:${scheduleId}] Executor failed:`, err);
+    console.error(`[scheduler:${scheduleId}] SubAgent failed:`, err);
   }
 }
 

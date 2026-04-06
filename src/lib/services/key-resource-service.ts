@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import type { Prisma as PrismaTypes } from "@/generated/prisma";
 import { callFcGenerateImage } from "./fc-image-client";
+import { generateVideo as seedanceGenerate } from "./seedance-client";
+import type { SeedanceGenerateType } from "./seedance-client";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -166,37 +168,43 @@ export async function generateImage(
     update: {},
   });
 
-  // 2. Create version (url = null initially)
-  const ver = await nextVersion(resource.id);
-  const versionRow = await prisma.keyResourceVersion.create({
-    data: {
-      keyResourceId: resource.id,
-      version: ver,
-      prompt,
-      refUrls: refUrls ?? [],
-    },
-  });
-
-  // 3. Call FC
+  // 2. Call FC FIRST — no empty version row created until we have a result
   const imageUrl = await callFcGenerateImage(prompt, refUrls);
 
-  // 4. Update version url + bump currentVersion
-  await prisma.$transaction([
-    prisma.keyResourceVersion.update({
-      where: { id: versionRow.id },
-      data: { url: imageUrl },
-    }),
-    prisma.keyResource.update({
-      where: { id: resource.id },
-      data: { currentVersion: ver },
-    }),
-  ]);
+  // 3. Create version + bump currentVersion in one transaction (with retry for race)
+  const maxRetries = 3;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const ver = await nextVersion(resource.id);
+    try {
+      await prisma.$transaction([
+        prisma.keyResourceVersion.create({
+          data: {
+            keyResourceId: resource.id,
+            version: ver,
+            prompt,
+            url: imageUrl,
+            refUrls: refUrls ?? [],
+          },
+        }),
+        prisma.keyResource.update({
+          where: { id: resource.id },
+          data: { currentVersion: ver },
+        }),
+      ]);
+      return { id: resource.id, key, imageUrl, version: ver };
+    } catch (err: unknown) {
+      // Unique constraint on (keyResourceId, version) — retry with next version
+      const msg = err instanceof Error ? err.message : "";
+      if (attempt < maxRetries - 1 && msg.includes("Unique constraint")) continue;
+      throw err;
+    }
+  }
 
-  return { id: resource.id, key, imageUrl, version: ver };
+  throw new Error(`Failed to persist version for ${key} after ${maxRetries} retries`);
 }
 
 /* ------------------------------------------------------------------ */
-/*  regenerate — out-of-band (UI-driven) regeneration                  */
+/*  regenerateImage — out-of-band (UI-driven) image regeneration        */
 /* ------------------------------------------------------------------ */
 
 export interface RegenerateResult {
@@ -207,7 +215,7 @@ export interface RegenerateResult {
   prompt: string;
 }
 
-export async function regenerate(
+export async function regenerateImage(
   id: string,
   promptOverride?: string,
 ): Promise<RegenerateResult> {
@@ -246,6 +254,78 @@ export async function regenerate(
   ]);
 
   return { id: resource.id, key: resource.key, imageUrl, version: ver, prompt };
+}
+
+/** @deprecated Use regenerateImage instead */
+export const regenerate = regenerateImage;
+
+/* ------------------------------------------------------------------ */
+/*  regenerateVideo — out-of-band (UI-driven) video regeneration        */
+/* ------------------------------------------------------------------ */
+
+export interface RegenerateVideoResult {
+  id: string;
+  key: string;
+  videoUrl: string;
+  version: number;
+  prompt: string;
+}
+
+/**
+ * Regenerate a video KeyResource using Seedance.
+ * Reads generation metadata (generateType, imageUrls, videoUrls, duration)
+ * from the current version's `data` JSONB field.
+ */
+export async function regenerateVideo(
+  id: string,
+  promptOverride?: string,
+): Promise<RegenerateVideoResult> {
+  const resource = await prisma.keyResource.findUniqueOrThrow({ where: { id } });
+
+  const curVer = await prisma.keyResourceVersion.findUnique({
+    where: {
+      keyResourceId_version: { keyResourceId: resource.id, version: resource.currentVersion },
+    },
+  });
+  if (!curVer) throw new Error(`Current version ${resource.currentVersion} not found`);
+
+  const prompt = promptOverride ?? curVer.prompt ?? "";
+  const refUrls = curVer.refUrls ?? [];
+
+  // Restore Seedance call params from version metadata
+  const meta = (curVer.data ?? {}) as Record<string, unknown> & PrismaTypes.InputJsonValue;
+  const generateType = (meta.generateType as SeedanceGenerateType | undefined) ?? "text_to_video";
+  const imageUrls = (meta.imageUrls as string[] | undefined) ?? [];
+  const videoUrls = (meta.videoUrls as string[] | undefined) ?? [];
+  const duration = (meta.duration as number | undefined) ?? undefined;
+
+  const result = await seedanceGenerate({
+    prompt,
+    generateType,
+    imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+    videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
+    duration,
+  });
+
+  const ver = await nextVersion(resource.id);
+  await prisma.$transaction([
+    prisma.keyResourceVersion.create({
+      data: {
+        keyResourceId: resource.id,
+        version: ver,
+        prompt,
+        url: result.saveUrl,
+        refUrls,
+        data: meta,
+      },
+    }),
+    prisma.keyResource.update({
+      where: { id: resource.id },
+      data: { currentVersion: ver },
+    }),
+  ]);
+
+  return { id: resource.id, key: resource.key, videoUrl: result.saveUrl, version: ver, prompt };
 }
 
 /* ------------------------------------------------------------------ */

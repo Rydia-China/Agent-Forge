@@ -84,6 +84,7 @@ interface RemoteSkillSummary {
   name: string;
   description: string;
   tags: string[];
+  provider: string;
   productionVersion: number;
 }
 
@@ -149,7 +150,7 @@ async function diffSkills(
   tag?: string,
 ): Promise<DiffEntry[]> {
   const [localSkills, remoteSkills] = await Promise.all([
-    skillService.listSkills(tag),
+    skillService.listSkills({ tag }),
     fetchJson<RemoteSkillSummary[]>(
       tag ? `${base}/api/skills?tag=${encodeURIComponent(tag)}` : `${base}/api/skills`,
     ),
@@ -225,6 +226,7 @@ async function pullSkill(name: string, base: string): Promise<SyncPullResult> {
       description: remote.description,
       content: remote.content,
       tags: remote.tags,
+      provider: remote.provider ?? "skill_admin",
       metadata: remote.metadata ?? undefined,
     });
     return { action: "created", type: "skill", name, sourceUrl: base, localVersion: version.version };
@@ -318,6 +320,7 @@ async function pushSkill(name: string, base: string): Promise<SyncPushResult> {
       description: local.description,
       content: local.content,
       tags: local.tags,
+      provider: local.provider,
       metadata: local.metadata,
     }),
   });
