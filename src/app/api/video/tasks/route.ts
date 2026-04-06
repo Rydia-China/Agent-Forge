@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { submitTask } from "@/lib/services/task-service";
-import { VideoContextProvider } from "@/lib/video/context-provider";
 import { ensureVideoSchema } from "@/lib/video/schema";
 import { resolveModel } from "@/lib/agent/models";
 
@@ -37,11 +36,11 @@ export async function POST(req: NextRequest) {
 
   const { message, session_id, user, images, model, video_context, skills } = parsed.data;
 
-  const contextProvider = new VideoContextProvider({
-    novelId: video_context.novelId,
-    scriptId: video_context.scriptId,
-    scriptKey: video_context.scriptKey,
-  });
+  const staticContext = [
+    `novel_id: ${video_context.novelId}`,
+    `script_id: ${video_context.scriptId}`,
+    `script_key: ${video_context.scriptKey}`,
+  ].join("\n");
 
   const result = await submitTask({
     message,
@@ -50,7 +49,7 @@ export async function POST(req: NextRequest) {
     images,
     model: resolveModel(model),
     agentConfig: {
-      contextProvider,
+      staticContext,
       skills,
     },
     beforeRun: () => ensureVideoSchema(),

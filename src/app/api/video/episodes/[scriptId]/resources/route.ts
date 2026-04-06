@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getResources, updateResourceData, deleteResource } from "@/lib/services/video-workflow-service";
+import { listResourcesByScope } from "@/lib/services/key-resource-listing";
+import { deleteResource } from "@/lib/services/key-resource-service";
+import { prisma } from "@/lib/db";
 
-/** GET /api/video/episodes/[scriptId]/resources?novelId=xxx — get episode resources */
+/** GET /api/video/episodes/[scriptId]/resources?novelId=xxx — get episode + novel resources from KeyResource */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ scriptId: string }> },
@@ -14,8 +16,21 @@ export async function GET(
   }
 
   try {
-    const resources = await getResources(scriptId, novelId);
-    return NextResponse.json(resources);
+    // Merge novel-level + script-level resources
+    const [novelGroups, scriptGroups] = await Promise.all([
+      listResourcesByScope("novel", novelId),
+      listResourcesByScope("script", scriptId),
+    ]);
+
+    const merged = new Map<string, unknown[]>();
+    for (const g of [...novelGroups, ...scriptGroups]) {
+      const existing = merged.get(g.category);
+      if (existing) existing.push(...g.items);
+      else merged.set(g.category, [...g.items]);
+    }
+
+    const categories = [...merged.entries()].map(([category, items]) => ({ category, items }));
+    return NextResponse.json({ categories });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -29,7 +44,10 @@ export async function PATCH(req: NextRequest) {
     if (!body.resourceId || body.data === undefined) {
       return NextResponse.json({ error: "Missing resourceId or data" }, { status: 400 });
     }
-    await updateResourceData(body.resourceId, body.data);
+    await prisma.keyResource.update({
+      where: { id: body.resourceId },
+      data: { title: typeof body.data === "string" ? body.data : undefined },
+    });
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { rollback, getById } from "@/lib/services/key-resource-service";
+import { pushNotification } from "@/lib/services/chat-session-service";
 
 type Params = { params: Promise<{ id: string }> };
 
 const BodySchema = z.object({
   version: z.number().int().min(1),
+  session_id: z.string().optional(),
 });
 
 /** POST /api/key-resources/:id/rollback */
@@ -31,6 +33,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     const result = await rollback(id, parsed.data.version);
+
+    if (parsed.data.session_id) {
+      await pushNotification(parsed.data.session_id, `key-resource "${result.key}" rolled back to v${result.version}`);
+    }
+
     return NextResponse.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

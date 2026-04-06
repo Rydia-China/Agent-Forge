@@ -5,8 +5,8 @@ import { replaceNovelScript } from "@/lib/services/video-workflow-service";
 /**
  * POST /api/video/novels/[novelId]/upload-script
  *
- * Re-upload: replaces all episodes for an existing novel.
- * Validates JSON with Zod (fields can be more but not fewer).
+ * Re-upload: replaces all episodes and novel-level data for an existing novel.
+ * Body: { title?, synopsis?, character_arcs?, location_bible?, episodes[] }
  */
 export async function POST(
   req: NextRequest,

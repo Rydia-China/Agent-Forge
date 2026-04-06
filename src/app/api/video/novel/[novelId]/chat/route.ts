@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { submitTask } from "@/lib/services/task-service";
-import { NovelContextProvider } from "@/lib/video/novel-context-provider";
 import { ensureVideoSchema } from "@/lib/video/schema";
 import { resolveModel } from "@/lib/agent/models";
 
@@ -34,8 +33,6 @@ export async function POST(
 
   const { message, session_id, images, model, skills } = parsed.data;
 
-  const contextProvider = new NovelContextProvider({ novelId });
-
   // Novel-level session userName: video:{novelId}
   const userName = `video:${novelId}`;
 
@@ -46,7 +43,7 @@ export async function POST(
     images,
     model: resolveModel(model),
     agentConfig: {
-      contextProvider,
+      staticContext: `novel_id: ${novelId}`,
       skills,
     },
     beforeRun: () => ensureVideoSchema(),

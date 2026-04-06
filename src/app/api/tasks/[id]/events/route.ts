@@ -1,10 +1,12 @@
 import { NextRequest } from "next/server";
 import { subscribeEvents, getTask } from "@/lib/services/task-service";
+import { prisma } from "@/lib/db";
 
 type Params = { params: Promise<{ id: string }> };
 
-function toSse(id: number, event: string, data: unknown): string {
-  return `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+function toSse(id: number | null, event: string, data: unknown): string {
+  const idLine = id != null ? `id: ${id}\n` : "";
+  return `${idLine}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
 /** GET /api/tasks/:id/events — SSE stream with reconnection via Last-Event-ID */
@@ -23,8 +25,11 @@ export async function GET(req: NextRequest, { params }: Params) {
   const lastEventIdRaw = req.headers.get("Last-Event-ID")
     ?? req.nextUrl.searchParams.get("last_event_id");
   const lastEventId = lastEventIdRaw ? parseInt(lastEventIdRaw, 10) : undefined;
+  const MAX_INT4 = 2147483647;
   const validLastId =
-    lastEventId != null && !isNaN(lastEventId) ? lastEventId : undefined;
+    lastEventId != null && !isNaN(lastEventId) && lastEventId <= MAX_INT4
+      ? lastEventId
+      : undefined;
 
   const encoder = new TextEncoder();
   const ac = new AbortController();
@@ -40,10 +45,20 @@ export async function GET(req: NextRequest, { params }: Params) {
         }
       };
 
-      // 心跳计时器，每 30 秒发送一次
-      const heartbeatInterval = setInterval(() => {
-        if (!ac.signal.aborted) {
-          send(toSse(Date.now(), "heartbeat", {}));
+      // 心跳计时器，每 30 秒发送一次，附带任务状态
+      const heartbeatInterval = setInterval(async () => {
+        if (ac.signal.aborted) return;
+        try {
+          const current = await prisma.task.findUnique({
+            where: { id },
+            select: { status: true, updatedAt: true },
+          });
+          send(toSse(null, "heartbeat", {
+            status: current?.status ?? "unknown",
+            elapsedMs: current ? Date.now() - current.updatedAt.getTime() : 0,
+          }));
+        } catch {
+          send(toSse(null, "heartbeat", {}));
         }
       }, 30000);
 
@@ -58,7 +73,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         // 尝试发送错误事件给客户端
         try {
           const errorMsg = err instanceof Error ? err.message : String(err);
-          send(toSse(Date.now(), "error", { error: errorMsg }));
+          send(toSse(null, "error", { error: errorMsg }));
         } catch {
           /* best effort */
         }

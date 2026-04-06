@@ -19,10 +19,13 @@ export async function GET() {
 
 const CreateNovelSchema = z.object({
   name: z.string().min(1),
-  episodes: NovelScriptUploadSchema,
+  script: NovelScriptUploadSchema,
 });
 
-/** POST /api/video/novels — create novel with JSON script upload */
+/**
+ * POST /api/video/novels — create novel with JSON script upload.
+ * Body: { name: string, script: { title?, synopsis?, character_arcs?, location_bible?, episodes[] } }
+ */
 export async function POST(req: NextRequest) {
   let raw: unknown;
   try {
@@ -39,7 +42,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await createNovelWithScript(
       parsed.data.name,
-      parsed.data.episodes,
+      parsed.data.script,
     );
     return NextResponse.json(result, { status: 201 });
   } catch (err: unknown) {
