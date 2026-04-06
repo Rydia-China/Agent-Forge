@@ -2,11 +2,12 @@ import type { McpProvider } from "./types";
 import { registry } from "./registry";
 import { bizDbMcp } from "./static/biz-db";
 import { apisMcp } from "./static/apis";
-import { videoMgrMcp } from "./static/video-mgr";
+import { videoWorkflowMcp } from "./static/video-workflow";
 import { langfuseMcp } from "./static/langfuse";
 import { langfuseAdminMcp } from "./static/langfuse-admin";
-import { subagentMcp } from "./static/subagent";
 import { ossMcp } from "./static/oss";
+import { stylePresetMcp } from "./static/style-preset";
+import { skillAdminMcp } from "./static/skill-admin";
 
 /* ------------------------------------------------------------------ */
 /*  Catalog entry                                                      */
@@ -25,11 +26,12 @@ export interface McpCatalogEntry {
 /* ------------------------------------------------------------------ */
 
 const CATALOG: readonly McpCatalogEntry[] = [
+  { name: "skill_admin", provider: skillAdminMcp, available: true },
   { name: "biz_db", provider: bizDbMcp, available: true },
   { name: "apis", provider: apisMcp, available: true },
   {
-    name: "video_mgr",
-    provider: videoMgrMcp,
+    name: "video_workflow",
+    provider: videoWorkflowMcp,
     available: !!(process.env.FC_GENERATE_IMAGE_URL || process.env.FC_GENERATE_VIDEO_URL),
   },
   {
@@ -51,11 +53,6 @@ const CATALOG: readonly McpCatalogEntry[] = [
     ),
   },
   {
-    name: "subagent",
-    provider: subagentMcp,
-    available: !!process.env.LLM_API_KEY,
-  },
-  {
     name: "oss",
     provider: ossMcp,
     available: !!(
@@ -64,6 +61,11 @@ const CATALOG: readonly McpCatalogEntry[] = [
       process.env.OSS_ACCESS_KEY_ID &&
       process.env.OSS_ACCESS_KEY_SECRET
     ),
+  },
+  {
+    name: "style_preset",
+    provider: stylePresetMcp,
+    available: true,
   },
 ];
 

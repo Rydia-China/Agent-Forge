@@ -1,7 +1,14 @@
+/**
+ * skill_admin MCP — Skill management (CRUD) tools.
+ *
+ * Reading capabilities (list_skills, get_skill) are provided by the
+ * skill protocol — this provider opts in via skillTools() + handleSkillTool().
+ */
+
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
 import * as svc from "@/lib/services/skill-service";
-import { appendSchemaDirectiveIfNeeded } from "@/lib/skills/required-schemas";
+import { skillTools, handleSkillTool } from "../skill-protocol";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -11,26 +18,14 @@ function json(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
 
-export const skillsMcp: McpProvider = {
-  name: "skills",
+export const skillAdminMcp: McpProvider = {
+  name: "skill_admin",
 
   async listTools(): Promise<Tool[]> {
     return [
-      {
-        name: "get",
-        description: "Get the full content of skill(s) by name (returns production version). Pass an array of names. For a single skill, pass a one-element array.",
-        inputSchema: {
-          type: "object" as const,
-          properties: {
-            names: {
-              type: "array",
-              items: { type: "string" },
-              description: "Array of skill names to fetch",
-            },
-          },
-          required: ["names"],
-        },
-      },
+      // Skill protocol: list_skills + get_skill
+      ...skillTools(),
+      // Management tools
       {
         name: "create",
         description: "Create a new skill (v1). Only use when the user EXPLICITLY asks to create a skill. NEVER call this to save notes, summaries, or information on your own initiative.",
@@ -41,8 +36,9 @@ export const skillsMcp: McpProvider = {
             description: { type: "string" },
             content: { type: "string", description: "Markdown body (skill instructions)" },
             tags: { type: "array", items: { type: "string" } },
+            provider: { type: "string", description: "MCP provider this skill belongs to (required)" },
           },
-          required: ["name", "description", "content"],
+          required: ["name", "description", "content", "provider"],
         },
       },
       {
@@ -118,30 +114,12 @@ export const skillsMcp: McpProvider = {
     name: string,
     args: Record<string, unknown>,
   ): Promise<CallToolResult> {
+    // Skill protocol: list_skills + get_skill
+    const skillResult = handleSkillTool(name, args);
+    if (skillResult) return skillResult;
+
+    // Management tools
     switch (name) {
-      case "get": {
-        const names = args.names as string[];
-        if (!Array.isArray(names) || names.length === 0) return text("Missing names parameter.");
-        const results = await Promise.allSettled(
-          names.map(async (n) => {
-            const skill = await svc.getSkill(n);
-            if (!skill) throw new Error(`Skill "${n}" not found`);
-
-            const content = await appendSchemaDirectiveIfNeeded(
-              skill.content,
-              skill.metadata,
-            );
-
-            return { name: n, content };
-          }),
-        );
-        const output = results.map((r, i) =>
-          r.status === "fulfilled"
-            ? { status: "ok" as const, ...r.value }
-            : { status: "error" as const, name: names[i], error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
-        );
-        return json(output);
-      }
       case "create": {
         const params = svc.SkillCreateParams.parse(args);
         const { skill } = await svc.createSkill(params);

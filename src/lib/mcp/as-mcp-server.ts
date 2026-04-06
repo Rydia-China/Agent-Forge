@@ -8,6 +8,7 @@ import {
 } from "@modelcontextprotocol/sdk/types";
 import { registry } from "./registry";
 import { initMcp } from "./init";
+import { isCatalogEntry, loadFromCatalog } from "./catalog";
 import { runAgent } from "@/lib/agent/agent";
 import { writeChatLog } from "@/lib/agent/chat-log";
 import { prisma } from "@/lib/db";
@@ -136,6 +137,11 @@ export async function createScopedMcpServer(
   providerName: string,
 ): Promise<Server | null> {
   await initMcp();
+
+  // External MCP access: directly load catalog provider if not yet registered
+  if (!registry.getProvider(providerName) && isCatalogEntry(providerName)) {
+    loadFromCatalog(providerName);
+  }
 
   const provider = registry.getProvider(providerName);
   if (!provider) return null;

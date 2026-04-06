@@ -1,19 +1,18 @@
 import { registry } from "./registry";
-import { skillsMcp } from "./static/skills-mcp";
 import { mcpManagerMcp } from "./static/mcp-manager";
 import { uiMcp } from "./static/ui";
-import { memoryMcp } from "./static/memory";
 import { syncMcp } from "./static/sync";
-import { executorMcp } from "./static/executor";
+import { subagentMcp } from "./static/subagent";
 import { isCatalogEntry, loadFromCatalog } from "./catalog";
 import { sandboxManager } from "./sandbox";
 import { getMcpCode } from "@/lib/services/mcp-service";
 import { bizDbReady } from "@/lib/biz-db";
 import { restoreSchedules } from "@/lib/services/scheduler-service";
+import { recoverStaleTasks, startWatchdog } from "@/lib/services/task-service";
 
 /**
  * Register core MCP providers.
- * Core: skills + mcp_manager + ui + memory — always active, protected.
+ * Core: mcp_manager + ui + sync + subagent — always active, protected.
  * All other MCPs (catalog + dynamic) are loaded on-demand by:
  *   - Skill declarations (requiresMcps) at agent loop start
  *   - mcp_manager__use dispatcher during agent loop
@@ -28,19 +27,17 @@ export async function initMcp(): Promise<void> {
   await bizDbReady;
 
   // Core providers — always active, protected from custom override
-  registry.register(skillsMcp);
+  // Note: skills is no longer a core provider; skill reading is a protocol
+  // that each business MCP opts into. skill_admin is a catalog entry.
   registry.register(mcpManagerMcp);
   registry.register(uiMcp);
-  registry.register(memoryMcp);
   registry.register(syncMcp);
-  registry.register(executorMcp);
+  registry.register(subagentMcp);
 
-  registry.protect(skillsMcp.name);
   registry.protect(mcpManagerMcp.name);
   registry.protect(uiMcp.name);
-  registry.protect(memoryMcp.name);
   registry.protect(syncMcp.name);
-  registry.protect(executorMcp.name);
+  registry.protect(subagentMcp.name);
 
   // Auto-load: when registry.callTool encounters an unknown provider,
   // try loading it from catalog or DB before returning an error.
@@ -60,4 +57,12 @@ export async function initMcp(): Promise<void> {
   void restoreSchedules().catch((err) =>
     console.error("[scheduler] Failed to restore schedules:", err),
   );
+
+  // Recover stale tasks from previous process (mark as failed)
+  void recoverStaleTasks().catch((err) =>
+    console.error("[task-recovery] Failed to recover stale tasks:", err),
+  );
+
+  // Start periodic watchdog for stuck tasks
+  startWatchdog();
 }

@@ -13,6 +13,10 @@ export interface ToolContext {
   onProgress?: (event: { type: string; data: unknown }) => void;
   /** Optional abort signal — when signaled, tools should cancel ongoing operations. */
   signal?: AbortSignal;
+  /** SubAgent nesting: ID of the parent agent that spawned this context. */
+  parentAgentId?: string;
+  /** SubAgent nesting: current depth (0 = called from main controller). */
+  agentDepth?: number;
 }
 
 /**

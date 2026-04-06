@@ -2,6 +2,7 @@ import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider, ToolContext } from "../types";
 import { bizPool } from "@/lib/biz-db";
 import { guardQuery, guardExecute } from "@/lib/sql-guard";
+import { skillTools, handleSkillTool } from "../skill-protocol";
 import {
   listVisibleTables,
   resolveTable,
@@ -221,6 +222,8 @@ export const bizDbMcp: McpProvider = {
           required: ["tableName"],
         },
       },
+      // Skill protocol: biz_db-scoped skill reading
+      ...skillTools({ provider: "biz_db" }),
     ];
   },
 
@@ -229,6 +232,10 @@ export const bizDbMcp: McpProvider = {
     args: Record<string, unknown>,
     context?: ToolContext,
   ): Promise<CallToolResult> {
+    // Skill protocol: list_skills + get_skill (biz_db-scoped)
+    const skillResult = handleSkillTool(name, args, { provider: "biz_db" });
+    if (skillResult) return skillResult;
+
     const userName = context?.userName;
 
     switch (name) {

@@ -25,11 +25,11 @@ export const mcpManagerMcp: McpProvider = {
       },
       {
         name: "use",
-        description: "Call a tool from an MCP that is not in your current tool list. Auto-loads the MCP on first use; subsequent calls within this session can use the tool directly. Use this for any tool whose prefix is not in your active tool list.",
+        description: "Call a tool from any non-core MCP. Auto-loads the MCP on first use. Always use this for tools outside core MCPs (mcp_manager, ui, sync, subagent).",
         inputSchema: {
           type: "object" as const,
           properties: {
-            provider: { type: "string", description: "MCP server name (e.g. 'biz_db', 'video_mgr', 'oss')" },
+provider: { type: "string", description: "MCP server name (e.g. 'biz_db', 'video_workflow', 'oss')" },
             tool: { type: "string", description: "Tool name within the MCP (e.g. 'sql', 'generate_image')" },
             args: {
               type: "object" as const,
