@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback } from "react";
-import { Button, Input, Select, Alert } from "antd";
-import { SendOutlined, StopOutlined, LoadingOutlined, PictureOutlined, CloseCircleFilled, PlayCircleOutlined } from "@ant-design/icons";
+import { App, Button, Input, Select, Alert } from "antd";
+import { SendOutlined, StopOutlined, LoadingOutlined, PictureOutlined, CloseCircleFilled, PlayCircleOutlined, WarningOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { StatusBadge } from "@/app/components/StatusBadge";
 import { MessageList } from "@/app/components/MessageList";
 import { useImageUpload } from "@/app/components/hooks/useImageUpload";
@@ -39,6 +39,7 @@ export function VideoChat({
   onRefreshNeeded,
   episodeStatus,
 }: VideoChatProps) {
+  const { modal } = App.useApp();
   const userName = videoContext
     ? `video:${videoContext.novelId}:${videoContext.scriptKey}`
     : "video:unknown";
@@ -62,6 +63,50 @@ export function VideoChat({
     img.setPendingImages([]);
     void chat.sendMessage(images);
   }, [chat, img]);
+
+  /** Start task with optional yolo flag — checks novel resources first. */
+  const handleStartTask = useCallback((yolo: boolean) => {
+    const prompt = yolo
+      ? "以 yolo 模式开始处理本集视频制作"
+      : "开始处理本集视频制作";
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/video/novel/${videoContext!.novelId}/resources`);
+        if (!res.ok) { void chat.sendDirect(prompt); return; }
+        const data = (await res.json()) as { categories: Array<{ category: string; items: Array<{ title: string | null; currentVersion: number }> }> };
+
+        const portraits = data.categories.find((c) => c.category === "角色立绘");
+        const scenes = data.categories.find((c) => c.category === "场景");
+        const missingChars = (portraits?.items ?? []).filter((i) => i.currentVersion === 0).map((i) => i.title ?? "?");
+        const missingScenes = (scenes?.items ?? []).filter((i) => i.currentVersion === 0).map((i) => i.title ?? "?");
+
+        if (missingChars.length > 0 || missingScenes.length > 0) {
+          const items: React.ReactNode[] = [];
+          if (missingChars.length > 0) {
+            const total = portraits?.items.length ?? 0;
+            items.push(<div key="char">1. 角色立绘 {total - missingChars.length}/{total}，缺少：{missingChars.join("、")}</div>);
+          }
+          if (missingScenes.length > 0) {
+            const total = scenes?.items.length ?? 0;
+            items.push(<div key="scene">{missingChars.length > 0 ? 2 : 1}. 场景图片 {total - missingScenes.length}/{total}，缺少：{missingScenes.join("、")}</div>);
+          }
+          modal.confirm({
+            title: "小说资源尚未全部完成",
+            icon: <WarningOutlined />,
+            content: <>{items}</>,
+            okText: "仍然开始",
+            cancelText: "稍后再说",
+            onOk: () => void chat.sendDirect(prompt),
+          });
+        } else {
+          void chat.sendDirect(prompt);
+        }
+      } catch {
+        void chat.sendDirect(prompt);
+      }
+    })();
+  }, [chat, modal, videoContext]);
 
   if (!videoContext) {
     return (
@@ -111,21 +156,40 @@ export function VideoChat({
         </div>
       )}
 
-      {/* Input */}
-      <footer className="px-3 py-2.5">
-        {episodeStatus === "uploaded" && !initialSessionId && chat.messages.length === 0 && !chat.isSending ? (
-          /* Episode uploaded but no task started — show start button */
+      {/* Start task button — only when episode uploaded & no session yet */}
+      {episodeStatus === "uploaded" && !initialSessionId && chat.messages.length === 0 && !chat.isSending && (
+        <div className="flex items-center justify-center gap-2 border-b border-slate-800 px-3 py-3">
           <Button
             type="primary"
-            block
             size="large"
             icon={<PlayCircleOutlined />}
-            onClick={() => void chat.sendDirect("开始处理本集视频制作")}
+            onClick={() => handleStartTask(false)}
           >
             开始任务
           </Button>
-        ) : (
-          <>
+          <Button
+            size="large"
+            icon={<ThunderboltOutlined />}
+            onClick={() => handleStartTask(true)}
+            style={{ borderColor: "#faad14", color: "#faad14" }}
+          >
+            YOLO
+          </Button>
+          {models.length > 1 && (
+            <Select
+              size="large"
+              value={selectedModel || undefined}
+              onChange={setSelectedModel}
+              options={models.map((m) => ({ value: m.id, label: m.label }))}
+              style={{ minWidth: 120 }}
+            />
+          )}
+          <span className="text-xs text-slate-500">或直接在下方输入</span>
+        </div>
+      )}
+
+      {/* Input — always visible */}
+      <footer className="px-3 py-2.5">
         {/* Pending image previews */}
         {img.pendingImages.length > 0 && (
           <div className="mb-1.5 flex flex-wrap gap-1.5">
@@ -172,8 +236,8 @@ export function VideoChat({
             placeholder={img.isDragOver ? "松开以上传图片…" : "Chat with video agent…"}
             value={chat.input}
             onChange={(e) => chat.setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (img.isComposing) return;
+          onKeyDown={(e) => {
+              if (img.isComposingRef.current) return;
               const native = e.nativeEvent;
               const composing =
                 typeof native === "object" &&
@@ -193,8 +257,8 @@ export function VideoChat({
                 void img.handleImageFiles(files);
               }
             }}
-            onCompositionStart={() => img.setIsComposing(true)}
-            onCompositionEnd={() => img.setIsComposing(false)}
+            onCompositionStart={() => { img.isComposingRef.current = true; }}
+            onCompositionEnd={() => { img.isComposingRef.current = false; }}
             disabled={chat.isSending}
             variant="borderless"
             style={{ fontSize: 12 }}
@@ -229,9 +293,7 @@ export function VideoChat({
               />
             )}
           </div>
-        </div>
-          </>
-        )}
+          </div>
       </footer>
         {/* LLM stats floating badge */}
         <LlmStatsBar stats={chat.llmStats} />

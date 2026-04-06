@@ -80,9 +80,11 @@ export default function VideoNovelListPage() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const jsonData: unknown = JSON.parse(reader.result as string);
-        // Derive novel name from filename: "complete_script_ep1_ep20.json" → "complete_script_ep1_ep20"
-        const novelName = file.name.replace(/\.json$/i, "");
+        const jsonData = JSON.parse(reader.result as string) as Record<string, unknown>;
+        // Use title from JSON if available, otherwise derive from filename
+        const novelName = (typeof jsonData.title === "string" && jsonData.title)
+          ? jsonData.title
+          : file.name.replace(/\.json$/i, "");
         void doUpload(novelName, jsonData);
       } catch {
         alert("Invalid JSON file");
@@ -92,13 +94,13 @@ export default function VideoNovelListPage() {
     e.target.value = "";
   };
 
-  const doUpload = async (name: string, episodes: unknown) => {
+  const doUpload = async (name: string, script: unknown) => {
     setIsUploading(true);
     try {
       const result = await fetchJson<{ novelId: string }>("/api/video/novels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, episodes }),
+        body: JSON.stringify({ name, script }),
       });
       await loadNovels();
       // Navigate to the new novel

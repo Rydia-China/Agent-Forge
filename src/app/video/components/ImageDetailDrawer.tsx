@@ -45,13 +45,15 @@ export interface ImageDetailDrawerProps {
   onClose: () => void;
   /** Called after any mutation so parent can refresh. */
   onRefresh?: () => void;
+  /** Current chat session id — used to push change notifications. */
+  sessionId?: string;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetailDrawerProps) {
+export function ImageDetailDrawer({ imageGenId, onClose, onRefresh, sessionId }: ImageDetailDrawerProps) {
   const { message } = App.useApp();
   const [detail, setDetail] = useState<ImageGenDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -119,7 +121,7 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
       await fetchJson(`/api/key-resources/${detail.id}/regenerate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(promptOverride ? { prompt: promptOverride } : {}),
+        body: JSON.stringify({ ...(promptOverride ? { prompt: promptOverride } : {}), ...(sessionId ? { session_id: sessionId } : {}) }),
       });
       void message.success("Image regenerated");
       void fetchDetail(detail.id, true);
@@ -139,7 +141,7 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
       await fetchJson(`/api/key-resources/${detail.id}/rollback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ version }),
+        body: JSON.stringify({ version, ...(sessionId ? { session_id: sessionId } : {}) }),
       });
       void message.success(`Rolled back to v${version}`);
       void fetchDetail(detail.id, true);

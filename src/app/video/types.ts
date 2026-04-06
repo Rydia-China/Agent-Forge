@@ -13,32 +13,26 @@ export interface EpisodeSummary {
   createdAt: string;
 }
 
-/* ---- Generic domain resource types ---- */
+/* ---- Resource types (backed by KeyResource, single source) ---- */
 
-export interface DomainResource {
-  id: string;
+export interface ResourceItem {
+  id: string;              // KeyResource ID — use directly for detail drawer
+  key: string;
   category: string;
   mediaType: string;
   title: string | null;
   url: string | null;
-  data: unknown;
-  keyResourceId: string | null;
-  sortOrder: number;
+  prompt: string | null;   // from current KeyResourceVersion
+  currentVersion: number;  // 0 = pending, >0 = generated
 }
 
 export interface CategoryGroup {
   category: string;
-  items: DomainResource[];
+  items: ResourceItem[];
 }
 
-export interface DomainResources {
+export interface ResourceData {
   categories: CategoryGroup[];
-}
-
-export interface VideoResourceData {
-  key?: string;
-  prompt?: string;
-  sourceImageUrl?: string | null;
 }
 
 export interface VideoContext {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { Input, Select, Alert } from "antd";
+import { Button, Input, Select, Alert } from "antd";
 import { SendOutlined, StopOutlined, LoadingOutlined, PictureOutlined, CloseCircleFilled } from "@ant-design/icons";
 import { StatusBadge } from "@/app/components/StatusBadge";
 import { MessageList } from "@/app/components/MessageList";
@@ -22,6 +22,8 @@ export interface NovelChatProps {
   onSessionCreated: (sessionId: string) => void;
   /** Called when task completes — parent should refresh data. */
   onRefreshNeeded: () => void;
+  /** Show empty-state CTA when no sessions exist yet. */
+  showEmptyState?: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -34,6 +36,7 @@ export function NovelChat({
   skills,
   onSessionCreated,
   onRefreshNeeded,
+  showEmptyState,
 }: NovelChatProps) {
   const { models, selectedModel, setSelectedModel } = useModels();
 
@@ -54,38 +57,13 @@ export function NovelChat({
     void chat.sendMessage(images);
   }, [chat, img]);
 
+  const isEmpty = showEmptyState && !chat.isLoadingSession && chat.messages.length === 0 && !chat.isSending;
+
   return (
     <div className="flex h-full bg-slate-950/60">
       {/* Chat column */}
       <div className="relative flex min-w-0 flex-1 flex-col">
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
-          <div className="flex items-center gap-2 text-xs">
-            <StatusBadge status={chat.status} />
-            {chat.sessionId && (
-              <span className="truncate text-slate-500">Session: {chat.sessionId.slice(0, 8)}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Select
-              size="small"
-              value={selectedModel}
-              onChange={setSelectedModel}
-              options={models.map((m) => ({ label: m, value: m }))}
-              disabled={chat.isSending}
-              style={{ width: 140, fontSize: 11 }}
-            />
-            {chat.isStreaming && (
-              <button
-                onClick={chat.stopStreaming}
-                className="flex items-center gap-1 rounded bg-rose-600 px-2 py-0.5 text-[10px] text-white transition hover:bg-rose-700"
-              >
-                <StopOutlined style={{ fontSize: 10 }} />
-                Stop
-              </button>
-            )}
-          </div>
-        </header>
 
         {/* Chat error */}
         {chat.error && (
@@ -100,7 +78,22 @@ export function NovelChat({
           />
         )}
 
-        {/* Messages */}
+        {isEmpty ? (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
+            <div className="text-center">
+              <div className="text-base font-medium text-slate-200">📚 小说资源管理</div>
+              <div className="mt-1 text-xs text-slate-400">开始与 AI 协作，生成角色、场景等小说级资源</div>
+            </div>
+            <Button
+              type="primary"
+              size="large"
+              onClick={() => void chat.sendDirect("开始生成小说级资源")}
+            >
+              开始生成小说级资源
+            </Button>
+            <div className="text-xs text-slate-500">或直接在下方输入开始自由对话</div>
+          </div>
+        ) : (
         <div className="flex min-h-0 flex-1 flex-col">
           <MessageList
             messages={chat.messages}
@@ -111,6 +104,7 @@ export function NovelChat({
             subagentTasks={chat.subagentTasks}
           />
         </div>
+        )}
 
         {/* Active tool indicator */}
         {chat.activeTool && (
@@ -123,7 +117,7 @@ export function NovelChat({
           </div>
         )}
 
-        {/* Input */}
+        {/* Input — always visible */}
         <footer className="px-3 py-2.5">
           {/* Pending image previews */}
           {img.pendingImages.length > 0 && (
@@ -171,8 +165,8 @@ export function NovelChat({
               placeholder={img.isDragOver ? "松开以上传图片…" : "Chat with novel resource manager…"}
               value={chat.input}
               onChange={(e) => chat.setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (img.isComposing) return;
+            onKeyDown={(e) => {
+                if (img.isComposingRef.current) return;
                 const native = e.nativeEvent;
                 const composing =
                   typeof native === "object" &&
@@ -192,20 +186,42 @@ export function NovelChat({
                   void img.handleImageFiles(files);
                 }
               }}
-              onCompositionStart={() => img.setIsComposing(true)}
-              onCompositionEnd={() => img.setIsComposing(false)}
+              onCompositionStart={() => { img.isComposingRef.current = true; }}
+              onCompositionEnd={() => { img.isComposingRef.current = false; }}
               disabled={chat.isSending}
               variant="borderless"
               style={{ fontSize: 12 }}
             />
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={chat.isSending || (!chat.input.trim() && img.pendingImages.length === 0)}
-              className="shrink-0 text-emerald-400 hover:text-emerald-300 disabled:opacity-30"
-            >
-              <SendOutlined style={{ fontSize: 16 }} />
-            </button>
+            <div className="flex shrink-0 items-center gap-1.5 pb-0.5">
+              {models.length > 1 && (
+                <Select
+                  size="small"
+                  value={selectedModel || undefined}
+                  onChange={setSelectedModel}
+                  options={models.map((m) => ({ value: m.id, label: m.label }))}
+                  style={{ minWidth: 80, fontSize: 11 }}
+                  disabled={chat.isSending || chat.isStreaming}
+                />
+              )}
+              <StatusBadge status={chat.status} />
+              {chat.isStreaming ? (
+                <Button
+                  danger
+                  type="primary"
+                  size="small"
+                  icon={<StopOutlined />}
+                  onClick={chat.stopStreaming}
+                />
+              ) : (
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<SendOutlined />}
+                  onClick={handleSend}
+                  disabled={chat.isSending || (!chat.input.trim() && img.pendingImages.length === 0)}
+                />
+              )}
+            </div>
           </div>
         </footer>
 

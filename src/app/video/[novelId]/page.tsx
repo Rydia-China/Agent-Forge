@@ -1,23 +1,27 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { ConfigProvider, theme as antTheme } from "antd";
+import { App, ConfigProvider, message, theme as antTheme } from "antd";
 import { useSessions } from "@/app/components/hooks/useSessions";
 import { useVideoData } from "../hooks/useVideoData";
 import { useNovelResources } from "../hooks/useNovelResources";
+import { useTaskMonitor } from "../hooks/useTaskMonitor";
+import { useTaskNotifications } from "../hooks/useTaskNotifications";
 import { EpisodeList } from "../components/EpisodeList";
 import { ResourcePanel } from "../components/ResourcePanel";
 import { VideoChat } from "../components/VideoChat";
 import { NovelChat } from "../components/NovelChat";
+import { TaskMonitor } from "../components/TaskMonitor";
+import { fetchJson } from "@/app/components/client-utils";
 import type { VideoContext } from "../types";
 
 /* ------------------------------------------------------------------ */
 /*  Default skills                                                     */
 /* ------------------------------------------------------------------ */
 
-const NOVEL_SKILLS = ["novel-resource-mgr"];
-const EP_SKILLS = ["ep-video-workflow"];
+const NOVEL_SKILLS = ["novel-video-planner"];
+const EP_SKILLS = ["ep-video-planner"];
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -30,11 +34,12 @@ export default function VideoWorkflowPage() {
   const novelName = searchParams.get("name") ?? novelId;
 
   /* ---- Mode: novel-level or EP-level ---- */
-  const [isNovelLevel, setIsNovelLevel] = useState(false);
+  const [isNovelLevel, setIsNovelLevel] = useState(true);
 
   /* ---- Data ---- */
   const epData = useVideoData(novelId);
   const novelData = useNovelResources(novelId);
+  const taskMonitor = useTaskMonitor(novelId);
 
   /* ---- Session management ---- */
   const userName = useMemo(() => {
@@ -64,6 +69,63 @@ export default function VideoWorkflowPage() {
     [sessionsHook, currentSessionId, switchSession],
   );
 
+  /* ---- Auto-select first novel session on initial load ---- */
+  const hasAutoSelectedRef = useRef(false);
+
+  /* ---- Auto-select session when switching episodes ---- */
+  const pendingEpAutoSelect = useRef<string | null>(null);
+  const sawSessionLoading = useRef(false);
+
+  useEffect(() => {
+    if (hasAutoSelectedRef.current) return;
+    if (sessionsHook.isLoadingSessions) return;
+    hasAutoSelectedRef.current = true;
+    if (isNovelLevel && sessionsHook.sessions.length > 0) {
+      const first = sessionsHook.sessions[0];
+      if (first) switchSession(first.id);
+    }
+  }, [sessionsHook.isLoadingSessions, sessionsHook.sessions, isNovelLevel, switchSession]);
+
+  /* ---- Auto-select session after episode switch ---- */
+  useEffect(() => {
+    if (!pendingEpAutoSelect.current) return;
+
+    if (sessionsHook.isLoadingSessions) {
+      sawSessionLoading.current = true;
+      return;
+    }
+    // Wait until sessions have been re-fetched for the new episode
+    if (!sawSessionLoading.current) return;
+
+    const targetScriptKey = pendingEpAutoSelect.current;
+    pendingEpAutoSelect.current = null;
+    sawSessionLoading.current = false;
+
+    const sessions = sessionsHook.sessions;
+    if (sessions.length === 0) return;
+
+    // Priority: session with running/pending task for this episode
+    const activeTask = taskMonitor.tasks.find(
+      (t) => t.scriptKey === targetScriptKey && (t.status === "running" || t.status === "pending"),
+    );
+    if (activeTask) {
+      const match = sessions.find((s) => s.id === activeTask.sessionId);
+      if (match) {
+        switchSession(match.id);
+        return;
+      }
+    }
+
+    // Fallback: most recently created session
+    const sorted = [...sessions].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    const last = sorted[0];
+    if (last) {
+      switchSession(last.id);
+    }
+  }, [sessionsHook.isLoadingSessions, sessionsHook.sessions, taskMonitor.tasks, switchSession]);
+
   /* ---- Video context for EP-level chat ---- */
   const videoContext: VideoContext | null = useMemo(() => {
     if (isNovelLevel || !epData.selectedEpisode) return null;
@@ -85,6 +147,8 @@ export default function VideoWorkflowPage() {
     (ep: typeof epData.episodes[number]) => {
       setIsNovelLevel(false);
       epData.selectEpisode(ep);
+      pendingEpAutoSelect.current = ep.scriptKey;
+      sawSessionLoading.current = false;
       setCurrentSessionId(undefined);
       setChatKey(crypto.randomUUID());
     },
@@ -99,6 +163,35 @@ export default function VideoWorkflowPage() {
     [sessionsHook],
   );
 
+  /* ---- Re-upload script ---- */
+  const [isReUploading, setIsReUploading] = useState(false);
+
+  const handleReUpload = useCallback(
+    async (jsonData: unknown) => {
+      setIsReUploading(true);
+      try {
+        await fetchJson(
+          `/api/video/novels/${encodeURIComponent(novelId)}/upload-script`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(jsonData),
+          },
+        );
+        void epData.refreshEpisodes();
+        void novelData.refresh();
+        void message.success("剧本数据已更新");
+      } catch (err: unknown) {
+        void message.error(
+          err instanceof Error ? err.message : "重传失败",
+        );
+      } finally {
+        setIsReUploading(false);
+      }
+    },
+    [novelId, epData, novelData],
+  );
+
   const handleRefreshNeeded = useCallback(() => {
     if (isNovelLevel) {
       void novelData.refresh();
@@ -107,6 +200,43 @@ export default function VideoWorkflowPage() {
     }
     void sessionsHook.refreshSessions();
   }, [isNovelLevel, epData, novelData, sessionsHook]);
+
+  /* ---- Jump-to-task logic (shared across monitor, notifications, EP dots) ---- */
+  const handleJumpToTask = useCallback(
+    (scriptKey: string | null, sessionId: string) => {
+      if (scriptKey) {
+        // EP-level task
+        const ep = epData.episodes.find((e) => e.scriptKey === scriptKey);
+        if (ep) {
+          setIsNovelLevel(false);
+          epData.selectEpisode(ep);
+        }
+      } else {
+        // Novel-level task
+        setIsNovelLevel(true);
+      }
+      setCurrentSessionId(sessionId);
+      setChatKey(crypto.randomUUID());
+    },
+    [epData],
+  );
+
+  /* ---- Notifications ---- */
+  useTaskNotifications({
+    novelId,
+    currentSessionId,
+    onJumpToTask: handleJumpToTask,
+  });
+
+  /* ---- beforeunload protection ---- */
+  useEffect(() => {
+    if (!taskMonitor.hasActiveTasks) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [taskMonitor.hasActiveTasks]);
 
   return (
     <ConfigProvider
@@ -123,8 +253,9 @@ export default function VideoWorkflowPage() {
           isLoading={epData.isLoadingEpisodes}
           selectedEpisode={epData.selectedEpisode}
           onSelectEpisode={handleSelectEpisode}
-          onDeleteEpisode={(ep) => { if (confirm(`Delete ${ep.scriptKey}?`)) void epData.deleteEpisode(ep.id); }}
           onRefresh={() => void epData.refreshEpisodes()}
+          onReUpload={(json) => void handleReUpload(json)}
+          isReUploading={isReUploading}
           sessions={sessionsHook.sessions}
           currentSessionId={currentSessionId}
           onSelectSession={switchSession}
@@ -132,6 +263,7 @@ export default function VideoWorkflowPage() {
           onDeleteSession={(id) => void handleDeleteSession(id)}
           isNovelLevelSelected={isNovelLevel}
           onSelectNovelLevel={handleSelectNovelLevel}
+          epTaskStatuses={taskMonitor.epStatuses}
         />
 
         {/* Center — Chat */}
@@ -144,6 +276,7 @@ export default function VideoWorkflowPage() {
               skills={NOVEL_SKILLS}
               onSessionCreated={handleSessionCreated}
               onRefreshNeeded={handleRefreshNeeded}
+              showEmptyState={!currentSessionId && sessionsHook.sessions.length === 0 && !sessionsHook.isLoadingSessions}
             />
           ) : (
             <VideoChat
@@ -162,9 +295,15 @@ export default function VideoWorkflowPage() {
         <ResourcePanel
           resources={isNovelLevel ? novelData.resources : epData.resources}
           isLoading={isNovelLevel ? novelData.isLoading : epData.isLoadingResources}
+          novelId={novelId}
           scriptId={isNovelLevel ? null : epData.selectedEpisode?.id ?? null}
           sessionId={currentSessionId}
           onRefresh={() => isNovelLevel ? void novelData.refresh() : void epData.refreshResources()}
+        />
+        {/* Task Monitor floating panel */}
+        <TaskMonitor
+          monitor={taskMonitor}
+          onJumpToTask={handleJumpToTask}
         />
       </main>
     </ConfigProvider>

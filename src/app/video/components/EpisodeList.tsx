@@ -1,16 +1,20 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Button, Typography, Empty, Tag, Modal, Spin } from "antd";
 import {
   ReloadOutlined,
   PlusOutlined,
   DeleteOutlined,
   EyeOutlined,
+  LoadingOutlined,
+  ExclamationCircleFilled,
+  UploadOutlined,
 } from "@ant-design/icons";
 import { fetchJson } from "@/app/components/client-utils";
 import type { EpisodeSummary, EpStatus } from "../types";
 import type { SessionSummary } from "@/app/types";
+import type { EpTaskStatus } from "../hooks/useTaskMonitor";
 
 /* ------------------------------------------------------------------ */
 /*  Status badge                                                       */
@@ -37,8 +41,10 @@ export interface EpisodeListProps {
   isLoading: boolean;
   selectedEpisode: EpisodeSummary | null;
   onSelectEpisode: (ep: EpisodeSummary) => void;
-  onDeleteEpisode: (ep: EpisodeSummary) => void;
   onRefresh: () => void;
+  /** Re-upload script JSON for this novel. */
+  onReUpload: (jsonData: unknown) => void;
+  isReUploading?: boolean;
   /** Sessions for the currently selected EP or novel-level. */
   sessions: SessionSummary[];
   currentSessionId: string | undefined;
@@ -49,6 +55,8 @@ export interface EpisodeListProps {
   isNovelLevelSelected: boolean;
   /** Callback when user selects novel-level resource management. */
   onSelectNovelLevel: () => void;
+  /** Per-EP task status from useTaskMonitor. */
+  epTaskStatuses?: Map<string, EpTaskStatus>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -61,8 +69,9 @@ export function EpisodeList({
   isLoading,
   selectedEpisode,
   onSelectEpisode,
-  onDeleteEpisode,
   onRefresh,
+  onReUpload,
+  isReUploading,
   sessions,
   currentSessionId,
   onSelectSession,
@@ -70,10 +79,33 @@ export function EpisodeList({
   onDeleteSession,
   isNovelLevelSelected,
   onSelectNovelLevel,
+  epTaskStatuses,
 }: EpisodeListProps) {
+  const reUploadRef = useRef<HTMLInputElement>(null);
   const [jsonViewEp, setJsonViewEp] = useState<EpisodeSummary | null>(null);
   const [jsonContent, setJsonContent] = useState<unknown>(null);
   const [jsonLoading, setJsonLoading] = useState(false);
+
+  const handleReUploadFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".json")) {
+      alert("Only .json files are accepted");
+      e.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const jsonData = JSON.parse(reader.result as string) as unknown;
+        onReUpload(jsonData);
+      } catch {
+        alert("Invalid JSON file");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }, [onReUpload]);
 
   const openJsonView = useCallback(async (ep: EpisodeSummary) => {
     setJsonViewEp(ep);
@@ -99,9 +131,27 @@ export function EpisodeList({
     <aside className="flex h-full w-52 shrink-0 flex-col border-r border-slate-800 bg-slate-950/80">
       {/* Header */}
       <div className="border-b border-slate-800 p-3">
-        <Typography.Text strong ellipsis style={{ display: "block", fontSize: 13 }}>
-          {novelName}
-        </Typography.Text>
+        <div className="flex items-center justify-between">
+          <Typography.Text strong ellipsis style={{ display: "block", fontSize: 13 }}>
+            {novelName}
+          </Typography.Text>
+          <Button
+            type="text"
+            size="small"
+            icon={<UploadOutlined />}
+            loading={isReUploading}
+            onClick={() => reUploadRef.current?.click()}
+            title="重传剧本数据"
+            style={{ width: 22, height: 22, minWidth: 22 }}
+          />
+        </div>
+        <input
+          ref={reUploadRef}
+          type="file"
+          accept=".json"
+          onChange={handleReUploadFile}
+          style={{ display: "none" }}
+        />
       </div>
 
       {/* Novel-level resource management */}
@@ -186,7 +236,7 @@ export function EpisodeList({
         ) : (
           <div className="space-y-1">
             {sortedEpisodes.map((ep) => {
-              const isActive = selectedEpisode?.id === ep.id;
+              const isActive = selectedEpisode?.id === ep.id && !isNovelLevelSelected;
               return (
                 <div key={ep.id}>
                   {/* Episode card */}
@@ -204,7 +254,17 @@ export function EpisodeList({
                         <span className="text-xs font-medium text-slate-100">
                           {ep.scriptKey}
                         </span>
-                        <EpStatusTag status={ep.status} />
+                        <div className="flex items-center gap-1">
+                          {(() => {
+                            const epTask = epTaskStatuses?.get(ep.scriptKey);
+                            if (!epTask) return null;
+                            if (epTask.status === "running") return <LoadingOutlined className="text-blue-400" spin style={{ fontSize: 10 }} />;
+                            if (epTask.status === "queued") return <LoadingOutlined className="text-slate-400" style={{ fontSize: 10 }} />;
+                            if (epTask.status === "failed") return <ExclamationCircleFilled className="text-red-400" style={{ fontSize: 10 }} />;
+                            return null;
+                          })()}
+                          <EpStatusTag status={ep.status} />
+                        </div>
                       </div>
                       {ep.scriptName && (
                         <div className="mt-0.5 truncate text-[10px] text-slate-400">
@@ -220,14 +280,6 @@ export function EpisodeList({
                         onClick={(e) => { e.stopPropagation(); void openJsonView(ep); }}
                         style={{ width: 20, height: 20, minWidth: 20 }}
                         title="View JSON"
-                      />
-                      <Button
-                        type="text"
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={(e) => { e.stopPropagation(); onDeleteEpisode(ep); }}
-                        style={{ width: 20, height: 20, minWidth: 20 }}
                       />
                     </div>
                   </div>

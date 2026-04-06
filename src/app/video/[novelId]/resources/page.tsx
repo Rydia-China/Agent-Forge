@@ -14,7 +14,7 @@ import { useNovelResources } from "../../hooks/useNovelResources";
 /*  Default skills for novel-level resource management                */
 /* ------------------------------------------------------------------ */
 
-const DEFAULT_SKILLS = ["novel-resource-mgr"];
+const DEFAULT_SKILLS = ["novel-video-planner"];
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -126,6 +126,7 @@ export default function NovelResourcesPage() {
           <ResourcePanel
             resources={resources}
             isLoading={isLoading}
+            novelId={novelId}
             scriptId={null}
             sessionId={currentSessionId}
             onRefresh={() => void refresh()}

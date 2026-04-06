@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchJson } from "@/app/components/client-utils";
 import type {
   EpisodeSummary,
-  DomainResources,
+  ResourceData,
 } from "../types";
 
 export interface UseVideoDataReturn {
@@ -12,7 +12,7 @@ export interface UseVideoDataReturn {
   isLoadingEpisodes: boolean;
   selectedEpisode: EpisodeSummary | null;
   selectEpisode: (ep: EpisodeSummary | null) => void;
-  resources: DomainResources | null;
+  resources: ResourceData | null;
   isLoadingResources: boolean;
   refreshEpisodes: () => Promise<EpisodeSummary[]>;
   refreshResources: () => Promise<void>;
@@ -26,7 +26,7 @@ export function useVideoData(novelId: string): UseVideoDataReturn {
   const [episodes, setEpisodes] = useState<EpisodeSummary[]>([]);
   const [isLoadingEpisodes, setIsLoadingEpisodes] = useState(false);
   const [selectedEpisode, setSelectedEpisode] = useState<EpisodeSummary | null>(null);
-  const [resources, setResources] = useState<DomainResources | null>(null);
+  const [resources, setResources] = useState<ResourceData | null>(null);
   const [isLoadingResources, setIsLoadingResources] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +55,7 @@ export function useVideoData(novelId: string): UseVideoDataReturn {
     console.log(`[refreshResources] fetching for episode=${selectedEpisode.id}`);
     setIsLoadingResources(true);
     try {
-      const data = await fetchJson<DomainResources>(
+      const data = await fetchJson<ResourceData>(
         `/api/video/episodes/${encodeURIComponent(selectedEpisode.id)}/resources?novelId=${encodeURIComponent(novelId)}`,
       );
       console.log(`[refreshResources] got: categories=${data.categories.length}`);

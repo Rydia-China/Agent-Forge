@@ -128,7 +128,7 @@ export function useVideoChat(
   }, []);
 
   const submitText = useCallback(async (text: string, images?: string[]) => {
-    if ((!text && !images?.length) || stream.isSending || !videoContext) return;
+    if ((!text && !images?.length) || stream.isSending || stream.activeSendRef.current || !videoContext) return;
 
     stream.setError(null);
     stream.setIsSending(true);

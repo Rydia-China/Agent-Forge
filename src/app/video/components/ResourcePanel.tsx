@@ -2,19 +2,21 @@
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Button, Collapse, Drawer, Empty, Input, Spin, Typography, Image, Tag, App } from "antd";
-import { DeleteOutlined, EditOutlined } from "@ant-design/icons";
-import type { DomainResources, DomainResource, VideoResourceData } from "../types";
+import { DeleteOutlined, DownloadOutlined, EditOutlined, FormatPainterOutlined } from "@ant-design/icons";
+import type { ResourceData, ResourceItem } from "../types";
 import { fetchJson } from "@/app/components/client-utils";
 import { ImageDetailDrawer } from "./ImageDetailDrawer";
 import { VideoDetailDrawer } from "./VideoDetailDrawer";
+import { StylePresetDrawer } from "./StylePresetDrawer";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
 /* ------------------------------------------------------------------ */
 
 export interface ResourcePanelProps {
-  resources: DomainResources | null;
+  resources: ResourceData | null;
   isLoading: boolean;
+  novelId: string;
   scriptId: string | null;
   sessionId: string | undefined;
   onRefresh?: () => void;
@@ -26,8 +28,36 @@ export interface ResourcePanelProps {
 
 const ASIDE_CLASS = "flex h-full w-56 min-w-[200px] shrink-0 flex-col border-l border-slate-800 bg-slate-950/80";
 
-export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRefresh }: ResourcePanelProps) {
+export function ResourcePanel({ resources, isLoading, novelId, scriptId, sessionId, onRefresh }: ResourcePanelProps) {
   const { message } = App.useApp();
+
+  /* ---- Export state ---- */
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const url = scriptId
+        ? `/api/video/episodes/${encodeURIComponent(scriptId)}/resources/export?novelId=${encodeURIComponent(novelId)}`
+        : `/api/video/novel/${encodeURIComponent(novelId)}/resources/export`;
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
+      const blob = await resp.blob();
+      const disposition = resp.headers.get("Content-Disposition");
+      const match = disposition?.match(/filename="?([^"]+)"?/);
+      const filename = match?.[1] ? decodeURIComponent(match[1]) : "resources.zip";
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      void message.success("导出完成");
+    } catch {
+      void message.error("导出失败");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [scriptId, novelId, message]);
 
   /* ---- JSON editor drawer state ---- */
   const [editingItem, setEditingItem] = useState<{ id: string; title: string; data: unknown } | null>(null);
@@ -38,34 +68,25 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
   const [selectedImageGenId, setSelectedImageGenId] = useState<string | null>(null);
 
   /* ---- Video detail drawer state ---- */
-  const [selectedVideoResource, setSelectedVideoResource] = useState<DomainResource | null>(null);
+  const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
+
+  /* ---- Style preset drawer state ---- */
+  const [styleDrawerOpen, setStyleDrawerOpen] = useState(false);
 
   /* ---- Collapse expand state (controlled) ---- */
   const [activeKeys, setActiveKeys] = useState<string[]>([]);
   const knownKeysRef = useRef<Set<string>>(new Set());
 
   /* ---- Smart image rendering ---- */
-  const renderSmartImage = (url: string, alt: string, keyResourceId?: string | null) => {
-    if (keyResourceId) {
-      return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={url}
-          alt={alt}
-          className="w-full cursor-pointer"
-          style={{ display: "block" }}
-          onClick={() => setSelectedImageGenId(keyResourceId)}
-        />
-      );
-    }
+  const renderSmartImage = (url: string, alt: string, resourceId: string) => {
     return (
-      <Image
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
         src={url}
         alt={alt}
-        width="100%"
+        className="w-full cursor-pointer"
         style={{ display: "block" }}
-      placeholder={<div className="aspect-square w-full bg-slate-800" />}
-        preview={true}
+        onClick={() => setSelectedImageGenId(resourceId)}
       />
     );
   };
@@ -143,14 +164,17 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
     />
   );
 
-  const renderImageItem = (r: DomainResource) => (
+  const renderImageItem = (r: ResourceItem) => (
     <div key={r.id} className="group/card relative overflow-hidden rounded-lg">
       {renderDeleteBtn(r.id)}
       {r.url ? (
-        renderSmartImage(r.url, r.title ?? "Image", r.keyResourceId)
+        renderSmartImage(r.url, r.title ?? "Image", r.id)
       ) : (
-        <div className="flex aspect-square items-center justify-center bg-slate-800">
-          <span className="text-xs text-slate-600">No image</span>
+        <div
+          className="flex aspect-square cursor-pointer items-center justify-center bg-slate-800"
+          onClick={() => setSelectedImageGenId(r.id)}
+        >
+          <span className="text-xs text-slate-500">{r.title ?? "待生成"}</span>
         </div>
       )}
       {r.title && (
@@ -161,50 +185,28 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
     </div>
   );
 
-  const renderVideoItem = (r: DomainResource) => {
-    const vData = r.data as VideoResourceData | null;
-    const handleClick = () => {
-      setSelectedVideoResource(r);
-    };
+  const renderVideoItem = (r: ResourceItem) => {
     return (
-      <div key={r.id} className="group/card relative cursor-pointer overflow-hidden rounded-lg" onClick={handleClick}>
+      <div key={r.id} className="group/card relative cursor-pointer overflow-hidden rounded-lg" onClick={() => setSelectedVideoId(r.id)}>
         {renderDeleteBtn(r.id)}
         {r.url ? (
           <video
             src={r.url}
-            poster={vData?.sourceImageUrl ?? undefined}
             muted
             preload="metadata"
             playsInline
             className="aspect-[9/16] w-full object-cover"
             style={{ pointerEvents: "none" }}
           />
-        ) : vData?.sourceImageUrl ? (
-          <div className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={vData.sourceImageUrl}
-              alt={r.title ?? "Source"}
-              className="aspect-[9/16] w-full object-cover opacity-50"
-            />
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 px-2">
-              <span className="mb-1 text-[10px] font-medium text-amber-400">待生成</span>
-              {vData.prompt && (
-                <p className="line-clamp-3 text-center text-[10px] leading-relaxed text-white/80">
-                  {vData.prompt}
-                </p>
-              )}
-            </div>
-          </div>
         ) : (
           <div className="flex aspect-[9/16] flex-col items-center justify-center bg-slate-800 px-2">
             <span className="mb-1 text-[10px] font-medium text-amber-400">待生成</span>
-            {vData?.prompt ? (
+            {r.prompt ? (
               <p className="line-clamp-4 text-center text-[10px] leading-relaxed text-slate-500">
-                {vData.prompt}
+                {r.prompt}
               </p>
             ) : (
-              <span className="text-xs text-slate-600">No prompt</span>
+              <span className="text-xs text-slate-600">{r.title ?? r.key}</span>
             )}
           </div>
         )}
@@ -215,30 +217,20 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
     );
   };
 
-  const renderJsonItem = (r: DomainResource) => {
-    const text = r.data != null
-      ? (typeof r.data === "string" ? r.data : JSON.stringify(r.data, null, 2))
-      : "";
-    return (
-      <div
-        key={r.id}
-        className="group/card relative cursor-pointer overflow-hidden rounded-lg bg-slate-900"
-        onClick={() => openEditor({ id: r.id, title: r.title ?? "JSON", data: r.data })}
-        title="Click to edit"
-      >
-        {renderDeleteBtn(r.id)}
-        <pre className="max-h-32 overflow-hidden whitespace-pre-wrap break-all px-2 pt-2 pb-8 font-mono text-[9px] leading-relaxed text-slate-400">
-          {text}
-        </pre>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-2 pb-1.5 pt-6">
-          <div className="flex items-center justify-between">
-            <div className="truncate text-[11px] font-medium text-white">{r.title ?? "JSON"}</div>
-            <EditOutlined className="text-[11px] text-white/70" />
-          </div>
-        </div>
+  const renderJsonItem = (r: ResourceItem) => (
+    <div
+      key={r.id}
+      className="group/card relative overflow-hidden rounded-lg bg-slate-900"
+    >
+      {renderDeleteBtn(r.id)}
+      <pre className="max-h-32 overflow-hidden whitespace-pre-wrap break-all px-2 pt-2 pb-8 font-mono text-[9px] leading-relaxed text-slate-400">
+        {r.prompt ?? ""}
+      </pre>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-2 pb-1.5 pt-6">
+        <div className="truncate text-[11px] font-medium text-white">{r.title ?? r.key}</div>
       </div>
-    );
-  };
+    </div>
+  );
 
   /* ---- Auto-expand newly appeared categories, preserve existing expand state ---- */
   const categories = resources?.categories ?? [];
@@ -271,50 +263,64 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
     );
   }
 
-  if (categories.length === 0) {
-    return (
-      <aside className={ASIDE_CLASS}>
-        <div className="flex flex-1 items-center justify-center">
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No resources yet" />
+  const collapseItems = categories.map((g) => {
+    const isVideoUrl = (url: string | null) => /\.(?:mp4|webm|mov)(?:[?#]|$)/i.test(url ?? "");
+    const images = g.items.filter((r) => r.mediaType === "image" && !isVideoUrl(r.url));
+    const videos = g.items.filter((r) => r.mediaType === "video" || (r.mediaType === "image" && isVideoUrl(r.url)));
+    const jsons = g.items.filter((r) => r.mediaType === "json");
+
+    return {
+      key: `cat-${g.category}`,
+      label: (
+        <span className="flex items-center gap-1.5 text-xs font-medium">
+          {g.category}
+          <Tag style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>{g.items.length}</Tag>
+        </span>
+      ),
+      children: (
+        <div className="space-y-2">
+          {images.length > 0 && <div className="grid grid-cols-2 gap-2">{images.map(renderImageItem)}</div>}
+          {videos.length > 0 && <div className="grid grid-cols-2 gap-2">{videos.map(renderVideoItem)}</div>}
+          {jsons.length > 0 && <div className="space-y-2">{jsons.map(renderJsonItem)}</div>}
         </div>
-      </aside>
-    );
-  }
-
-  const items = [
-    ...categories.map((g) => {
-      const isVideoUrl = (url: string | null) => /\.(?:mp4|webm|mov)(?:[?#]|$)/i.test(url ?? "");
-      const images = g.items.filter((r) => r.mediaType === "image" && !isVideoUrl(r.url));
-      const videos = g.items.filter((r) => r.mediaType === "video" || (r.mediaType === "image" && isVideoUrl(r.url)));
-      const jsons = g.items.filter((r) => r.mediaType === "json");
-
-      return {
-        key: `cat-${g.category}`,
-        label: (
-          <span className="flex items-center gap-1.5 text-xs font-medium">
-            {g.category}
-            <Tag style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>{g.items.length}</Tag>
-          </span>
-        ),
-        children: (
-          <div className="space-y-2">
-            {images.length > 0 && <div className="grid grid-cols-2 gap-2">{images.map(renderImageItem)}</div>}
-            {videos.length > 0 && <div className="grid grid-cols-2 gap-2">{videos.map(renderVideoItem)}</div>}
-            {jsons.length > 0 && <div className="space-y-2">{jsons.map(renderJsonItem)}</div>}
-          </div>
-        ),
-      };
-    }),
-  ];
+      ),
+    };
+  });
 
   return (
     <>
       <aside className={ASIDE_CLASS}>
-        <div className="border-b border-slate-800 px-3 py-2">
+        <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
           <Typography.Text strong style={{ fontSize: 12 }}>Resources</Typography.Text>
+          <div className="flex items-center gap-1">
+            <Button
+              type="text"
+              size="small"
+              icon={<DownloadOutlined />}
+              loading={isExporting}
+              onClick={() => void handleExport()}
+              className="!text-slate-400 hover:!text-slate-200"
+              title="导出全部资源"
+              disabled={categories.length === 0}
+            />
+            <Button
+              type="text"
+              size="small"
+              icon={<FormatPainterOutlined />}
+              onClick={() => setStyleDrawerOpen(true)}
+              className="!text-slate-400 hover:!text-slate-200"
+              title="Manage Style Presets"
+            />
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
-          <Collapse activeKey={activeKeys} onChange={(keys) => setActiveKeys(keys as string[])} items={items} size="small" ghost />
+          {collapseItems.length > 0 ? (
+            <Collapse activeKey={activeKeys} onChange={(keys) => setActiveKeys(keys as string[])} items={collapseItems} size="small" ghost />
+          ) : (
+            <div className="flex items-center justify-center py-6">
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No resources yet" />
+            </div>
+          )}
         </div>
       </aside>
 
@@ -322,12 +328,17 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
         imageGenId={selectedImageGenId}
         onClose={() => setSelectedImageGenId(null)}
         onRefresh={() => onRefresh?.()}
+        sessionId={sessionId}
       />
 
       <VideoDetailDrawer
-        resource={selectedVideoResource}
-        onClose={() => setSelectedVideoResource(null)}
+        keyResourceId={selectedVideoId}
+        onClose={() => setSelectedVideoId(null)}
+        onRefresh={() => onRefresh?.()}
+        sessionId={sessionId}
       />
+
+      <StylePresetDrawer open={styleDrawerOpen} onClose={() => setStyleDrawerOpen(false)} />
 
       <Drawer
         title={editingItem?.title ?? "Edit JSON"}
