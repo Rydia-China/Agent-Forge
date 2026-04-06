@@ -1,5 +1,6 @@
 "use client";
 
+import type React from "react";
 import { Button, Input, Select, Space } from "antd";
 import {
   PictureOutlined,
@@ -20,8 +21,7 @@ export interface ChatInputProps {
   isProcessing: boolean;
   isDragOver: boolean;
   setIsDragOver: (v: boolean) => void;
-  isComposing: boolean;
-  setIsComposing: (v: boolean) => void;
+  isComposingRef: React.MutableRefObject<boolean>;
   handleImageFiles: (files: File[]) => Promise<void>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   sendMessage: () => void;
@@ -43,8 +43,7 @@ export function ChatInput({
   isProcessing,
   isDragOver,
   setIsDragOver,
-  isComposing,
-  setIsComposing,
+  isComposingRef,
   handleImageFiles,
   fileInputRef,
   sendMessage,
@@ -99,7 +98,7 @@ export function ChatInput({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (isComposing) return;
+              if (isComposingRef.current) return;
               const native = e.nativeEvent;
               const composing =
                 typeof native === "object" &&
@@ -119,8 +118,8 @@ export function ChatInput({
                 void handleImageFiles(files);
               }
             }}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={() => setIsComposing(false)}
+            onCompositionStart={() => { isComposingRef.current = true; }}
+            onCompositionEnd={() => { isComposingRef.current = false; }}
             disabled={isSending}
           />
         </div>

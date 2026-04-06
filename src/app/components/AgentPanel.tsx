@@ -25,8 +25,8 @@ export interface AgentPanelProps {
   onSessionCreated: (sessionId: string) => void;
   onTitleChange: (title: string) => void;
   onRefreshNeeded: () => void;
-  showResources: boolean;
-  onToggleResources: () => void;
+  showMcp: boolean;
+  onToggleMcp: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -40,8 +40,8 @@ export function AgentPanel({
   onSessionCreated,
   onTitleChange,
   onRefreshNeeded,
-  showResources,
-  onToggleResources,
+  showMcp,
+  onToggleMcp,
 }: AgentPanelProps) {
   const { models, selectedModel, setSelectedModel } = useModels();
 
@@ -85,13 +85,13 @@ export function AgentPanel({
         <div className="flex items-center gap-1.5">
           <Button
             size="small"
-            type={showResources ? "primary" : "default"}
-            ghost={showResources}
+            type={showMcp ? "primary" : "default"}
+            ghost={showMcp}
             icon={<AppstoreOutlined />}
-            onClick={onToggleResources}
-            title="切换资源面板"
+            onClick={onToggleMcp}
+            title="切换 MCP 面板"
           >
-            Resources
+            MCP
           </Button>
         </div>
       </header>
@@ -118,8 +118,7 @@ export function AgentPanel({
             isProcessing={imageUpload.isProcessing}
             isDragOver={imageUpload.isDragOver}
             setIsDragOver={imageUpload.setIsDragOver}
-            isComposing={imageUpload.isComposing}
-            setIsComposing={imageUpload.setIsComposing}
+            isComposingRef={imageUpload.isComposingRef}
             handleImageFiles={imageUpload.handleImageFiles}
             fileInputRef={imageUpload.fileInputRef}
             sendMessage={() => {

@@ -14,21 +14,17 @@ import { parseJsonObject } from "./client-utils";
 
 /* ---- Helpers ---- */
 
-/** Strip internal [memory] lines from assistant content (eviction artefact). */
-export function stripMemoryLines(text: string): string {
-  return text
-    .split("\n")
-    .filter((line) => !line.startsWith("[memory] "))
-    .join("\n")
-    .trim();
-}
-
 function summarizeToolCalls(calls: ToolCall[]): string {
   const tools: string[] = [];
   const skills: string[] = [];
   for (const call of calls) {
     const name = call.function.name;
-    if (name.startsWith("skills__")) {
+    // Skill protocol: any provider's get_skill / list_skills, or skill_admin CRUD
+    if (name.endsWith("__get_skill")) {
+      const parsed = parseJsonObject(call.function.arguments);
+      const names = parsed && Array.isArray(parsed.names) ? (parsed.names as string[]).join(", ") : "skill";
+      if (!skills.includes(names)) skills.push(names);
+    } else if (name.startsWith("skill_admin__")) {
       const parsed = parseJsonObject(call.function.arguments);
       const skillName = parsed && typeof parsed.name === "string" ? parsed.name : "skill";
       if (!skills.includes(skillName)) skills.push(skillName);
@@ -67,7 +63,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           {cfg.label}
         </Tag>
       </div>
-      {message.content && stripMemoryLines(message.content) ? (
+      {message.content ? (
         <div className="markdown-body" style={{ fontSize: 12, lineHeight: 1.7 }}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
@@ -109,7 +105,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               },
             }}
           >
-            {stripMemoryLines(message.content)}
+            {message.content}
           </ReactMarkdown>
         </div>
       ) : (

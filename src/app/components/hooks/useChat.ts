@@ -110,7 +110,7 @@ export function useChat(
   const sendMessage = useCallback(async (images?: string[]) => {
     const text = stream.input.trim();
     const hasImages = images && images.length > 0;
-    if ((!text && !hasImages) || stream.isSending) return;
+    if ((!text && !hasImages) || stream.isSending || stream.activeSendRef.current) return;
     stream.setError(null);
     stream.setIsSending(true);
     stream.activeSendRef.current = true;

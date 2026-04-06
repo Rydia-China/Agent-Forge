@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchJson, getErrorMessage, joinTags, parseTags } from "../client-utils";
 import type {
-  ResourceSelection,
+  McpSelection,
   SkillDetail,
   SkillVersionSummary,
   McpDetail,
@@ -13,9 +13,9 @@ import type {
   McpSummary,
 } from "../../types";
 
-export interface UseResourceDetailReturn {
-  selectedResource: ResourceSelection | null;
-  setSelectedResource: (r: ResourceSelection | null) => void;
+export interface UseMcpDetailReturn {
+  selectedMcp: McpSelection | null;
+  setSelectedMcp: (r: McpSelection | null) => void;
   skillDetail: SkillDetail | null;
   skillVersions: SkillVersionSummary[];
   skillEdit: { description: string; content: string; tags: string };
@@ -24,86 +24,86 @@ export interface UseResourceDetailReturn {
   mcpVersions: McpVersionSummary[];
   mcpEdit: { description: string; code: string };
   setMcpEdit: React.Dispatch<React.SetStateAction<{ description: string; code: string }>>;
-  isLoadingResourceDetail: boolean;
-  isSavingResource: boolean;
-  isDeletingResource: boolean;
+  isLoadingMcpDetail: boolean;
+  isSavingMcp: boolean;
+  isDeletingMcp: boolean;
   isPublishingVersion: boolean;
   error: string | null;
   notice: string | null;
-  loadResourceDetail: (resource: ResourceSelection) => Promise<void>;
+  loadMcpDetail: (resource: McpSelection) => Promise<void>;
   saveSkillVersion: () => Promise<void>;
   saveMcpVersion: () => Promise<void>;
   publishSkillVersion: (ver: number) => Promise<void>;
   publishMcpVersion: (ver: number) => Promise<void>;
-  deleteSelectedResource: () => Promise<void>;
+  deleteSelectedMcp: () => Promise<void>;
 }
 
-export function useResourceDetail(
-  loadResources: () => Promise<void>,
+export function useMcpDetail(
+  loadMcp: () => Promise<void>,
   builtinSkills: SkillSummary[],
   dbSkills: SkillSummary[],
   builtinMcps: BuiltinMcpSummary[],
   mcps: McpSummary[],
-): UseResourceDetailReturn {
-  const [selectedResource, setSelectedResource] = useState<ResourceSelection | null>(null);
+): UseMcpDetailReturn {
+  const [selectedMcp, setSelectedMcp] = useState<McpSelection | null>(null);
   const [skillDetail, setSkillDetail] = useState<SkillDetail | null>(null);
   const [skillVersions, setSkillVersions] = useState<SkillVersionSummary[]>([]);
   const [skillEdit, setSkillEdit] = useState({ description: "", content: "", tags: "" });
   const [mcpDetail, setMcpDetail] = useState<McpDetail | null>(null);
   const [mcpVersions, setMcpVersions] = useState<McpVersionSummary[]>([]);
   const [mcpEdit, setMcpEdit] = useState({ description: "", code: "" });
-  const [isLoadingResourceDetail, setIsLoadingResourceDetail] = useState(false);
-  const [isSavingResource, setIsSavingResource] = useState(false);
-  const [isDeletingResource, setIsDeletingResource] = useState(false);
+  const [isLoadingMcpDetail, setIsLoadingMcpDetail] = useState(false);
+  const [isSavingMcp, setIsSavingMcp] = useState(false);
+  const [isDeletingMcp, setIsDeletingMcp] = useState(false);
   const [isPublishingVersion, setIsPublishingVersion] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const selectedResourceRef = useRef<string | null>(null);
+  const selectedMcpRef = useRef<string | null>(null);
 
   useEffect(() => {
-    selectedResourceRef.current = selectedResource
-      ? `${selectedResource.type}:${selectedResource.name}`
+    selectedMcpRef.current = selectedMcp
+      ? `${selectedMcp.type}:${selectedMcp.name}`
       : null;
-  }, [selectedResource]);
+  }, [selectedMcp]);
 
   // Auto-deselect when the resource disappears from lists
   useEffect(() => {
-    if (!selectedResource) return;
-    if (selectedResource.type === "skill") {
+    if (!selectedMcp) return;
+    if (selectedMcp.type === "skill") {
       if (
-        !builtinSkills.some((s) => s.name === selectedResource.name) &&
-        !dbSkills.some((s) => s.name === selectedResource.name)
+        !builtinSkills.some((s) => s.name === selectedMcp.name) &&
+        !dbSkills.some((s) => s.name === selectedMcp.name)
       ) {
-        setSelectedResource(null);
+        setSelectedMcp(null);
         setSkillDetail(null);
         setSkillVersions([]);
       }
       return;
     }
     if (
-      !builtinMcps.some((m) => m.name === selectedResource.name) &&
-      !mcps.some((m) => m.name === selectedResource.name)
+      !builtinMcps.some((m) => m.name === selectedMcp.name) &&
+      !mcps.some((m) => m.name === selectedMcp.name)
     ) {
-      setSelectedResource(null);
+      setSelectedMcp(null);
       setMcpDetail(null);
       setMcpVersions([]);
     }
-  }, [builtinSkills, builtinMcps, dbSkills, mcps, selectedResource]);
+  }, [builtinSkills, builtinMcps, dbSkills, mcps, selectedMcp]);
 
-  const loadResourceDetail = useCallback(async (resource: ResourceSelection) => {
+  const loadMcpDetail = useCallback(async (resource: McpSelection) => {
     const key = `${resource.type}:${resource.name}`;
-    selectedResourceRef.current = key;
-    setIsLoadingResourceDetail(true);
+    selectedMcpRef.current = key;
+    setIsLoadingMcpDetail(true);
     setError(null);
     setNotice(null);
-    setSelectedResource(resource);
+    setSelectedMcp(resource);
     try {
       if (resource.type === "skill") {
         const [d, v] = await Promise.all([
           fetchJson<SkillDetail>(`/api/skills/${resource.name}`),
           fetchJson<SkillVersionSummary[]>(`/api/skills/${resource.name}/versions`),
         ]);
-        if (selectedResourceRef.current !== key) return;
+        if (selectedMcpRef.current !== key) return;
         setSkillDetail(d);
         setSkillVersions(v);
         setSkillEdit({ description: d.description, content: d.content, tags: joinTags(d.tags) });
@@ -114,7 +114,7 @@ export function useResourceDetail(
           fetchJson<McpDetail>(`/api/mcps/${resource.name}`),
           fetchJson<McpVersionSummary[]>(`/api/mcps/${resource.name}/versions`),
         ]);
-        if (selectedResourceRef.current !== key) return;
+        if (selectedMcpRef.current !== key) return;
         setMcpDetail(d);
         setMcpVersions(v);
         setMcpEdit({ description: d.description ?? "", code: d.code });
@@ -122,10 +122,10 @@ export function useResourceDetail(
         setSkillVersions([]);
       }
     } catch (err: unknown) {
-      if (selectedResourceRef.current === key)
-        setError(getErrorMessage(err, "Failed to load resource."));
+      if (selectedMcpRef.current === key)
+        setError(getErrorMessage(err, "Failed to load MCP detail."));
     } finally {
-      if (selectedResourceRef.current === key) setIsLoadingResourceDetail(false);
+      if (selectedMcpRef.current === key) setIsLoadingMcpDetail(false);
     }
   }, []);
 
@@ -137,7 +137,7 @@ export function useResourceDetail(
       setError("Description and content are required.");
       return;
     }
-    setIsSavingResource(true);
+    setIsSavingMcp(true);
     setError(null);
     setNotice(null);
     try {
@@ -155,16 +155,16 @@ export function useResourceDetail(
         },
       );
       setNotice(`已提交版本 v${r.version.version}（未发布）`);
-      await loadResources();
+      await loadMcp();
       setSkillVersions(
         await fetchJson<SkillVersionSummary[]>(`/api/skills/${skillDetail.name}/versions`),
       );
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to save."));
     } finally {
-      setIsSavingResource(false);
+      setIsSavingMcp(false);
     }
-  }, [loadResources, skillDetail, skillEdit]);
+  }, [loadMcp, skillDetail, skillEdit]);
 
   const saveMcpVersion = useCallback(async () => {
     if (!mcpDetail) return;
@@ -173,7 +173,7 @@ export function useResourceDetail(
       setError("Code is required.");
       return;
     }
-    setIsSavingResource(true);
+    setIsSavingMcp(true);
     setError(null);
     setNotice(null);
     try {
@@ -190,16 +190,16 @@ export function useResourceDetail(
         },
       );
       setNotice(`已提交版本 v${r.version.version}（未发布）`);
-      await loadResources();
+      await loadMcp();
       setMcpVersions(
         await fetchJson<McpVersionSummary[]>(`/api/mcps/${mcpDetail.name}/versions`),
       );
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to save."));
     } finally {
-      setIsSavingResource(false);
+      setIsSavingMcp(false);
     }
-  }, [loadResources, mcpDetail, mcpEdit]);
+  }, [loadMcp, mcpDetail, mcpEdit]);
 
   const publishSkillVersion = useCallback(
     async (ver: number) => {
@@ -213,7 +213,7 @@ export function useResourceDetail(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ version: ver }),
         });
-        await loadResources();
+        await loadMcp();
         const [d, v] = await Promise.all([
           fetchJson<SkillDetail>(`/api/skills/${skillDetail.name}`),
           fetchJson<SkillVersionSummary[]>(`/api/skills/${skillDetail.name}/versions`),
@@ -227,7 +227,7 @@ export function useResourceDetail(
         setIsPublishingVersion(false);
       }
     },
-    [loadResources, skillDetail],
+    [loadMcp, skillDetail],
   );
 
   const publishMcpVersion = useCallback(
@@ -247,7 +247,7 @@ export function useResourceDetail(
         );
         if (r.loadError) setError(`Published but load error: ${r.loadError}`);
         else setNotice(`已发布版本 v${ver}`);
-        await loadResources();
+        await loadMcp();
         const [d, v] = await Promise.all([
           fetchJson<McpDetail>(`/api/mcps/${mcpDetail.name}`),
           fetchJson<McpVersionSummary[]>(`/api/mcps/${mcpDetail.name}/versions`),
@@ -260,38 +260,38 @@ export function useResourceDetail(
         setIsPublishingVersion(false);
       }
     },
-    [loadResources, mcpDetail],
+    [loadMcp, mcpDetail],
   );
 
-  const deleteSelectedResource = useCallback(async () => {
-    if (!selectedResource) return;
-    setIsDeletingResource(true);
+  const deleteSelectedMcp = useCallback(async () => {
+    if (!selectedMcp) return;
+    setIsDeletingMcp(true);
     setError(null);
     setNotice(null);
     try {
       await fetchJson<{ deleted: string }>(
-        selectedResource.type === "skill"
-          ? `/api/skills/${selectedResource.name}`
-          : `/api/mcps/${selectedResource.name}`,
+        selectedMcp.type === "skill"
+          ? `/api/skills/${selectedMcp.name}`
+          : `/api/mcps/${selectedMcp.name}`,
         { method: "DELETE" },
       );
-      setSelectedResource(null);
+      setSelectedMcp(null);
       setSkillDetail(null);
       setSkillVersions([]);
       setMcpDetail(null);
       setMcpVersions([]);
-      await loadResources();
+      await loadMcp();
       setNotice("已删除资源");
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to delete."));
     } finally {
-      setIsDeletingResource(false);
+      setIsDeletingMcp(false);
     }
-  }, [loadResources, selectedResource]);
+  }, [loadMcp, selectedMcp]);
 
   return {
-    selectedResource,
-    setSelectedResource,
+    selectedMcp,
+    setSelectedMcp,
     skillDetail,
     skillVersions,
     skillEdit,
@@ -300,17 +300,17 @@ export function useResourceDetail(
     mcpVersions,
     mcpEdit,
     setMcpEdit,
-    isLoadingResourceDetail,
-    isSavingResource,
-    isDeletingResource,
+    isLoadingMcpDetail,
+    isSavingMcp,
+    isDeletingMcp,
     isPublishingVersion,
     error,
     notice,
-    loadResourceDetail,
+    loadMcpDetail,
     saveSkillVersion,
     saveMcpVersion,
     publishSkillVersion,
     publishMcpVersion,
-    deleteSelectedResource,
+    deleteSelectedMcp,
   };
 }

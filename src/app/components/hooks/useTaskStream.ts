@@ -34,10 +34,14 @@ export interface LlmStats {
   totalCompletionTokens: number;
   /** Accumulated total tokens. */
   totalTokens: number;
+  /** Accumulated cache-read input tokens. */
+  totalCacheReadTokens: number;
   /** Number of LLM completion rounds. */
   llmCalls: number;
   /** Last call's prompt tokens — used for context usage %. */
   lastPromptTokens: number;
+  /** Last call's cache-read tokens. */
+  lastCacheReadTokens: number;
   /** Model context window size. */
   maxContextTokens: number;
   /** Current model id. */
@@ -52,16 +56,16 @@ export interface LlmStats {
   subagentCallCount: number;
   /** Subagent calls that errored. */
   subagentErrorCount: number;
-  /** Number of memory__recall tool calls. */
-  recallCount: number;
 }
 
 const INITIAL_STATS: LlmStats = {
   totalPromptTokens: 0,
   totalCompletionTokens: 0,
   totalTokens: 0,
+  totalCacheReadTokens: 0,
   llmCalls: 0,
   lastPromptTokens: 0,
+  lastCacheReadTokens: 0,
   maxContextTokens: 0,
   model: "",
   toolCallCount: 0,
@@ -69,7 +73,6 @@ const INITIAL_STATS: LlmStats = {
   toolErrorCount: 0,
   subagentCallCount: 0,
   subagentErrorCount: 0,
-  recallCount: 0,
 };
 
 /* ------------------------------------------------------------------ */
@@ -95,10 +98,16 @@ export interface TaskStreamCallbacks {
 
 export interface SubagentTaskInfo {
   index: number;
+  /** Display text: prompt preview (single-shot) or instruction (tool-loop). */
+  instruction: string;
   model: string;
-  promptPreview: string;
-  status: "running" | "ok" | "error";
+  /** single-shot | tool-loop | continue */
+  mode: string;
+  status: "running" | "ok" | "error" | "completed" | "failed" | "max_iterations";
+  currentTool: string | null;
+  toolCallCount: number;
   durationMs?: number;
+  agentId?: string;
 }
 
 export interface TaskStreamReturn {
@@ -239,9 +248,59 @@ export function useTaskStream(
         lastMessageTime = Date.now();
       };
 
-      // 心跳事件监听器
-      es.addEventListener("heartbeat", () => {
+      // 心跳事件监听器 — 带状态校验
+      es.addEventListener("heartbeat", (e: MessageEvent) => {
         touchLastMessageTime();
+        // If heartbeat says task is terminal but we haven't received done/error,
+        // reconcile by fetching session detail
+        try {
+          const data: unknown = JSON.parse(e.data as string);
+          if (isRecord(data) && typeof data.status === "string") {
+            const hbStatus = data.status as string;
+            if ((hbStatus === "completed" || hbStatus === "failed" || hbStatus === "cancelled")
+                && taskIdRef.current) {
+              // Clean up connection state immediately
+              if (timeoutCheckIntervalRef.current) {
+                clearInterval(timeoutCheckIntervalRef.current);
+                timeoutCheckIntervalRef.current = null;
+              }
+              es.close();
+              eventSourceRef.current = null;
+              taskIdRef.current = null;
+
+              // Cleanup streaming UI — batched with setMessages to avoid flicker
+              const finalStatus = hbStatus === "completed" ? "done" as const : "error" as const;
+              const cleanupStreamingState = () => {
+                setIsStreaming(false);
+                setIsSending(false);
+                activeSendRef.current = false;
+                setStreamingReply(null);
+                setStreamingTools([]);
+                setSubagentTasks([]);
+                setStatus(finalStatus);
+                if (hbStatus !== "completed") {
+                  setError("任务已终止，请查看任务监控面板");
+                }
+                cbRef.current.onStreamEnd?.();
+              };
+
+              // Task already terminated but we missed the event — reconcile
+              const sid = sessionIdRef.current;
+              if (sid) {
+                void fetchJson<SessionDetail>(`/api/sessions/${sid}`)
+                  .then((detail) => {
+                    setMessages(detail.messages);
+                    setKeyResources(detail.keyResources ?? []);
+                    cbRef.current.onSessionDetail?.(detail);
+                  })
+                  .catch(() => { /* best effort */ })
+                  .finally(() => cleanupStreamingState());
+              } else {
+                cleanupStreamingState();
+              }
+            }
+          }
+        } catch { /* ignore parse errors */ }
       });
 
       /* ---- Core events ---- */
@@ -263,8 +322,8 @@ export function useTaskStream(
         try {
           const data: unknown = JSON.parse(e.data as string);
           if (isRecord(data) && typeof data.text === "string") {
-            // New LLM turn started — subagent phase is over
-            setSubagentTasks([]);
+            // Don't clear subagent/executor tasks on delta — let them persist
+            // until replaced by a new batch or until streaming ends.
             setStreamingReply((prev) => (prev ?? "") + data.text);
           }
         } catch { /* ignore */ }
@@ -320,7 +379,7 @@ export function useTaskStream(
         } catch { /* ignore */ }
       });
 
-      /* ---- Subagent progress events ---- */
+      /* ---- Subagent progress events (unified) ---- */
 
       es.addEventListener("subagent_tasks", (e: MessageEvent) => {
         touchLastMessageTime();
@@ -330,10 +389,36 @@ export function useTaskStream(
             setSubagentTasks(
               (data.tasks as Array<Record<string, unknown>>).map((t) => ({
                 index: typeof t.index === "number" ? t.index : 0,
+                instruction: typeof t.instruction === "string" ? t.instruction : (typeof t.promptPreview === "string" ? t.promptPreview : ""),
                 model: typeof t.model === "string" ? t.model : "",
-                promptPreview: typeof t.promptPreview === "string" ? t.promptPreview : "",
+                mode: typeof t.mode === "string" ? t.mode : "single-shot",
                 status: "running" as const,
+                currentTool: null,
+                toolCallCount: 0,
               })),
+            );
+          }
+        } catch { /* ignore */ }
+      });
+
+      es.addEventListener("subagent_step", (e: MessageEvent) => {
+        touchLastMessageTime();
+        try {
+          const data: unknown = JSON.parse(e.data as string);
+          if (isRecord(data) && typeof data.taskIndex === "number") {
+            const idx = data.taskIndex;
+            const tool = typeof data.tool === "string" ? data.tool : null;
+            const action = data.action;
+            setSubagentTasks((prev) =>
+              prev.map((t) =>
+                t.index === idx
+                  ? {
+                      ...t,
+                      currentTool: action === "start" ? tool : null,
+                      toolCallCount: action === "end" ? t.toolCallCount + 1 : t.toolCallCount,
+                    }
+                  : t,
+              ),
             );
           }
         } catch { /* ignore */ }
@@ -345,11 +430,17 @@ export function useTaskStream(
           const data: unknown = JSON.parse(e.data as string);
           if (isRecord(data) && typeof data.index === "number") {
             const idx = data.index;
-            const status = data.status === "ok" ? "ok" as const : "error" as const;
+            const status = typeof data.status === "string"
+              ? data.status as SubagentTaskInfo["status"]
+              : "failed";
             const durationMs = typeof data.durationMs === "number" ? data.durationMs : undefined;
+            const toolCallCount = typeof data.toolCallCount === "number" ? data.toolCallCount : 0;
+            const agentId = typeof data.agentId === "string" ? data.agentId : undefined;
             setSubagentTasks((prev) =>
               prev.map((t) =>
-                t.index === idx ? { ...t, status, durationMs } : t,
+                t.index === idx
+                  ? { ...t, status, durationMs, toolCallCount, currentTool: null, agentId }
+                  : t,
               ),
             );
           }
@@ -363,13 +454,16 @@ export function useTaskStream(
         try {
           const data: unknown = JSON.parse(e.data as string);
           if (isRecord(data)) {
+            const cacheRead = typeof data.cacheReadTokens === "number" ? data.cacheReadTokens : 0;
             setLlmStats((prev) => ({
               ...prev,
               totalPromptTokens: prev.totalPromptTokens + (typeof data.promptTokens === "number" ? data.promptTokens : 0),
               totalCompletionTokens: prev.totalCompletionTokens + (typeof data.completionTokens === "number" ? data.completionTokens : 0),
               totalTokens: prev.totalTokens + (typeof data.totalTokens === "number" ? data.totalTokens : 0),
+              totalCacheReadTokens: prev.totalCacheReadTokens + cacheRead,
               llmCalls: prev.llmCalls + 1,
               lastPromptTokens: typeof data.promptTokens === "number" ? data.promptTokens : prev.lastPromptTokens,
+              lastCacheReadTokens: cacheRead,
               maxContextTokens: typeof data.maxContextTokens === "number" ? data.maxContextTokens : prev.maxContextTokens,
               model: typeof data.model === "string" ? data.model : prev.model,
             }));
@@ -386,12 +480,10 @@ export function useTaskStream(
           if (isRecord(data) && typeof data.name === "string") {
             setLlmStats((prev) => {
               const isSubagent = (data.name as string).startsWith("subagent");
-              const isRecall = data.name === "memory__recall";
               return {
                 ...prev,
                 toolCallCount: prev.toolCallCount + 1,
                 subagentCallCount: isSubagent ? prev.subagentCallCount + 1 : prev.subagentCallCount,
-                recallCount: isRecall ? prev.recallCount + 1 : prev.recallCount,
               };
             });
           }
@@ -430,7 +522,22 @@ export function useTaskStream(
         taskIdRef.current = null;
         cbRef.current.onRefreshNeeded();
 
-        // Reload full session to get final state
+        // Cleanup streaming UI state — must be batched with setMessages to
+        // avoid a flash where the streaming reply disappears before the
+        // final messages arrive.
+        const cleanupStreamingState = () => {
+          setIsStreaming(false);
+          setIsSending(false);
+          activeSendRef.current = false;
+          setStreamingReply(null);
+          setStreamingTools([]);
+          setSubagentTasks([]);
+          setStatus("done");
+          cbRef.current.onStreamEnd?.();
+        };
+
+        // Reload full session to get final state, then clear streaming UI
+        // in the same React batch to prevent flicker.
         const sid = sessionIdRef.current;
         if (sid) {
           void fetchJson<SessionDetail>(`/api/sessions/${sid}`)
@@ -439,17 +546,11 @@ export function useTaskStream(
               setKeyResources(detail.keyResources ?? []);
               cbRef.current.onSessionDetail?.(detail);
             })
-            .catch(() => { /* best effort */ });
+            .catch(() => { /* best effort */ })
+            .finally(() => cleanupStreamingState());
+        } else {
+          cleanupStreamingState();
         }
-
-        setIsStreaming(false);
-        setIsSending(false);
-        activeSendRef.current = false;
-        setStreamingReply(null);
-        setStreamingTools([]);
-        setSubagentTasks([]);
-        setStatus("done");
-        cbRef.current.onStreamEnd?.();
       });
 
       /* ---- error ---- */
@@ -556,12 +657,21 @@ export function useTaskStream(
     eventSourceRef.current?.close();
     eventSourceRef.current = null;
     taskIdRef.current = null;
+
+    // Mark streaming as stopped immediately for responsive UI,
+    // but keep streamingReply visible until session data arrives
+    // to prevent the message from briefly disappearing.
     setIsStreaming(false);
     setIsSending(false);
     activeSendRef.current = false;
-    setStreamingReply(null);
-    setStreamingTools([]);
-    setSubagentTasks([]);
+
+    const cleanupStreamingUI = () => {
+      setStreamingReply(null);
+      setStreamingTools([]);
+      setSubagentTasks([]);
+      setStatus("idle");
+      cbRef.current.onStreamEnd?.();
+    };
 
     // Reload session to get persisted state after cancellation
     const sid = sessionIdRef.current;
@@ -571,10 +681,11 @@ export function useTaskStream(
           setMessages(data.messages);
           setKeyResources(data.keyResources ?? []);
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => cleanupStreamingUI());
+    } else {
+      cleanupStreamingUI();
     }
-    setStatus("idle");
-    cbRef.current.onStreamEnd?.();
   }, []);
 
   /* ---------------------------------------------------------------- */

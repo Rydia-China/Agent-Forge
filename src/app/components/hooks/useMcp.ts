@@ -4,24 +4,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchJson, getErrorMessage } from "../client-utils";
 import type { SkillSummary, McpSummary, BuiltinMcpSummary } from "../../types";
 
-export interface UseResourcesReturn {
+export interface UseMcpReturn {
   skills: SkillSummary[];
   mcps: McpSummary[];
   builtinMcps: BuiltinMcpSummary[];
   builtinSkills: SkillSummary[];
   dbSkills: SkillSummary[];
-  isLoadingResources: boolean;
-  loadResources: () => Promise<void>;
+  isLoadingMcp: boolean;
+  loadMcp: () => Promise<void>;
 }
 
-export function useResources(
+export function useMcp(
   currentSessionIdRef: React.RefObject<string | undefined>,
   onError: (msg: string) => void,
-): UseResourcesReturn {
+): UseMcpReturn {
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [mcps, setMcps] = useState<McpSummary[]>([]);
   const [builtinMcps, setBuiltinMcps] = useState<BuiltinMcpSummary[]>([]);
-  const [isLoadingResources, setIsLoadingResources] = useState(false);
+  const [isLoadingMcp, setIsLoadingMcp] = useState(false);
 
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
@@ -35,8 +35,8 @@ export function useResources(
     [skills],
   );
 
-  const loadResources = useCallback(async () => {
-    setIsLoadingResources(true);
+  const loadMcp = useCallback(async () => {
+    setIsLoadingMcp(true);
     try {
       const sid = currentSessionIdRef.current;
       const sp = sid ? `?session=${encodeURIComponent(sid)}` : "";
@@ -49,15 +49,15 @@ export function useResources(
       setMcps(mc);
       setBuiltinMcps(bm);
     } catch (err: unknown) {
-      onErrorRef.current(getErrorMessage(err, "Failed to load resources."));
+      onErrorRef.current(getErrorMessage(err, "Failed to load MCP."));
     } finally {
-      setIsLoadingResources(false);
+      setIsLoadingMcp(false);
     }
   }, [currentSessionIdRef]);
 
   useEffect(() => {
-    void loadResources();
-  }, [loadResources]);
+    void loadMcp();
+  }, [loadMcp]);
 
   return {
     skills,
@@ -65,7 +65,7 @@ export function useResources(
     builtinMcps,
     builtinSkills,
     dbSkills,
-    isLoadingResources,
-    loadResources,
+    isLoadingMcp,
+    loadMcp,
   };
 }

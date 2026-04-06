@@ -5,7 +5,7 @@ import { Alert, Empty, Spin, Tag, Typography } from "antd";
 import { RobotOutlined } from "@ant-design/icons";
 import type { ChatMessage } from "../types";
 import type { SubagentTaskInfo } from "./hooks/useTaskStream";
-import { MessageBubble, stripMemoryLines } from "./MessageBubble";
+import { MessageBubble } from "./MessageBubble";
 import { SubagentProgress } from "./SubagentProgress";
 
 /* ---- Helpers ---- */
@@ -34,14 +34,6 @@ export function mergeStreamingSummaries(summaries: string[]): string {
   if (tools.length > 0) parts.push(`调用了工具：${tools.join("、")}`);
   if (skills.length > 0) parts.push(`使用了 skill：${skills.join("、")}`);
   return parts.join(" · ");
-}
-
-/** Message is a memory-only eviction artefact with no visible content. */
-function isMemoryOnly(m: ChatMessage): boolean {
-  if (m.role !== "assistant") return false;
-  if (m.tool_calls && m.tool_calls.length > 0) return false;
-  if (!m.content) return false;
-  return stripMemoryLines(m.content).length === 0;
 }
 
 /* ---- Component ---- */
@@ -78,12 +70,12 @@ export function MessageList({
         <div className="flex items-center justify-center py-8">
           <Spin description="Loading…" />
         </div>
-      ) : messages.filter((m) => m.role !== "tool" && !m.hidden && !isMemoryOnly(m)).length === 0 ? (
+      ) : messages.filter((m) => m.role !== "tool" && !m.hidden).length === 0 ? (
         <Empty description="Send a message to start." style={{ margin: "32px 0" }} />
       ) : (
         <div className="space-y-3">
           {messages
-            .filter((m) => m.role !== "tool" && !m.hidden && !isMemoryOnly(m))
+            .filter((m) => m.role !== "tool" && !m.hidden)
             .map((msg, idx) => (
               <MessageBubble key={`${msg.role}-${idx}`} message={msg} />
             ))}
@@ -101,13 +93,15 @@ export function MessageList({
               ) : (
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>Streaming…</Typography.Text>
               )}
-              {subagentTasks && subagentTasks.length > 0 ? (
+              {/* Progress indicators: subagent → executor → tool summary */}
+              {subagentTasks && subagentTasks.length > 0 && (
                 <SubagentProgress tasks={subagentTasks} />
-              ) : streamingTools.length > 0 ? (
+              )}
+              {streamingTools.length > 0 && (
                 <div className="mt-2 rounded border border-slate-800 bg-slate-950/70 px-2 py-1.5 text-[10px] text-slate-200">
                   {mergeStreamingSummaries(streamingTools)}
                 </div>
-              ) : null}
+              )}
             </div>
           )}
           <div ref={endRef} />

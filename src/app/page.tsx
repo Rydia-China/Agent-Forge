@@ -3,17 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AgentPanel } from "./components/AgentPanel";
 import { SessionSidebar } from "./components/SessionSidebar";
-import { ResourceDrawer } from "./components/ResourceDrawer";
-import { ResourceDetailDrawer } from "./components/ResourceDetailDrawer";
+import { McpDrawer } from "./components/McpDrawer";
+import { McpDetailDrawer } from "./components/McpDetailDrawer";
 import { useUser } from "./components/hooks/useUser";
 import { useSessions } from "./components/hooks/useSessions";
-import { useResources } from "./components/hooks/useResources";
-import { useResourceDetail } from "./components/hooks/useResourceDetail";
+import { useMcp } from "./components/hooks/useMcp";
+import { useMcpDetail } from "./components/hooks/useMcpDetail";
 
 export default function Home() {
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
   const [panelKey, setPanelKey] = useState(() => crypto.randomUUID());
-  const [showResources, setShowResources] = useState(false);
+  const [showMcp, setShowMcp] = useState(false);
   const currentSessionIdRef = useRef<string | undefined>(undefined);
 
   const switchSession = useCallback((sessionId?: string) => {
@@ -24,14 +24,14 @@ export default function Home() {
 
   const user = useUser(() => switchSession(undefined));
 
-  const resources = useResources(currentSessionIdRef, () => {});
+  const mcp = useMcp(currentSessionIdRef, () => {});
 
-  const resourceDetail = useResourceDetail(
-    resources.loadResources,
-    resources.builtinSkills,
-    resources.dbSkills,
-    resources.builtinMcps,
-    resources.mcps,
+  const mcpDetail = useMcpDetail(
+    mcp.loadMcp,
+    mcp.builtinSkills,
+    mcp.dbSkills,
+    mcp.builtinMcps,
+    mcp.mcps,
   );
 
   const sessionsHook = useSessions(
@@ -41,15 +41,15 @@ export default function Home() {
   );
 
   const refreshSessionsRef = useRef(sessionsHook.refreshSessions);
-  const loadResourcesRef = useRef(resources.loadResources);
+  const loadMcpRef = useRef(mcp.loadMcp);
   useEffect(() => {
     refreshSessionsRef.current = sessionsHook.refreshSessions;
-    loadResourcesRef.current = resources.loadResources;
+    loadMcpRef.current = mcp.loadMcp;
   });
 
   const handleRefresh = useCallback(() => {
     void refreshSessionsRef.current();
-    void loadResourcesRef.current();
+    void loadMcpRef.current();
   }, []);
 
   const handleDeleteSession = useCallback(
@@ -86,26 +86,25 @@ export default function Home() {
           }}
           onTitleChange={() => {}}
           onRefreshNeeded={handleRefresh}
-          showResources={showResources}
-          onToggleResources={() => setShowResources((v) => !v)}
+          showMcp={showMcp}
+          onToggleMcp={() => setShowMcp((v) => !v)}
         />
       </section>
 
-      <ResourceDrawer
-        open={showResources}
-        builtinSkills={resources.builtinSkills}
-        dbSkills={resources.dbSkills}
-        builtinMcps={resources.builtinMcps}
-        mcps={resources.mcps}
-        isLoadingResources={resources.isLoadingResources}
-        error={resourceDetail.error}
-        notice={resourceDetail.notice}
-        onLoadResources={() => void resources.loadResources()}
-        onSelectResource={(r) => void resourceDetail.loadResourceDetail(r)}
-        onClose={() => setShowResources(false)}
+      <McpDrawer
+        open={showMcp}
+        skills={mcp.skills}
+        builtinMcps={mcp.builtinMcps}
+        mcps={mcp.mcps}
+        isLoadingMcp={mcp.isLoadingMcp}
+        error={mcpDetail.error}
+        notice={mcpDetail.notice}
+        onLoadMcp={() => void mcp.loadMcp()}
+        onSelectMcp={(r) => void mcpDetail.loadMcpDetail(r)}
+        onClose={() => setShowMcp(false)}
       />
 
-      <ResourceDetailDrawer detail={resourceDetail} />
+      <McpDetailDrawer detail={mcpDetail} />
     </main>
   );
 }

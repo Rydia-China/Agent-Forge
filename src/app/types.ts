@@ -17,6 +17,7 @@ export type SkillSummary = {
   name: string;
   description: string;
   tags: string[];
+  provider: string;
   productionVersion: number;
 };
 
@@ -71,9 +72,9 @@ export type BuiltinMcpSummary = {
   active: boolean;
 };
 
-/* ---- Resources ---- */
+/* ---- MCP Panel ---- */
 
-export type ResourceSelection =
+export type McpSelection =
   | { type: "skill"; name: string }
   | { type: "mcp"; name: string };
 

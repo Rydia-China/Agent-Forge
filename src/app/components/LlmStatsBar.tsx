@@ -17,15 +17,20 @@ function pct(a: number, b: number): string {
   return (a / b * 100).toFixed(1) + "%";
 }
 
-/** Estimate cost in USD based on model pricing. */
+/** Estimate cost in USD based on model pricing, accounting for cache reads.
+ *  Note: Anthropic proxy reports promptTokens as uncached-only input tokens,
+ *  so we use promptTokens directly as the uncached portion. */
 function calcCost(
   model: string,
   promptTokens: number,
   completionTokens: number,
+  cacheReadTokens: number,
 ): number {
   const m = MODEL_OPTIONS.find((o) => o.id === model);
   if (!m) return 0;
+  const cachePrice = m.cacheReadPricePerM ?? m.inputPricePerM;
   return (promptTokens / 1_000_000) * m.inputPricePerM
+       + (cacheReadTokens / 1_000_000) * cachePrice
        + (completionTokens / 1_000_000) * m.outputPricePerM;
 }
 
@@ -69,12 +74,16 @@ export function LlmStatsBar({ stats }: { stats: LlmStats }) {
     stats.maxContextTokens > 0
       ? stats.lastPromptTokens / stats.maxContextTokens
       : 0;
-  const contextWarn = contextPct > 0.8;
+  const contextWarn = contextPct > 0.7;
 
   const hasErrors = stats.toolErrorCount > 0;
-  const cost = calcCost(stats.model, stats.totalPromptTokens, stats.totalCompletionTokens);
+  const cost = calcCost(stats.model, stats.totalPromptTokens, stats.totalCompletionTokens, stats.totalCacheReadTokens);
+  const totalInput = stats.totalPromptTokens + stats.totalCacheReadTokens;
+  const cacheHitPct = totalInput > 0
+    ? stats.totalCacheReadTokens / totalInput
+    : 0;
 
-  // Badge color: red if context > 80% or has tool errors, otherwise neutral
+  // Badge color: red if context > 70% or has tool errors, otherwise neutral
   const badgeColor =
     contextWarn || hasErrors
       ? "bg-red-900/60 text-red-300 border-red-800/50"
@@ -111,6 +120,10 @@ export function LlmStatsBar({ stats }: { stats: LlmStats }) {
             warn={contextWarn}
           />
           <Row label="LLM rounds" value={String(stats.llmCalls)} />
+          <Row
+            label="Cache hit"
+            value={`${fmtM(stats.totalCacheReadTokens)} / ${fmtM(stats.totalPromptTokens)} (${pct(stats.totalCacheReadTokens, stats.totalPromptTokens)})`}
+          />
           <Row label="Est. cost" value={fmtCost(cost)} />
 
           {/* Section: Tools */}
@@ -127,7 +140,6 @@ export function LlmStatsBar({ stats }: { stats: LlmStats }) {
             value={stats.toolCallCount > 0 ? pct(stats.toolSuccessCount, stats.toolCallCount) : "—"}
             warn={hasErrors}
           />
-          <Row label="Recall" value={String(stats.recallCount)} />
 
           {/* Section: Subagent (conditional) */}
           {stats.subagentCallCount > 0 && (

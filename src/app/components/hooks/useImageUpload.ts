@@ -8,8 +8,7 @@ export interface UseImageUploadReturn {
   isProcessing: boolean;
   isDragOver: boolean;
   setIsDragOver: (v: boolean) => void;
-  isComposing: boolean;
-  setIsComposing: (v: boolean) => void;
+  isComposingRef: React.MutableRefObject<boolean>;
   handleImageFiles: (files: File[]) => Promise<void>;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
 }
@@ -30,7 +29,7 @@ export function useImageUpload(
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [isComposing, setIsComposing] = useState(false);
+  const isComposingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const onErrorRef = useRef(onError);
@@ -67,8 +66,7 @@ export function useImageUpload(
     isProcessing,
     isDragOver,
     setIsDragOver,
-    isComposing,
-    setIsComposing,
+    isComposingRef,
     handleImageFiles,
     fileInputRef,
   };
