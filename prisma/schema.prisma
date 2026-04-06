@@ -10,14 +10,18 @@ datasource db {
 
 /// Skill — 遵循 Agent Skills 开放标准 (agentskills.io)
 /// 实体表只保留身份字段 + production 指针，内容存在 SkillVersion
+/// provider 指向归属的 MCP provider，null 表示全局 skill
 model Skill {
   id                String         @id @default(cuid())
   name              String         @unique
   tags              String[]
+  provider          String         // MCP provider name (required — every skill belongs to a provider)
   productionVersion Int            @default(1)
   versions          SkillVersion[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
+
+  @@index([provider])
 }
 
 /// SkillVersion — 不可变的版本快照
@@ -81,6 +85,8 @@ model KeyResource {
   scopeId        String               // novel ID / script DB ID
   key            String
   mediaType      String               // "image" | "video" | "json"
+  category       String?              // UI grouping: 角色立绘, 场景, 换装, 视频
+  title          String?              // Display name: character name, scene name, etc.
   currentVersion Int                  @default(0)
   versions       KeyResourceVersion[]
   createdAt      DateTime             @default(now())
@@ -163,6 +169,17 @@ model McpServerVersion {
 
   @@unique([mcpServerId, version])
   @@index([mcpServerId])
+}
+
+/// StylePreset — 本地风格提示词预设，替代 Langfuse 风格词获取
+/// 存储纯风格词 + 可选参考图，通过 MCP tools 暴露给 agent
+model StylePreset {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  prompt            String
+  referenceImageUrl String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 /// BizTableMapping — 逻辑表名到物理表名(UUID)的映射，实现 biz-db 用户隔离
