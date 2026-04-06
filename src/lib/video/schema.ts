@@ -24,8 +24,18 @@ const NOVELS_DDL = `CREATE TABLE IF NOT EXISTS "$TABLE" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   episode_count INT DEFAULT 0,
+  synopsis JSONB,
+  character_arcs JSONB,
+  location_bible JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 )`;
+
+/** Columns that may be missing on older novels tables — idempotent migration. */
+const NOVELS_MIGRATIONS = [
+  `ALTER TABLE "$TABLE" ADD COLUMN IF NOT EXISTS synopsis JSONB`,
+  `ALTER TABLE "$TABLE" ADD COLUMN IF NOT EXISTS character_arcs JSONB`,
+  `ALTER TABLE "$TABLE" ADD COLUMN IF NOT EXISTS location_bible JSONB`,
+];
 
 /* ------------------------------------------------------------------ */
 /*  novel_scripts DDL                                                  */
@@ -75,13 +85,18 @@ export async function ensureVideoSchema(): Promise<void> {
   await ensureDomainResourcesTable();
 
   // 2. novels (local novel registry)
+  let novelsPn: string;
   const existingNovels = await resolveTable(GLOBAL_USER, NOVELS_LOGICAL);
   if (existingNovels) {
-    await bizPool.query(NOVELS_DDL.replace("$TABLE", existingNovels.physicalName));
+    novelsPn = existingNovels.physicalName;
+    await bizPool.query(NOVELS_DDL.replace("$TABLE", novelsPn));
   } else {
-    const pn = await ensureMapping(GLOBAL_USER, NOVELS_LOGICAL);
-    await bizPool.query(NOVELS_DDL.replace("$TABLE", pn));
-    console.log(`[video-schema] Created table "${NOVELS_LOGICAL}" → "${pn}"`);
+    novelsPn = await ensureMapping(GLOBAL_USER, NOVELS_LOGICAL);
+    await bizPool.query(NOVELS_DDL.replace("$TABLE", novelsPn));
+    console.log(`[video-schema] Created table "${NOVELS_LOGICAL}" → "${novelsPn}"`);
+  }
+  for (const stmt of NOVELS_MIGRATIONS) {
+    await bizPool.query(stmt.replaceAll("$TABLE", novelsPn));
   }
 
   // 3. novel_scripts (episode container — system-managed, all columns)
