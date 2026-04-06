@@ -1,15 +1,10 @@
 import { registry } from "@/lib/mcp/registry";
 import { initMcp } from "@/lib/mcp/init";
-import { type ToolContext, parseToolName } from "@/lib/mcp/types";
-import { isCatalogEntry, loadFromCatalog } from "@/lib/mcp/catalog";
-import { sandboxManager } from "@/lib/mcp/sandbox";
-import * as mcpService from "@/lib/services/mcp-service";
-import { getBuiltinSkill } from "@/lib/skills/builtins";
-import { getSkill } from "@/lib/services/skill-service";
-import { extractRequiredSchemas } from "@/lib/skills/required-schemas";
+import type { ToolContext } from "@/lib/mcp/types";
 import {
   chatCompletion,
   chatCompletionStream,
+  isTransientStreamError,
   mcpToolToOpenAI,
   type LlmMessage,
 } from "./llm-client";
@@ -17,17 +12,13 @@ import { resolveModel, MODEL_OPTIONS } from "./models";
 import {
   getOrCreateSession,
   pushMessages,
+  replaceMessages,
   stripDanglingToolCalls,
 } from "@/lib/services/chat-session-service";
 import { buildSystemPrompt } from "./system-prompt";
-import { BaseContextProvider, type ContextProvider } from "./context-provider";
+import { compressToCheckpoint, CHECKPOINT_THRESHOLD } from "./context-checkpoint";
 import type { ChatMessage, ToolCall } from "./types";
 import { uploadDataUrl } from "@/lib/services/oss-service";
-import {
-  ToolCallTracker,
-  scanMessages,
-  compressMessages,
-} from "./eviction";
 
 /* ------------------------------------------------------------------ */
 /*  Key resource extraction from specific tools                        */
@@ -52,14 +43,16 @@ export interface KeyResourceEvent {
  * Only these tools' results are inspected — all others are ignored.
  */
 const KEY_RESOURCE_TOOLS = new Set([
-  "subagent__run_text",
-  "video_mgr__generate_image",
-  "video_mgr__generate_video",
+  "subagent__run",
+  "video_workflow__generate_portrait",
+  "video_workflow__generate_scene",
+  "video_workflow__generate_costume",
+  "video_workflow__generate_video",
 ]);
 
 /**
  * Extract key resource events from a specific tool's result.
- * Only the 3 known resource-producing tools are handled.
+ * Inspects video_workflow image/video tools + subagent.
  */
 export function extractKeyResources(toolName: string, content: string): KeyResourceEvent[] {
   if (!KEY_RESOURCE_TOOLS.has(toolName)) return [];
@@ -71,13 +64,14 @@ export function extractKeyResources(toolName: string, content: string): KeyResou
   } catch {
     return out;
   }
-  if (!Array.isArray(parsed)) return out;
 
-  for (const item of parsed) {
+  // video_workflow tools return a single object, not an array
+  const items = Array.isArray(parsed) ? parsed : [parsed];
+
+  for (const item of items) {
     if (!isRecord(item) || item.status !== "ok") continue;
 
-    if (toolName === "subagent__run_text") {
-      // Subagent: { status, result, keyJsonTitle? }
+    if (toolName === "subagent__run") {
       if (typeof item.keyJsonTitle !== "string" || typeof item.result !== "string") continue;
       let data: unknown;
       try { data = JSON.parse(item.result as string); } catch { data = item.result; }
@@ -87,8 +81,12 @@ export function extractKeyResources(toolName: string, content: string): KeyResou
         data,
         title: item.keyJsonTitle as string,
       });
-    } else if (toolName === "video_mgr__generate_image") {
-      // generate_image: { status, key, keyResourceId, imageUrl, version }
+    } else if (
+      toolName === "video_workflow__generate_portrait" ||
+      toolName === "video_workflow__generate_scene" ||
+      toolName === "video_workflow__generate_costume"
+    ) {
+      // Image tools: { status, key, keyResourceId, imageUrl, version }
       if (typeof item.key !== "string" || typeof item.keyResourceId !== "string") continue;
       out.push({
         key: item.key as string,
@@ -97,12 +95,13 @@ export function extractKeyResources(toolName: string, content: string): KeyResou
         title: item.key as string,
         persisted: { id: item.keyResourceId as string, version: item.version as number },
       });
-    } else if (toolName === "video_mgr__generate_video") {
-      // generate_video: { status, key, keyResourceId, version }
+    } else if (toolName === "video_workflow__generate_video") {
+      // Video tool: { status, key, keyResourceId, videoUrl, version }
       if (typeof item.key !== "string" || typeof item.keyResourceId !== "string") continue;
       out.push({
         key: item.key as string,
         mediaType: "video",
+        url: typeof item.videoUrl === "string" ? item.videoUrl as string : undefined,
         title: item.key as string,
         persisted: { id: item.keyResourceId as string, version: item.version as number },
       });
@@ -117,12 +116,12 @@ export function extractKeyResources(toolName: string, content: string): KeyResou
 
 /**
  * Optional configuration for the agent loop.
- * When provided, enables domain-specific context refresh, MCP pre-loading,
+ * When provided, enables domain-specific context refresh
  * and skill injection — without forking the core loop.
  */
 export interface AgentConfig {
-  /** Dynamic context provider — called every iteration to refresh context. */
-  contextProvider?: ContextProvider;
+  /** Static context appended to the system prompt once (e.g. domain IDs). */
+  staticContext?: string;
   /** Skill names whose full content should be injected into the system prompt. */
   skills?: string[];
   /** LLM model id to use for this run (must be in MODEL_OPTIONS). */
@@ -133,64 +132,8 @@ export interface AgentConfig {
 /*  Core MCP names — always in scope                                   */
 /* ------------------------------------------------------------------ */
 
-const CORE_MCPS = new Set(["skills", "mcp_manager", "ui", "memory", "sync", "executor"]);
+const CORE_MCPS = new Set(["mcp_manager", "ui", "sync", "subagent"]);
 
-/* ------------------------------------------------------------------ */
-/*  Skill → MCP resolution + on-demand loading                         */
-/* ------------------------------------------------------------------ */
-
-/** Resolve skill names to their declared requiresMcps. */
-function resolveSkillMcps(skillNames: string[]): string[] {
-  const mcps: string[] = [];
-  for (const name of skillNames) {
-    const builtin = getBuiltinSkill(name);
-    if (builtin) {
-      for (const mcp of builtin.requiresMcps) mcps.push(mcp);
-    }
-  }
-  return mcps;
-}
-
-/**
- * Resolve implicit MCP dependencies from DB skills' metadata.
- * Skills with requiredSchemas implicitly depend on biz_db.
- */
-async function resolveImplicitMcps(skillNames: string[]): Promise<string[]> {
-  const mcps: string[] = [];
-  for (const name of skillNames) {
-    if (getBuiltinSkill(name)) continue; // already handled by resolveSkillMcps
-    const skill = await getSkill(name);
-    if (!skill) continue;
-    const schemas = extractRequiredSchemas(skill.metadata);
-    if (schemas?.length) {
-      mcps.push("biz_db");
-      break; // only need to add once
-    }
-  }
-  return mcps;
-}
-
-/** Ensure the listed MCPs are loaded in the registry (catalog or dynamic). */
-async function ensureMcpsLoaded(names: string[]): Promise<void> {
-  for (const name of names) {
-    if (registry.getProvider(name)) continue;
-    try {
-      if (isCatalogEntry(name)) {
-        loadFromCatalog(name);
-      } else {
-        const code = await mcpService.getMcpCode(name);
-        if (!code) {
-          console.warn(`[agent] MCP "${name}" has no production code, skipping`);
-          continue;
-        }
-        const provider = await sandboxManager.load(name, code);
-        registry.replace(provider);
-      }
-    } catch (err) {
-      console.warn(`[agent] Failed to load MCP "${name}":`, err);
-    }
-  }
-}
 
 /* ------------------------------------------------------------------ */
 /*  Per-session concurrency lock                                       */
@@ -208,6 +151,29 @@ function withSessionLock<T>(sid: string, fn: () => Promise<T>): Promise<T> {
     if (sessionLocks.get(sid) === next) sessionLocks.delete(sid);
   });
   return next;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Abort-aware promise racing                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Race a promise against an AbortSignal.
+ * When the signal fires before the promise settles, immediately rejects —
+ * the underlying promise is abandoned (fire-and-forget).
+ * Used to make tool calls cancellable without each tool implementing abort.
+ */
+function abortRace<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(new Error("Task cancelled"));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error("Task cancelled"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (val) => { signal.removeEventListener("abort", onAbort); resolve(val); },
+      (err) => { signal.removeEventListener("abort", onAbort); reject(err); },
+    );
+  });
 }
 
 export interface AgentResponse {
@@ -234,6 +200,7 @@ export interface UsageEvent {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  cacheReadTokens: number;
   model: string;
   maxContextTokens: number;
 }
@@ -398,24 +365,10 @@ async function runAgentInnerCore(
   images?: string[],
   config?: AgentConfig,
 ): Promise<AgentResponse> {
-  // --- Build active scope: core + skill-required MCPs ---
-  const activeScope = new Set(CORE_MCPS);
-  if (config?.skills) {
-    const skillMcps = resolveSkillMcps(config.skills);
-    const implicitMcps = await resolveImplicitMcps(config.skills);
-    const allMcps = [...skillMcps, ...implicitMcps];
-    await ensureMcpsLoaded(allMcps);
-    for (const m of allMcps) activeScope.add(m);
-  }
-
-  const systemPrompt = await buildSystemPrompt(config?.skills, activeScope);
-  const ctxProvider = config?.contextProvider ?? new BaseContextProvider(
-    toolCtx.sessionId ? { scopeType: "session", scopeId: toolCtx.sessionId } : undefined,
-  );
-
-  // --- Eviction setup (compression only; recall reads from DB) ---
-  const tracker = new ToolCallTracker();
-  scanMessages(session.messages, tracker);
+  const baseSystemPrompt = await buildSystemPrompt(config?.skills);
+  const systemPrompt = config?.staticContext
+    ? `${baseSystemPrompt}\n\n## Context\n${config.staticContext}`
+    : baseSystemPrompt;
 
   // Resolve images: data URLs → OSS HTTP URLs
   const resolvedImages = images?.length ? await resolveImages(images) : undefined;
@@ -425,7 +378,7 @@ async function runAgentInnerCore(
   const newMessages: ChatMessage[] = [userMsg];
   let persistedCount = 0;
 
-  /** Flush un-persisted messages to DB so recall can find them. */
+  /** Flush un-persisted messages to DB. */
   async function flush(): Promise<void> {
     const batch = newMessages.slice(persistedCount);
     if (batch.length > 0) {
@@ -435,39 +388,27 @@ async function runAgentInnerCore(
 }
 
   while (true) {
-    // Build system state context (refreshed every iteration)
-    const stateCtx = await ctxProvider.build();
-
-    // Rebuild compressed LLM context each iteration
-    // Order: static system prompt → stable history → dynamic context (maximizes prefix cache)
-    const allRaw = [...session.messages, ...newMessages];
-    const compressed = compressMessages(allRaw, tracker);
-    const compressedLlm = compressed.map(chatMsgToLlm);
+    const historyLlm = session.messages.map(chatMsgToLlm);
+    const newLlm = newMessages.map(chatMsgToLlm);
 
     // Anthropic prefix caching breakpoints:
     // BP1: system prompt — semi-static, high hit rate across iterations
-    // BP2: last history message — stable boundary before dynamic context pair
-    if (compressedLlm.length > 0) {
-      compressedLlm[compressedLlm.length - 1] = withCacheBreakpoint(
-        compressedLlm[compressedLlm.length - 1]!,
+    // BP2: last history message — stable boundary before dynamic content
+    if (historyLlm.length > 0) {
+      historyLlm[historyLlm.length - 1] = withCacheBreakpoint(
+        historyLlm[historyLlm.length - 1]!,
       );
     }
 
     const llmMessages: LlmMessage[] = [
       withCacheBreakpoint({ role: "system", content: systemPrompt } as LlmMessage),
-      ...compressedLlm,
-      // Context pair at the end — dynamic content after stable prefix for cache efficiency
-      ...(stateCtx
-        ? [
-            { role: "assistant" as const, content: "当前系统最新状态是什么？" },
-            { role: "user" as const, content: `[real-time system state — 以此为准]\n${stateCtx}` },
-          ]
-        : []),
+      ...historyLlm,
+      ...newLlm,
     ];
 
-    const mcpTools = await registry.listToolsForProviders(activeScope);
+    const mcpTools = await registry.listToolsForProviders(CORE_MCPS);
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
-    // BP3: last tool — cache tool definitions across iterations
+    // BP3: last tool — cache tool definitions across iterations (stable: always core MCPs only)
     if (openaiTools.length > 0) {
       Object.assign(openaiTools[openaiTools.length - 1]!, {
         cache_control: { type: "ephemeral" },
@@ -523,14 +464,6 @@ async function runAgentInnerCore(
           ?.map((c: Record<string, unknown>) => ("text" in c ? String(c.text) : JSON.stringify(c)))
           .join("\n") ?? "";
 
-      // Register with eviction tracker
-      tracker.register(tc.id, tc.function.name, tc.function.arguments, content);
-
-      // Expand scope if mcp_manager__use was called
-      if (tc.function.name === "mcp_manager__use" && typeof args.provider === "string") {
-        activeScope.add(args.provider);
-      }
-
       const toolMsg: ChatMessage = {
         role: "tool",
         tool_call_id: tc.id,
@@ -539,7 +472,7 @@ async function runAgentInnerCore(
       newMessages.push(toolMsg);
     }
 
-    // Flush assistant + tool messages so recall can find them
+    // Flush assistant + tool messages
     await flush();
   }
 }
@@ -608,23 +541,10 @@ async function runAgentStreamInnerCore(
   images?: string[],
   config?: AgentConfig,
 ): Promise<AgentResponse> {
-  // --- Build active scope: core + skill-required MCPs ---
-  const activeScope = new Set(CORE_MCPS);
-  if (config?.skills) {
-    const skillMcps = resolveSkillMcps(config.skills);
-    const implicitMcps = await resolveImplicitMcps(config.skills);
-    const allMcps = [...skillMcps, ...implicitMcps];
-    await ensureMcpsLoaded(allMcps);
-    for (const m of allMcps) activeScope.add(m);
-  }
-
-  const systemPrompt = await buildSystemPrompt(config?.skills, activeScope);
-  const ctxProvider = config?.contextProvider ?? new BaseContextProvider(
-    toolCtx.sessionId ? { scopeType: "session", scopeId: toolCtx.sessionId } : undefined,
-  );
-
-  const tracker = new ToolCallTracker();
-  scanMessages(session.messages, tracker);
+  const baseSystemPrompt = await buildSystemPrompt(config?.skills);
+  const systemPrompt = config?.staticContext
+    ? `${baseSystemPrompt}\n\n## Context\n${config.staticContext}`
+    : baseSystemPrompt;
 
   // Resolve images: data URLs → OSS HTTP URLs
   const resolvedImages = images?.length ? await resolveImages(images) : undefined;
@@ -634,7 +554,7 @@ async function runAgentStreamInnerCore(
   const newMessages: ChatMessage[] = [userMsg];
   let persistedCount = 0;
 
-  /** Flush un-persisted messages to DB so recall can find them. */
+  /** Flush un-persisted messages to DB. */
   async function flush(): Promise<void> {
     const batch = newMessages.slice(persistedCount);
     if (batch.length > 0) {
@@ -643,40 +563,34 @@ async function runAgentStreamInnerCore(
   }
 }
 
+  // Resolve & validate model
+  const modelId = resolveModel(config?.model);
+  if (config?.model && config.model !== modelId) {
+    console.warn(`[agent] Rejected non-whitelisted model: ${config.model} → fallback ${modelId}`);
+  }
+
   let lastReply = "";
 
   while (true) {
     if (signal?.aborted) break;
 
-    // Build system state context (refreshed every iteration)
-    const stateCtx = await ctxProvider.build();
-
-    // Rebuild compressed LLM context each iteration
-    // Order: static system prompt → stable history → dynamic context (maximizes prefix cache)
-    const allRaw = [...session.messages, ...newMessages];
-    const compressed = compressMessages(allRaw, tracker);
-    const compressedLlm = compressed.map(chatMsgToLlm);
+    const historyLlm = session.messages.map(chatMsgToLlm);
+    const newLlm = newMessages.map(chatMsgToLlm);
 
     // Anthropic prefix caching breakpoints (same as sync loop)
-    if (compressedLlm.length > 0) {
-      compressedLlm[compressedLlm.length - 1] = withCacheBreakpoint(
-        compressedLlm[compressedLlm.length - 1]!,
+    if (historyLlm.length > 0) {
+      historyLlm[historyLlm.length - 1] = withCacheBreakpoint(
+        historyLlm[historyLlm.length - 1]!,
       );
     }
 
     const llmMessages: LlmMessage[] = [
       withCacheBreakpoint({ role: "system", content: systemPrompt } as LlmMessage),
-      ...compressedLlm,
-      // Context pair at the end — dynamic content after stable prefix for cache efficiency
-      ...(stateCtx
-        ? [
-            { role: "assistant" as const, content: "当前系统最新状态是什么？" },
-            { role: "user" as const, content: `[real-time system state — 以此为准]\n${stateCtx}` },
-          ]
-        : []),
+      ...historyLlm,
+      ...newLlm,
     ];
 
-    const mcpTools = await registry.listToolsForProviders(activeScope);
+    const mcpTools = await registry.listToolsForProviders(CORE_MCPS);
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
     if (openaiTools.length > 0) {
       Object.assign(openaiTools[openaiTools.length - 1]!, {
@@ -687,42 +601,91 @@ async function runAgentStreamInnerCore(
     let currentContent = "";
 
     try {
-      const stream = await chatCompletionStream(llmMessages, openaiTools, signal, config?.model);
+      const MAX_STREAM_RETRIES = 10;
+      const BASE_DELAY_MS = 1000;
+      const MAX_DELAY_MS = 30_000;
       const toolCallsByIndex = new Map<number, ToolCall>();
       let lastUsage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | undefined;
 
-      for await (const chunk of stream) {
-        // Capture usage FIRST — the final chunk has usage but empty choices
-        if (chunk.usage) {
-          lastUsage = chunk.usage;
-        }
-        const choice = chunk.choices[0];
-        if (!choice) continue;
-        const delta = choice.delta;
-        if (delta.content) {
-          currentContent += delta.content;
-          callbacks.onDelta?.(delta.content);
-        }
-        if (delta.tool_calls?.length) {
-          for (const tcDelta of delta.tool_calls) {
-            upsertToolCall(toolCallsByIndex, tcDelta);
+      for (let attempt = 0; ; attempt++) {
+        const stream = await chatCompletionStream(llmMessages, openaiTools, signal, modelId);
+        try {
+          for await (const chunk of stream) {
+            // Capture usage FIRST — the final chunk has usage but empty choices
+            if (chunk.usage) {
+              lastUsage = chunk.usage;
+            }
+            const choice = chunk.choices[0];
+            if (!choice) continue;
+            const delta = choice.delta;
+            if (delta.content) {
+              currentContent += delta.content;
+              callbacks.onDelta?.(delta.content);
+            }
+            if (delta.tool_calls?.length) {
+              for (const tcDelta of delta.tool_calls) {
+                upsertToolCall(toolCallsByIndex, tcDelta);
+              }
+            }
           }
+          break; // stream completed successfully
+        } catch (streamErr: unknown) {
+          // Abort the stream to prevent dangling connection / unhandled rejections
+          stream.controller.abort();
+          if (
+            !signal?.aborted &&
+            isTransientStreamError(streamErr) &&
+            attempt < MAX_STREAM_RETRIES
+          ) {
+            const delay = Math.min(BASE_DELAY_MS * 2 ** attempt, MAX_DELAY_MS);
+            console.warn(
+              `[agent] Stream attempt ${attempt + 1}/${MAX_STREAM_RETRIES} failed (${(streamErr as Error).message}), retrying in ${delay}ms...`,
+            );
+            await new Promise((r) => setTimeout(r, delay));
+            // Reset accumulated content — we'll redo the full LLM call
+            currentContent = "";
+            toolCallsByIndex.clear();
+            lastUsage = undefined;
+            continue;
+          }
+          throw streamErr;
         }
       }
 
       lastReply = currentContent;
 
       // Emit usage
-      const modelId = resolveModel(config?.model);
       const maxCtx = MODEL_OPTIONS.find((m) => m.id === modelId)?.maxContextTokens ?? 200_000;
       if (lastUsage) {
+        // Extract cache read tokens from prompt_tokens_details (OpenAI SDK format)
+        const usageRaw = lastUsage as Record<string, unknown>;
+        const details = usageRaw.prompt_tokens_details as Record<string, unknown> | undefined;
+        const cacheRead = typeof details?.cached_tokens === "number" ? details.cached_tokens : 0;
         callbacks.onUsage?.({
           promptTokens: lastUsage.prompt_tokens,
           completionTokens: lastUsage.completion_tokens,
           totalTokens: lastUsage.total_tokens,
+          cacheReadTokens: cacheRead,
           model: modelId,
           maxContextTokens: maxCtx,
         });
+
+        // Context checkpoint: compress history when approaching limit
+        if (lastUsage.prompt_tokens > maxCtx * CHECKPOINT_THRESHOLD) {
+          const allCurrent = [...session.messages, ...newMessages];
+          const compressed = await compressToCheckpoint(allCurrent);
+          if (compressed) {
+            // Persist compressed messages to DB
+            await replaceMessages(session.id, compressed);
+            // Reset in-memory state: compressed becomes new history
+            session.messages = compressed;
+            newMessages.length = 0;
+            persistedCount = 0;
+            console.log(
+              `[agent] Context checkpoint triggered (${lastUsage.prompt_tokens}/${maxCtx} tokens)`,
+            );
+          }
+        }
       }
 
       const toolCalls = Array.from(toolCallsByIndex.entries())
@@ -768,7 +731,10 @@ async function runAgentStreamInnerCore(
         const t0 = Date.now();
         let toolError: string | undefined;
         try {
-          const result = await registry.callTool(tc.function.name, args, toolCtx);
+          const result = await abortRace(
+            registry.callTool(tc.function.name, args, toolCtx),
+            signal,
+          );
 
           // Side-channel: upload provider attaches _uploadRequest
           const uploadReq = (result as Record<string, unknown>)._uploadRequest;
@@ -782,14 +748,6 @@ async function runAgentStreamInnerCore(
                 "text" in c ? String(c.text) : JSON.stringify(c),
               )
               .join("\n") ?? "";
-
-          // Register with eviction tracker
-          tracker.register(tc.id, tc.function.name, tc.function.arguments, content);
-
-          // Expand scope if mcp_manager__use was called
-          if (tc.function.name === "mcp_manager__use" && typeof args.provider === "string") {
-            activeScope.add(args.provider);
-          }
 
           // Extract key resources from known resource-producing tools
           for (const kr of extractKeyResources(tc.function.name, content)) {
@@ -821,7 +779,7 @@ async function runAgentStreamInnerCore(
         break;
       }
 
-      // Flush assistant + tool messages so recall can find them
+      // Flush assistant + tool messages
       await flush();
     } catch (err: unknown) {
       if (signal?.aborted) {

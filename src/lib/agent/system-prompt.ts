@@ -14,30 +14,32 @@ const RULES = `You are Agent Forge, an AI assistant with access to tools provide
 ## Core Rules
 
 ### Skills
-- Skills are system knowledge documents managed by the \`skills\` MCP.
-- Always call \`skills__get\` to read full content **before** using related tools.
+- Skills are system knowledge documents. Each MCP that supports skills exposes \`list_skills\` and \`get_skill\` tools.
+- Always call \`get_skill\` to read full content **before** using related tools.
+- **Pre-loaded skills** (marked \`[Pre-loaded]\` below) are already fully included in this prompt. Do NOT call \`get_skill\` for them.
+- Skill management (create/update/delete) requires the \`skill_admin\` MCP (available via \`mcp_manager__use\`).
 - Never create, update, or import skills unless the user explicitly asks.
 
 ### MCP Servers
-Your tool list contains **active** MCPs only. Additional MCPs are listed under "Available MCPs" below.
+Your tool list contains **core** MCPs only (mcp_manager, ui, sync, subagent). All other MCPs are called via \`mcp_manager__use\`.
 
-- **Active MCPs** — their tools are in your tool list; call directly.
-- **Available MCPs** — listed below but not in your tool list. Call via \`mcp_manager__use(provider, tool, args)\`. After first use, the MCP's tools appear in your tool list for direct calls.
+- **Core MCPs** — their tools are in your tool list; call directly.
+- **Other MCPs** — listed under "Available MCPs" below. Always call via \`mcp_manager__use(provider, tool, args)\`.
 - \`mcp_manager__use\` works for **any** MCP by name — including ones not listed below (e.g. newly created Dynamic MCPs). Use \`mcp_manager__list\` to discover all MCPs in the system.
 - **Dynamic MCPs** — User-created JS code stored in DB. Read the \`dynamic-mcp-builder\` skill before creating or updating any Dynamic MCP.
 
-### Executor Delegation
-For multi-step business operations, **delegate to executors** instead of calling tools directly.
-- \`executor__run_sync\` — dispatch tasks and wait for results. Supports concurrent batch execution.
-- \`executor__run_async\` — dispatch long-running tasks, continue working, check results later with \`executor__get_result\`.
-- \`executor__schedule\` — schedule future or recurring tasks.
-- Executors are lightweight agents with their own tool-use loop. Specify \`mcpScope\` (which MCPs to use) and \`instruction\` (what to do). The executor figures out the tool calls.
-- If an executor fails, read its output to understand what went wrong and what it needs, then retry with adjusted parameters.
-- **Direct tool calls are still appropriate for**: quick data reads, skill retrieval, memory recall, and any situation where a single tool call suffices.
-
-### Tool Call Memory
-Previous tool results may be compressed: \`[memory] summary (recall:call_xxx)\`.
-Use \`memory__recall\` only when the summary lacks detail you need.
+### SubAgent Delegation
+For prompt-driven tasks and multi-step business operations, **delegate to subagents** instead of calling tools directly.
+- \`subagent__run\` — dispatch tasks and wait for results. Supports concurrent batch execution. Mode is determined by \`mcpScope\`:
+  - **Omit mcpScope** → single-shot mode: one LLM call, ideal for prompt execution, JSON generation, and multimodal analysis. Supports \`outputSchema\` for validated structured output.
+  - **Specify mcpScope** → tool-loop mode: multi-iteration agent with its own tools, ideal for complex business operations.
+- \`subagent__run_async\` — dispatch long-running tasks, continue working, check results later with \`subagent__get_result\`.
+- \`subagent__continue\` — send follow-up feedback to an existing subagent (by \`agentId\`). The subagent retains its full conversation history and continues execution.
+- \`subagent__get_trace\` — inspect a subagent's full execution trace (message history, tool calls, system prompt) for debugging. Use when a subagent fails and you need to understand why.
+- \`subagent__schedule\` — schedule future or recurring tasks.
+- If a subagent fails, use \`subagent__get_trace\` to inspect the trace, then either \`subagent__continue\` with corrective feedback or retry with adjusted parameters.
+- **Async result collection**: after calling \`subagent__run_async\`, you **must** collect all results with \`subagent__get_result\` (use \`subagent__wait\` if needed) before ending your reply. Uncollected results are lost to the conversation.
+- **Direct tool calls are still appropriate for**: quick data reads, skill retrieval, and any situation where a single tool call suffices.
 
 ### Error Handling
 When a tool call fails, report the error to the user. Do not fabricate results.`;
@@ -48,16 +50,25 @@ When a tool call fails, report the error to the user. Do not fabricate results.`
 
 /**
  * Build the full system prompt.
- * Static rules + active MCP list + available MCP catalog + skill index.
+ * Static rules + injected skill instructions + active MCP list + skill index.
+ *
+ * Skills listed in `injectedSkills` are:
+ *   1. Rendered as top-level sections (between RULES and MCP section)
+ *   2. Excluded from the skill index so the LLM won't try `get_skill`
  */
 export async function buildSystemPrompt(
-  preloadedSkills?: string[],
-  activeScope?: Set<string>,
+  injectedSkills?: string[],
 ): Promise<string> {
   const parts: string[] = [RULES];
 
-  // Active MCP descriptions + available MCP catalog
-  const mcpSection = await buildMcpSection(preloadedSkills, activeScope);
+  // Inject skill content as top-level system prompt sections
+  if (injectedSkills?.length) {
+    const skillSections = await buildInjectedSkillSections(injectedSkills);
+    if (skillSections) parts.push(skillSections);
+  }
+
+  // Core MCP descriptions + available MCP catalog
+  const mcpSection = await buildMcpSection(injectedSkills);
   parts.push(mcpSection);
 
   return parts.join("\n\n");
@@ -67,31 +78,27 @@ export async function buildSystemPrompt(
 /*  Active MCP description builder                                     */
 /* ------------------------------------------------------------------ */
 
-async function buildMcpSection(
-  preloadedSkills?: string[],
-  activeScope?: Set<string>,
-): Promise<string> {
-  const activeNames = activeScope ?? new Set(registry.listProviders().map((p) => p.name));
-  const lines: string[] = ["## Active MCPs"];
+const CORE_MCPS = new Set(["mcp_manager", "ui", "sync", "subagent"]);
 
-  for (const name of activeNames) {
+async function buildMcpSection(
+  injectedSkills?: string[],
+): Promise<string> {
+  const lines: string[] = ["## Core MCPs"];
+
+  for (const name of CORE_MCPS) {
     const provider = registry.getProvider(name);
     if (!provider) continue;
     const tools = await provider.listTools();
     const toolNames = tools.map((t) => `\`${t.name}\``).join(", ");
-
-    if (name === "skills") {
-      lines.push(`### \`skills\``);
-      lines.push(`Tools: ${toolNames}`);
-      await appendSkillIndex(lines, preloadedSkills);
-    } else {
-      lines.push(`### \`${name}\``);
-      lines.push(`Tools: ${toolNames}`);
-    }
+    lines.push(`### \`${name}\``);
+    lines.push(`Tools: ${toolNames}`);
   }
 
-  // Available MCPs (not in active scope) — listed as catalog for mcp_manager__use
-  await appendAvailableCatalog(lines, activeNames);
+  // Available MCPs (not core) — listed as catalog for mcp_manager__use
+  await appendAvailableCatalog(lines, CORE_MCPS);
+
+  // Skill index — standalone section, not tied to any specific provider
+  await appendSkillIndex(lines, injectedSkills);
 
   return lines.join("\n");
 }
@@ -139,33 +146,48 @@ async function appendAvailableCatalog(
   }
 }
 
-async function appendSkillIndex(lines: string[], preloadedSkills?: string[]): Promise<void> {
+async function appendSkillIndex(lines: string[], injectedSkills?: string[]): Promise<void> {
   const skills = await listSkills();
   if (skills.length === 0) return;
 
-  lines.push("Available skills:");
-  for (const s of skills) {
+  // Exclude already-injected skills from the index
+  const injectedSet = new Set(injectedSkills ?? []);
+  const available = skills.filter((s) => !injectedSet.has(s.name));
+  if (available.length === 0) return;
+
+  lines.push("");
+  lines.push("## Skills");
+  lines.push("Call `get_skill` (available in your active MCP) to read full content.");
+  for (const s of available) {
     const mcps = s.requiresMcps.length > 0 ? ` [needs: ${s.requiresMcps.map((m) => `\`${m}\``).join(", ")}]` : "";
     lines.push(`- **${s.name}**: ${s.description}${mcps}`);
   }
+}
 
-  // Append pre-loaded skill content inline (with requiredSchemas check)
-  if (preloadedSkills?.length) {
-    const loaded: string[] = [];
-    for (const name of preloadedSkills) {
-      const skill = await getSkill(name);
-      if (skill) {
-        const content = await appendSchemaDirectiveIfNeeded(
-          skill.content,
-          skill.metadata,
-        );
-        loaded.push(`#### ${skill.name}\n${content}`);
-      }
+/* ------------------------------------------------------------------ */
+/*  Injected skill sections (top-level system prompt)                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Resolve skill names and concatenate their content as top-level prompt sections.
+ * These become part of the system prompt itself — mandatory agent instructions,
+ * not optional reference material.
+ */
+async function buildInjectedSkillSections(
+  skillNames: string[],
+): Promise<string | undefined> {
+  const sections: string[] = [];
+  for (const name of skillNames) {
+    const skill = await getSkill(name);
+    if (!skill) {
+      console.warn(`[system-prompt] Skill "${name}" not found, skipping injection`);
+      continue;
     }
-    if (loaded.length > 0) {
-      lines.push("");
-      lines.push("Pre-loaded skill content (no need to call `skills__get`):");
-      lines.push(loaded.join("\n\n"));
-    }
+    const content = await appendSchemaDirectiveIfNeeded(
+      skill.content,
+      skill.metadata,
+    );
+    sections.push(`<!-- [Pre-loaded] ${name} — do NOT call get_skill for this -->\n${content}`);
   }
+  return sections.length > 0 ? sections.join("\n\n") : undefined;
 }

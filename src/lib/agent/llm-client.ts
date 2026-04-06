@@ -3,6 +3,7 @@ import type {
   ChatCompletionTool,
   ChatCompletionChunk,
 } from "openai/resources/chat/completions";
+import type { Stream } from "openai/streaming";
 import type { Tool } from "@modelcontextprotocol/sdk/types";
 import { DEFAULT_MODEL } from "./models";
 
@@ -17,6 +18,8 @@ function getClient(): OpenAI {
     g.__llmClient = new OpenAI({
       apiKey: process.env.LLM_API_KEY ?? "",
       baseURL: process.env.LLM_BASE_URL || undefined,
+      timeout: 5 * 60_000,   // 5 min per-request timeout
+      maxRetries: 2,          // retry on connection errors (initial connect)
     });
   }
   return g.__llmClient;
@@ -61,7 +64,7 @@ export async function chatCompletionStream(
   tools?: ChatCompletionTool[],
   signal?: AbortSignal,
   model?: string,
-): Promise<AsyncIterable<ChatCompletionChunk>> {
+): Promise<Stream<ChatCompletionChunk>> {
   const client = getClient();
   return client.chat.completions.create(
     {
@@ -72,6 +75,23 @@ export async function chatCompletionStream(
       stream_options: { include_usage: true },
     },
     signal ? { signal } : undefined,
+  );
+}
+
+/** Check if an error is a transient network issue worth retrying. */
+export function isTransientStreamError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message;
+  const cause = (err as { cause?: Error }).cause;
+  const causeCode = (cause as { code?: string } | undefined)?.code;
+  return (
+    msg === "terminated" ||
+    causeCode === "ETIMEDOUT" ||
+    causeCode === "ECONNRESET" ||
+    causeCode === "EPIPE" ||
+    causeCode === "UND_ERR_SOCKET" ||
+    msg.includes("network") ||
+    msg.includes("socket hang up")
   );
 }
 
