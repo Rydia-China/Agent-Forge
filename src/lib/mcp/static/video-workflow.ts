@@ -168,6 +168,16 @@ const PlanVideoShotsParams = z.object({
   model: z.string().optional(),
 });
 
+const ExecuteVideoShotParams = z.object({
+  scriptId: z.string().min(1),
+  key: z.string().min(1),
+  shotPrompt: z.string().min(1),
+  definition: z.string().min(1),
+  duration: z.number().min(4).max(15),
+  previousVideoUrl: z.string().url().optional(),
+  title: z.string().optional(),
+});
+
 const ExtractTailParams = z.object({
   sourceVideoUrl: z.string().url(),
   seconds: z.number().min(1).max(10).default(5),
@@ -356,7 +366,29 @@ const TOOLS: Tool[] = [
     },
   },
 
-  // --- Video Gen ---
+  {
+    name: "execute_video_shot",
+    description:
+      "Execute a single video shot end-to-end: auto-resolves reference images from definition, " +
+      "always uses video_style, handles extract_tail for continuation shots. " +
+      "Pass the shot data from plan_video_shots output. For continuation shots (definition has @视飑1), " +
+      "pass previousVideoUrl. The tool does everything else.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        scriptId: { type: "string", description: "Episode script DB ID" },
+        key: { type: "string", description: "Shot key (e.g. 'public_1', 'branch_1_1')" },
+        shotPrompt: { type: "string", description: "Shot prompt from plan_video_shots output" },
+        definition: { type: "string", description: "Definition from plan_video_shots (e.g. '@图1 是 [场景X空镜]，@图2 是 [人物A立绘]')" },
+        duration: { type: "number", description: "Duration in seconds (4-15)" },
+        previousVideoUrl: { type: "string", description: "Previous shot's video URL (for continuation shots with @视飑1). Tool auto-calls extract_tail." },
+        title: { type: "string", description: "Human-readable label" },
+      },
+      required: ["scriptId", "key", "shotPrompt", "definition", "duration"],
+    },
+  },
+
+  // --- Video Gen (low-level) ---
   {
     name: "generate_video",
     description:
@@ -901,6 +933,175 @@ export const videoWorkflowMcp: McpProvider = {
             raw: result.output,
           });
         }
+      }
+
+      /* ------------------------------------------------------------ */
+      /*  execute_video_shot                                            */
+      /* ------------------------------------------------------------ */
+      case "execute_video_shot": {
+        const shotParams = ExecuteVideoShotParams.parse(args);
+
+        // 1. Resolve novelId from scriptId
+        const tScriptsShot = await physical("novel_scripts");
+        const { rows: shotRows } = await bizPool.query(
+          `SELECT novel_id FROM "${tScriptsShot}" WHERE id = $1 LIMIT 1`,
+          [shotParams.scriptId],
+        );
+        const shotRow = shotRows[0] as { novel_id: string } | undefined;
+        if (!shotRow) return text(`Episode not found: ${shotParams.scriptId}`);
+        const shotNovelId = shotRow.novel_id;
+
+        // 2. Get all resources for reference matching
+        const allResources = await prisma.keyResource.findMany({
+          where: {
+            OR: [
+              { scopeType: "novel", scopeId: shotNovelId },
+              { scopeType: "script", scopeId: shotParams.scriptId },
+            ],
+            currentVersion: { gt: 0 },
+          },
+          include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+        });
+
+        // 3. Parse definition and resolve @图N to URLs
+        const refImageUrls: string[] = [];
+        const imgRefs = shotParams.definition.match(/@图\d+\s*是\s*\[([^\]]+)\]/g) ?? [];
+        for (const ref of imgRefs) {
+          const nameMatch = ref.match(/\[([^\]]+)\]/);
+          if (!nameMatch) continue;
+          const refName = nameMatch[1]!;
+          // Strip common suffixes for fuzzy matching
+          const cleanName = refName.replace(/(空镜|立绘|换装)$/g, "").trim();
+
+          // Try matching: 场景 category first, then 角色立绘/换装
+          let matched: string | null = null;
+          for (const r of allResources) {
+            const url = r.versions[0]?.url;
+            if (!url) continue;
+            const title = r.title ?? "";
+            if (title.includes(cleanName) || cleanName.includes(title)) {
+              // Prefer 换装 over 角色立绘 for character references
+              if (matched && r.category === "角色立绘") continue;
+              matched = url;
+              if (r.category === "换装") break; // 换装 is preferred, stop searching
+            }
+          }
+          if (matched) refImageUrls.push(matched);
+        }
+
+        // 4. Resolve style (always video_style)
+        const shotStyle = await resolveStyle("video_style");
+        if (shotStyle.styleRefUrl) refImageUrls.unshift(shotStyle.styleRefUrl);
+
+        // 5. Handle continuation: extract_tail if previousVideoUrl provided
+        let sourceVideoUrls: string[] | undefined;
+        if (shotParams.previousVideoUrl) {
+          const { writeFile: wf, readFile: rf, unlink: ul } = await import("node:fs/promises");
+          const { join: joinPath } = await import("node:path");
+          const { tmpdir: getTmpdir } = await import("node:os");
+          const { randomUUID: uuid } = await import("node:crypto");
+          const { path: ffmpegPath } = await import("@ffmpeg-installer/ffmpeg");
+          const { execFile } = await import("node:child_process");
+          const { promisify } = await import("node:util");
+          const execFileAsync = promisify(execFile);
+
+          const tailId = uuid();
+          const tmpIn = joinPath(getTmpdir(), `tail-in-${tailId}.mp4`);
+          const tmpOut = joinPath(getTmpdir(), `tail-out-${tailId}.mp4`);
+
+          const dlRes = await fetch(shotParams.previousVideoUrl);
+          if (!dlRes.ok) throw new Error(`下载视频失败: ${dlRes.status}`);
+          await wf(tmpIn, Buffer.from(await dlRes.arrayBuffer()));
+
+          try {
+            // Probe duration
+            let videoDuration = 0;
+            try {
+              await execFileAsync(ffmpegPath, ["-i", tmpIn]);
+            } catch (err: unknown) {
+              const stderr = err instanceof Error && "stderr" in err
+                ? (err as Error & { stderr: string }).stderr : "";
+              const m = stderr.match(/Duration:\s*(\d+):(\d+):(\d+)\.(\d+)/);
+              if (m) {
+                videoDuration = parseInt(m[1]!) * 3600 + parseInt(m[2]!) * 60 + parseInt(m[3]!) + parseInt(m[4]!) / 100;
+              }
+            }
+            if (videoDuration <= 0) throw new Error("无法解析视频时长");
+
+            const startSec = Math.max(0, videoDuration - 5);
+            await execFileAsync(ffmpegPath, [
+              "-ss", String(startSec), "-i", tmpIn,
+              "-c", "copy", "-y", tmpOut,
+            ]);
+            const tailBuffer = await rf(tmpOut);
+            const tailFilename = ossService.generateFilename("tail.mp4", "tail");
+            const tailUrl = await ossService.uploadBuffer(tailBuffer, tailFilename, "video");
+            sourceVideoUrls = [tailUrl];
+          } finally {
+            await ul(tmpIn).catch(() => {});
+            await ul(tmpOut).catch(() => {});
+          }
+        }
+
+        // 6. Compile prompt via style template
+        const shotPromptCompiled = compileTemplate(shotStyle.stylePrompt, {
+          definition: shotParams.definition,
+          prompt: shotParams.shotPrompt,
+        });
+
+        // 7. Call Seedance
+        const imageUrls = [...refImageUrls];
+        const videoUrls = sourceVideoUrls ?? [];
+        const generateType = videoUrls.length > 0
+          ? "multimodal" as const
+          : refImageUrls.length > 0
+            ? "first_frame" as const
+            : "text_to_video" as const;
+
+        let seedResult;
+        try {
+          seedResult = await seedanceGenerate({
+            prompt: shotPromptCompiled,
+            generateType,
+            imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+            videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
+            duration: shotParams.duration,
+          });
+        } catch (err) {
+          return json({
+            status: "error",
+            key: shotParams.key,
+            error: err instanceof Error ? err.message : String(err),
+            prompt: shotPromptCompiled,
+            referenceImageUrls: refImageUrls,
+          });
+        }
+
+        // 8. Persist to KeyResource
+        const kr = await keyResourceService.upsertResource(
+          "script", shotParams.scriptId, shotParams.key, "video",
+          {
+            prompt: shotPromptCompiled,
+            url: seedResult.saveUrl,
+            refUrls: [...imageUrls, ...videoUrls],
+            data: { generateType, duration: shotParams.duration },
+          },
+        );
+        await prisma.keyResource.update({
+          where: { id: kr.id },
+          data: { category: "视频", title: shotParams.title ?? shotParams.key },
+        });
+
+        return json({
+          status: "ok",
+          key: shotParams.key,
+          keyResourceId: kr.id,
+          version: kr.version,
+          videoUrl: seedResult.saveUrl,
+          timingMs: seedResult.timingMs,
+          referenceImageCount: refImageUrls.length,
+          prompt: shotPromptCompiled,
+        });
       }
 
       /* ------------------------------------------------------------ */
