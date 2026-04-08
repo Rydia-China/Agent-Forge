@@ -1,80 +1,50 @@
 /**
- * Built-in Skill: langfuse
+ * Built-in Skill: prompt-compiler
  *
  * 标准 SKILL.md 格式（YAML frontmatter + Markdown body）以字符串形式内嵌。
  * 由 builtins/index.ts 统一加载解析。
  */
 export const raw = `---
 name: prompt-compiler
-provider: langfuse
-description: Fetch and compile prompt templates from Langfuse with variable substitution. Use when you need to prepare prompts for subagent execution or inspect available prompt templates.
+provider: local
+description: Prompt compilation rules for the video workflow. Style words come from StylePreset DB, prompt assembly is done inline — no external template engine.
 tags:
   - core
   - prompt
-  - langfuse
+  - style
 requires_mcps:
-  - langfuse
-  - langfuse_admin
+  - style_preset
 ---
-# Langfuse Prompt 管理
+# Prompt 编译规则
 
-## 概述
+## 核心原则
 
-Langfuse 是外部 prompt 版本管理系统。prompt 模板由运营人员在 Langfuse 控制台维护，本系统通过 MCP tools 读取和编译。
+**StylePreset.prompt 就是完整的 prompt 模板。** 代码只提供数据变量做 \`{{var}}\` 替换，替换后直接就是最终 prompt。
 
-**核心原则：从 Langfuse 获取的 prompt 必须通过 \`subagent__run_text\` 执行，禁止在主控上下文中直接使用。**
+代码中 **禁止硬编码任何 prompt 结构**（风格词、指令语、copyright 等）。所有内容均在 StylePreset DB 中维护。
 
-## 可用工具
+## StylePreset 管理
 
-- \`langfuse__list_prompts\` — 列出所有 prompt（名称和元数据，不含内容）
-- \`langfuse__get_prompts\` — 获取 prompt 模板原文（含 \`{{variable}}\` 占位符），支持批量
-- \`langfuse__compile_prompts\` — 获取并编译 prompt（替换变量），返回可直接执行的最终 prompt，支持批量
+通过 \`style_preset\` MCP tools 或 REST API 查看和修改。
 
-## 变量语法
+6 个内置预设及其可用变量：
+- \`portrait-style\` — 角色立绘，变量: \`{{demographics}}\`
+- \`update_portrait_style\` — 更新立绘，变量: \`{{demographics}}\`
+- \`location_style\` — 单场景图，变量: \`{{name}}\` \`{{scenePrompt}}\`
+- \`location_grid_style\` — 宫格图，变量: \`{{name}}\` \`{{gridSize}}\` \`{{gridSlots}}\`
+- \`sub_location_style\` — 子场景高清放大，变量: \`{{name}}\` \`{{sceneName}}\`
+- \`video_style\` — 视频生成，变量: \`{{shotPrompt}}\` \`{{clipDescription}}\` \`{{referenceInfo}}\`
 
-Langfuse prompt 使用 \`{{variableName}}\` 语法标记变量占位符。
+## 代码对 StylePreset 的约定
 
-**重要：风格词、比例、约束等全部由 Langfuse 模板控制，禁止在代码或对话中硬编码任何风格词。**
-
-编译调用示例：
-\\\`\\\`\\\`json
-{
-  "name": "common__gen_scenery_shot__image",
-  "variables": {
-    "style": "<风格词>",
-    "scenePrompt": "<场景视觉描述>"
-  }
-}
+代码只做一件事：
+\\\`\\\`\\\`
+prompt = compileTemplate(style.stylePrompt, { ...variables })
 \\\`\\\`\\\`
 
-## Prompt 命名约定
+不做任何额外拼接、不加前缀/后缀、不包装。模板怎么写，输出就是什么。
 
-Prompt 名称遵循 \`{workflow}__{step}__{type}\` 格式：
+## Langfuse
 
-- **workflow**: \`common\`（共用）、\`live2d\`、\`intro\`
-- **step**: 步骤名（如 \`gen_scenery_shot\`、\`gen_scene\`）
-- **type**: \`image\`（图片生成）、\`video\`（视频生成）、\`video_prompt\`（视频提示词生成）
-
-示例：
-- \`common__gen_scenery_shot__image\` — 空镜图片生成
-- \`live2d__gen_scene__image\` — Live2D 分镜图生成
-- \`intro__gen_scene__video_prompt\` — Intro 视频提示词生成
-
-**禁止猜测 prompt 名称** — 必须先通过 \`langfuse__list_prompts\` 或 \`langfuse__get_prompts\` 确认实际存在的名称。
-
-## 典型工作流
-
-1. 调用 \`langfuse__list_prompts\` 发现可用 prompt
-2. 调用 \`langfuse__get_prompts\` 查看模板原文，确认实际变量名
-3. 调用 \`langfuse__compile_prompts\` 编译（传入变量数组）
-4. 将编译后的 prompt 传给 \`subagent__run_text\` 执行
-
-**禁止猜测变量名** — 必须先通过 \`get_prompts\` 查看实际模板，确认 \`{{variable}}\` 名称后再调用 compile_prompts。
-**禁止硬编码风格词** — 风格词由运营在 Langfuse 控制台维护，代码和对话中不得出现任何风格词字面量。
-
-## 约束
-
-- Prompt 内容由运营在 Langfuse 控制台维护，本系统只读不写
-- 未编译的变量（\`{{var}}\` 未替换）会原样保留在输出中
-- 编译后的 prompt 必须通过 subagent 执行，不要在主控对话中直接使用
+Langfuse 仍可用于 prompt 版本管理和浏览（\`langfuse__list_prompts\` / \`langfuse__get_prompts\`），但**不在生产执行路径上**。
 `;

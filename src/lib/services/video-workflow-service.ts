@@ -879,7 +879,7 @@ export async function getPromptPreview(
   }
 
   // Build character previews
-  const langfusePromptSvc = await import("@/lib/services/langfuse-prompt-service");
+  const { compileTemplate } = await import("@/lib/mcp/static/langfuse-helpers");
   const characters: CharacterPreview[] = [];
   for (const arc of characterArcs) {
     const name = String(arc.name ?? "");
@@ -892,11 +892,7 @@ export async function getPromptPreview(
 
     let compiledPrompt: string | null = null;
     if (portraitStylePrompt && appearance) {
-      const result = await langfusePromptSvc.compilePrompt(
-        "common__portrait__image",
-        { stylePrompt: portraitStylePrompt, demographics: appearance },
-      );
-      compiledPrompt = result.compiledPrompt;
+      compiledPrompt = compileTemplate(portraitStylePrompt, { demographics: appearance });
     }
 
     characters.push({
@@ -913,7 +909,6 @@ export async function getPromptPreview(
 
   // Analyze locations to determine mode per parent
   const analyzed = analyzeLocations(locationBible);
-  const { compileTemplate } = await import("@/lib/mcp/static/langfuse-helpers");
 
   // Build scene previews (mode-aware)
   const scenes: ScenePreview[] = [];
@@ -922,11 +917,7 @@ export async function getPromptPreview(
       // Single mode: parent with no real sub-locations
       let compiled: string | null = null;
       if (singleStylePrompt && loc.visualPrompt) {
-        const result = await langfusePromptSvc.compilePrompt(
-          "common__gen_scenery_shot__image",
-          { style: compileTemplate(singleStylePrompt, { name: loc.name }), scenePrompt: loc.visualPrompt },
-        );
-        compiled = result.compiledPrompt;
+        compiled = compileTemplate(singleStylePrompt, { name: loc.name, scenePrompt: loc.visualPrompt });
       }
       scenes.push({
         name: loc.name,
@@ -945,15 +936,11 @@ export async function getPromptPreview(
           `【格 1】${loc.name}：${loc.visualPrompt}`,
           ...loc.realSubs.map((sub, i) => `【格 ${i + 2}】${sub.name}：${sub.visualPrompt}`),
         ];
-        const result = await langfusePromptSvc.compilePrompt(
-          "common__gen_scene_grid__image",
-          {
-            style: compileTemplate(gridStylePrompt, { name: loc.name }),
-            gridSize: String(loc.gridSize),
-            gridSlots: slots.join("\n"),
-          },
-        );
-        gridCompiled = result.compiledPrompt;
+        gridCompiled = compileTemplate(gridStylePrompt, {
+          name: loc.name,
+          gridSize: String(loc.gridSize),
+          gridSlots: slots.join("\n"),
+        });
       }
       scenes.push({
         name: loc.name,
@@ -969,14 +956,7 @@ export async function getPromptPreview(
       for (const sub of loc.realSubs) {
         let hdCompiled: string | null = null;
         if (hdStylePrompt) {
-          const result = await langfusePromptSvc.compilePrompt(
-            "common__gen_scene_hd__image",
-            {
-              style: compileTemplate(hdStylePrompt, { name: sub.name }),
-              sceneName: sub.name,
-            },
-          );
-          hdCompiled = result.compiledPrompt;
+          hdCompiled = compileTemplate(hdStylePrompt, { name: sub.name, sceneName: sub.name });
         }
         scenes.push({
           name: sub.name,

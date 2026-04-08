@@ -16,7 +16,7 @@
   },
   {
     "name": "sub_location_style",
-    "prompt": "16:9 尺寸，场景空镜图，新海诚动漫画风，将【{{name}}】的场景图放大并添加电影级细节，画面中没有任何文字和人物。",
+    "prompt": "新海诚动漫画风",
     "referenceImageUrl": null
   },
   {

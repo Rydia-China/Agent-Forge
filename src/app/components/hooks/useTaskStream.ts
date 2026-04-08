@@ -444,6 +444,7 @@ export function useTaskStream(
               ),
             );
           }
+          cbRef.current.onExtraEvent?.("subagent_task_done", data);
         } catch { /* ignore */ }
       });
 

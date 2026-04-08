@@ -92,9 +92,9 @@ export function useVideoChat(
           index: typeof data.index === "number" ? data.index : 0,
           total: typeof data.total === "number" ? data.total : 1,
         });
-      } else if (type === "tool_end") {
-        setActiveTool(null);
-        // Debounced data refresh on every tool completion
+      } else if (type === "tool_end" || type === "subagent_task_done") {
+        if (type === "tool_end") setActiveTool(null);
+        // Debounced data refresh on tool/subagent completion
         if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = setTimeout(() => {
           onRefreshNeededRef.current();

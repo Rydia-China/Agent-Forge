@@ -1,24 +1,10 @@
 # Prompt 处理流程说明
 
-## 一、两套 Prompt 引擎（并行存在）
+## 一、Prompt 编译机制
 
-系统有两套 prompt 编译机制，底层机制完全一样（`{{var}}` 正则替换），来源不同：
+**StylePreset.prompt 就是完整的 prompt 模板。** 代码只提供数据变量做 `{{var}}` 替换，替换后直接就是最终 prompt。
 
-1. **Langfuse 远程 Prompt** — `langfuse-prompt-service.ts` 通过 HTTP 从 Langfuse API 拉取模板
-2. **本地内置模板** — `prompt-templates.ts` 中的 `PROMPT_TEMPLATES` 字典（注释标注"替代之前的 Langfuse 依赖"）
-
-**实际执行时**（`video-workflow.ts` 中的 `compileLangfuse()`）走的是 **Langfuse 远程**路径。
-前端 prompt preview 同样走 Langfuse。本地模板作为备查/可能的降级方案存在。
-
-## 二、变量编译机制
-
-统一使用正则 `{{varName}}` 替换：
-
-```ts
-template.replace(/\{\{(\w+)\}\}/g, (match, key) => key in variables ? variables[key] : match)
-```
-
-未匹配到的 `{{var}}` 保持原样不替换。
+代码中禁止硬编码任何 prompt 结构（风格词、指令语、copyright 等）。全部在 StylePreset DB 中维护。
 
 ## 三、画风词注入机制
 
@@ -226,34 +212,26 @@ resolveStyle(styleName)
 ## 五、数据流总图
 
 ```
-StylePreset DB ──────────────┐
+StylePreset DB ────────────────────────┐
   (name → prompt,            │
    referenceImageUrl)        │
                              ▼
-character_arcs ────► ┌────────────┐    ┌──────────────┐    ┌─────────────────┐
-location_bible ────► │  提取变量   │ ──►│ Langfuse API  │ ──►│ {{var}} → value  │ ──► final prompt
-character_outfits ──►│  (DB 查询)  │    │ (拉取远程模板) │    │ compileTemplate  │
-                     └────────────┘    └──────────────┘    └─────────────────┘
-                                              │
-                                   video 的 shotPrompt 模式
-                                   跳过此步，直接字符串拼接
+character_arcs ────► ┌────────────┐    ┌─────────────────┐
+location_bible ────► │  提取变量   │ ──►│ 直接字符串拼接  │ ──► final prompt
+character_outfits ──►│  (DB 查询)  │    │ (无外部模板引擎) │
+                     └────────────┘    └─────────────────┘
 ```
 
-## 六、Langfuse Prompt 名与使用方映射
+## 六、各 StylePreset 可用变量
 
-命名约定：`{workflow}__{step}__{type}`
-
-| Prompt 名 | 使用方 | 变量 |
-|---|---|---|
-| `common__portrait__image` | generate_portrait | `stylePrompt`, `demographics` |
-| `common__gen_scenery_shot__image` | generate_scene (single) | `style`, `scenePrompt` |
-| `common__gen_scene_grid__image` | generate_scene (grid) | `style`, `gridSize`, `gridSlots` |
-| `common__gen_scene_hd__image` | generate_scene (hd) | `style`, `sceneName` |
-| `common__update_profile__image` | generate_costume | `stylePrompt`, `appearance_desc` |
-| `live2d__gen_scene__video` | generate_video (legacy clipDescription) | `videoPrompt` |
+- **portrait-style / update_portrait_style**: `{{demographics}}` — 角色外貌描述
+- **location_style**: `{{name}}` `{{scenePrompt}}` — 场景名、场景视觉描述
+- **location_grid_style**: `{{name}}` `{{gridSize}}` `{{gridSlots}}` — 场景名、宫格数、各格描述
+- **sub_location_style**: `{{name}}` `{{sceneName}}` — 场景名
+- **video_style**: `{{shotPrompt}}` `{{clipDescription}}` `{{referenceInfo}}` — 分镜描述/片段描述/参考图信息
 
 ## 七、调用入口
 
-- **MCP Tool 执行**: `src/lib/mcp/static/video-workflow.ts` — `compileLangfuse()` 内部函数
-- **前端 Prompt Preview**: `src/lib/services/video-workflow-service.ts` → `getPromptPreview()` → `langfusePromptSvc.compilePrompt()`
-- **REST API 编译**: `POST /api/prompts/:name/compile` → `langfusePromptSvc.compilePrompt()`
+- **MCP Tool 执行**: `src/lib/mcp/static/video-workflow.ts` — 各 generate_* case 内联拼接
+- **前端 Prompt Preview**: `src/lib/services/video-workflow-service.ts` → `getPromptPreview()`
+- **REST API 编译**: `POST /api/prompts/:name/compile` — 仍可走 Langfuse（仅用于浏览，非生产路径）

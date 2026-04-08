@@ -30,6 +30,7 @@ import * as ossService from "@/lib/services/oss-service";
 import * as stylePresetService from "@/lib/services/style-preset-service";
 import * as langfusePromptSvc from "@/lib/services/langfuse-prompt-service";
 import { compileTemplate } from "@/lib/mcp/static/langfuse-helpers";
+import { runSubAgent } from "@/lib/agent/subagent";
 import { skillTools, handleSkillTool } from "../skill-protocol";
 
 /* ------------------------------------------------------------------ */
@@ -62,18 +63,6 @@ function parseJsonb(val: unknown): Record<string, unknown> | null {
 }
 
 /* ---- Scene structure analysis: imported from service ---- */
-
-/**
- * Fetch a Langfuse prompt template and compile it with variables.
- * Prompts must exist in Langfuse — no local fallback.
- */
-async function compileLangfuse(
-  promptName: string,
-  variables: Record<string, string>,
-): Promise<string> {
-  const result = await langfusePromptSvc.compilePrompt(promptName, variables);
-  return result.compiledPrompt;
-}
 
 /**
  * Resolve style prompt from DB style preset by unique name.
@@ -160,6 +149,7 @@ const GenerateVideoParams = z.object({
   key: z.string().min(1),
   clipDescription: z.string().min(1).optional(),
   shotPrompt: z.string().min(1).optional(),
+  definition: z.string().optional(),
   referenceImageUrls: z.array(z.string().url()).optional(),
   duration: z.number().min(4).max(15).optional(),
   sourceImageUrl: z.string().url().optional(),
@@ -171,6 +161,12 @@ const GenerateVideoParams = z.object({
   (d) => d.clipDescription || d.shotPrompt,
   { message: "Either clipDescription or shotPrompt is required" },
 );
+
+const PlanVideoShotsParams = z.object({
+  scriptContent: z.string().min(1),
+  shotType: z.string().min(1),
+  model: z.string().optional(),
+});
 
 const ExtractTailParams = z.object({
   sourceVideoUrl: z.string().url(),
@@ -338,6 +334,25 @@ const TOOLS: Tool[] = [
         model: { type: "string", description: "Image generation model name (e.g. 'google/gemini-3-pro-image-preview'). Falls back to FC env default if omitted." },
       },
       required: ["scriptId", "characterName"],
+    },
+  },
+
+  // --- Video Planning ---
+  {
+    name: "plan_video_shots",
+    description:
+      "Generate video shot plan for a script segment using the video_prompt_generator template from Langfuse. " +
+      "The tool fetches the template programmatically (no LLM relay), runs a single-shot subagent (GLM-5-turbo by default), " +
+      "and returns structured JSON with scenes/shots. Call once per script segment (pre_choice / each outcome). " +
+      "Multiple calls can run in parallel.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        scriptContent: { type: "string", description: "Raw script content for this segment" },
+        shotType: { type: "string", description: "Shot type label: 'public' for pre_choice, 'branch_1'/'branch_2'/... for outcomes" },
+        model: { type: "string", description: "LLM model override (default: z-ai/glm-5-turbo)" },
+      },
+      required: ["scriptContent", "shotType"],
     },
   },
 
@@ -628,11 +643,8 @@ export const videoWorkflowMcp: McpProvider = {
           const demographics = arc.appearance ? String(arc.appearance) : "";
           if (!demographics) return text(`Character arc for "${characterName}" has no appearance description`);
 
-          // 3. Compile final portrait prompt: {{stylePrompt}}, demographics: {{demographics}}
-          prompt = await compileLangfuse("common__portrait__image", {
-            stylePrompt: style.stylePrompt,
-            demographics,
-          });
+          // 3. Style preset IS the full prompt template — just replace variables
+          prompt = compileTemplate(style.stylePrompt, { demographics });
         }
 
         // Prepend style reference image if present
@@ -651,7 +663,7 @@ export const videoWorkflowMcp: McpProvider = {
       /*  update_portrait                                               */
       /* ------------------------------------------------------------ */
       case "update_portrait": {
-        // Same logic as generate_portrait, but with a separate style preset
+        // Update portrait uses update_portrait_style — template expects {{appearance_desc}}
         const { novelId, characterName, prompt: explicitPrompt, referenceUrls, styleName, model } =
           GeneratePortraitParams.parse(args);
 
@@ -665,13 +677,10 @@ export const videoWorkflowMcp: McpProvider = {
           const style = await resolveStyle(styleName);
           styleRefUrl = style.styleRefUrl;
 
-          const demographics = arc.appearance ? String(arc.appearance) : "";
-          if (!demographics) return text(`Character arc for "${characterName}" has no appearance description`);
+          const appearance_desc = arc.appearance ? String(arc.appearance) : "";
+          if (!appearance_desc) return text(`Character arc for "${characterName}" has no appearance description`);
 
-          prompt = await compileLangfuse("common__portrait__image", {
-            stylePrompt: style.stylePrompt,
-            demographics,
-          });
+          prompt = compileTemplate(style.stylePrompt, { appearance_desc });
         }
 
         const finalRefUrls = styleRefUrl
@@ -722,8 +731,8 @@ export const videoWorkflowMcp: McpProvider = {
             slots.push(`【格 ${i + 2}】${sub.name}：${sub.visualPrompt}`);
           });
 
-          const prompt = await compileLangfuse("common__gen_scene_grid__image", {
-            style: compileTemplate(style.stylePrompt, { name: sceneName }),
+          const prompt = compileTemplate(style.stylePrompt, {
+            name: sceneName,
             gridSize: String(parent.gridSize),
             gridSlots: slots.join("\n"),
           });
@@ -769,10 +778,7 @@ export const videoWorkflowMcp: McpProvider = {
             );
           }
 
-          const prompt = await compileLangfuse("common__gen_scene_hd__image", {
-            style: compileTemplate(style.stylePrompt, { name: sceneName }),
-            sceneName,
-          });
+          const prompt = compileTemplate(style.stylePrompt, { name: sceneName, sceneName });
 
           // Grid image as primary reference, then style ref, then user refs
           const hdRefs: string[] = [gridUrl];
@@ -807,10 +813,7 @@ export const videoWorkflowMcp: McpProvider = {
             return text(`No visual_prompt found for scene "${sceneName}" in novel ${novelId}`);
           }
 
-          const prompt = await compileLangfuse("common__gen_scenery_shot__image", {
-            style: compileTemplate(style.stylePrompt, { name: sceneName }),
-            scenePrompt: visualPrompt,
-          });
+          const prompt = compileTemplate(style.stylePrompt, { name: sceneName, scenePrompt: visualPrompt });
 
           const singleRefs = styleRefUrl
             ? [styleRefUrl, ...(referenceUrls ?? [])]
@@ -821,6 +824,82 @@ export const videoWorkflowMcp: McpProvider = {
             "novel", novelId, key, "场景", prompt, sceneName, singleRefs, model,
           );
           return json(result);
+        }
+      }
+
+      /* ------------------------------------------------------------ */
+      /*  plan_video_shots                                              */
+      /* ------------------------------------------------------------ */
+      case "plan_video_shots": {
+        const { scriptContent, shotType, model } = PlanVideoShotsParams.parse(args);
+
+        // 1. Fetch video_prompt_generator template from Langfuse (deterministic, no LLM)
+        const templateDetail = await langfusePromptSvc.getPrompt("video_prompt_generator");
+        const template = templateDetail.template;
+
+        // 2. Build instruction = template + user message
+        const userMessage = `请为以下剧本生成视频镜头脚本：\n---\n${scriptContent}\n---\n所有镜头 type 填 "${shotType}"，index 从 "1" 开始。`;
+        const instruction = `${template}\n\n${userMessage}`;
+
+        // 3. Output schema for structured result
+        const outputSchema = {
+          type: "object",
+          properties: {
+            scenes: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  scene_title: { type: "string" },
+                  scene_desc: { type: "string" },
+                  shots: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        index: { type: "string" },
+                        type: { type: "string" },
+                        duration: { type: "string" },
+                        definition: { type: "string" },
+                        prompt: { type: "string" },
+                      },
+                      required: ["index", "type", "duration", "definition", "prompt"],
+                    },
+                  },
+                },
+                required: ["scene_title", "scene_desc", "shots"],
+              },
+            },
+          },
+          required: ["scenes"],
+        };
+
+        // 4. Run single-shot subagent
+        const result = await runSubAgent({
+          instruction,
+          model: model ?? "z-ai/glm-5-turbo",
+          outputSchema,
+        }, _context);
+
+        if (result.status !== "completed") {
+          return json({
+            status: "error",
+            shotType,
+            error: result.error ?? "Subagent did not complete",
+            attempts: result.attempts,
+          });
+        }
+
+        // 5. Parse and return structured result
+        try {
+          const parsed = JSON.parse(result.output);
+          return json({ status: "ok", shotType, ...parsed });
+        } catch {
+          return json({
+            status: "ok",
+            shotType,
+            raw: result.output,
+          });
         }
       }
 
@@ -849,11 +928,8 @@ export const videoWorkflowMcp: McpProvider = {
         const style = await resolveStyle(styleName);
         const styleRefUrl = style.styleRefUrl;
 
-        // 2. Compile costume prompt via Langfuse: {{stylePrompt}}, 用 {{appearance_desc}} 修改原本的人物立绘
-        const prompt = await compileLangfuse("common__update_profile__image", {
-          stylePrompt: style.stylePrompt,
-          appearance_desc: demographics,
-        });
+        // 2. Style preset IS the full prompt template — just replace variables
+        const prompt = compileTemplate(style.stylePrompt, { appearance_desc: demographics });
 
         // Auto-fetch character portrait as reference (换装基于原立绘修改)
         const portraitKey = `char_${characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
@@ -897,18 +973,13 @@ export const videoWorkflowMcp: McpProvider = {
         if (!svRow) return text(`Episode not found: ${params.scriptId}`);
         const novelId = svRow.novel_id;
 
-        // Copyright declaration — required by Jimeng's content moderation.
-        const copyrightNotice =
-          "以下人物均为版权属于我们的原创动漫人物（并非真实人物），版权所有 ©️ MOB.AI Inc";
-
         let prompt: string;
         let referenceImageUrls: string[];
 
         if (params.shotPrompt && !params.prompt) {
           // ============================================================
-          //  shotPrompt mode (video_prompt_generator)
-          //  - Reference images resolved by caller (subagent) via get_status
-          //  - Final prompt = copyright + shotPrompt + video_style
+          //  shotPrompt mode: definition + style + prompt
+          //  Reference URLs passed via referenceImageUrls / sourceVideoUrls
           // ============================================================
           referenceImageUrls = params.referenceImageUrls ?? [];
 
@@ -917,10 +988,10 @@ export const videoWorkflowMcp: McpProvider = {
             referenceImageUrls.unshift(style.styleRefUrl);
           }
 
-          // Combine: copyright + shotPrompt + video_style
-          prompt = [copyrightNotice, params.shotPrompt, style.stylePrompt]
-            .filter(Boolean)
-            .join("\n");
+          prompt = compileTemplate(style.stylePrompt, {
+            definition: params.definition ?? "",
+            prompt: params.shotPrompt!,
+          });
 
         } else if (params.prompt) {
           // ============================================================
@@ -932,6 +1003,7 @@ export const videoWorkflowMcp: McpProvider = {
         } else {
           // ============================================================
           //  Legacy clipDescription mode
+          //  Auto-collect reference image URLs from DB (style ref + scenes + costumes)
           // ============================================================
           const sceneResources = await prisma.keyResource.findMany({
             where: { scopeType: "novel", scopeId: novelId, category: "场景", currentVersion: { gt: 0 } },
@@ -943,36 +1015,20 @@ export const videoWorkflowMcp: McpProvider = {
           });
 
           referenceImageUrls = [];
-          const refInfoParts: string[] = [];
-          let refIdx = 1;
-
-          if (style.styleRefUrl) {
-            referenceImageUrls.push(style.styleRefUrl);
-            refInfoParts.push(`图${refIdx}: 风格参考图 ${style.styleRefUrl}`);
-            refIdx++;
-          }
+          if (style.styleRefUrl) referenceImageUrls.push(style.styleRefUrl);
           for (const r of sceneResources) {
             const url = r.versions[0]?.url;
-            if (url) {
-              referenceImageUrls.push(url);
-              refInfoParts.push(`图${refIdx}: 场景「${r.title ?? r.key}」 ${url}`);
-              refIdx++;
-            }
+            if (url) referenceImageUrls.push(url);
           }
           for (const r of costumeResources) {
             const url = r.versions[0]?.url;
-            if (url) {
-              referenceImageUrls.push(url);
-              refInfoParts.push(`图${refIdx}: 角色「${r.title ?? r.key}」 ${url}`);
-              refIdx++;
-            }
+            if (url) referenceImageUrls.push(url);
           }
 
-          const referenceInfo = refInfoParts.join("\n");
-          const videoPrompt = [copyrightNotice, params.clipDescription, style.stylePrompt, referenceInfo]
-            .filter(Boolean)
-            .join("\n");
-          prompt = await compileLangfuse("live2d__gen_scene__video", { videoPrompt });
+          prompt = compileTemplate(style.stylePrompt, {
+            definition: params.definition ?? "",
+            prompt: params.clipDescription ?? "",
+          });
         }
 
         // --- 4. Build image/video URL lists for Seedance ---
