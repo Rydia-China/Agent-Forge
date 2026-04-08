@@ -2,17 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { App, ConfigProvider, message, theme as antTheme } from "antd";
+import { App, ConfigProvider, theme as antTheme } from "antd";
 import { useSessions } from "@/app/components/hooks/useSessions";
 import { useVideoData } from "../hooks/useVideoData";
 import { useNovelResources } from "../hooks/useNovelResources";
 import { useTaskMonitor } from "../hooks/useTaskMonitor";
 import { useTaskNotifications } from "../hooks/useTaskNotifications";
 import { EpisodeList } from "../components/EpisodeList";
+import { PromptList } from "../components/PromptList";
+import { PromptEditor } from "../components/PromptEditor";
 import { ResourcePanel } from "../components/ResourcePanel";
 import { VideoChat } from "../components/VideoChat";
 import { NovelChat } from "../components/NovelChat";
 import { TaskMonitor } from "../components/TaskMonitor";
+import { usePrompts } from "../hooks/usePrompts";
 import { fetchJson } from "@/app/components/client-utils";
 import type { VideoContext } from "../types";
 
@@ -30,16 +33,21 @@ const EP_SKILLS = ["ep-video-planner"];
 export default function VideoWorkflowPage() {
   const params = useParams<{ novelId: string }>();
   const searchParams = useSearchParams();
+  const { message } = App.useApp();
   const novelId = params.novelId;
   const novelName = searchParams.get("name") ?? novelId;
 
-  /* ---- Mode: novel-level or EP-level ---- */
-  const [isNovelLevel, setIsNovelLevel] = useState(true);
+  /* ---- Mode: novel-level, EP-level, or prompts ---- */
+  type PageMode = "novel" | "episode" | "prompts";
+  const [pageMode, setPageMode] = useState<PageMode>("novel");
+  const isNovelLevel = pageMode === "novel";
+  const isPromptMode = pageMode === "prompts";
 
   /* ---- Data ---- */
   const epData = useVideoData(novelId);
   const novelData = useNovelResources(novelId);
   const taskMonitor = useTaskMonitor(novelId);
+  const promptsHook = usePrompts();
 
   /* ---- Session management ---- */
   const userName = useMemo(() => {
@@ -138,14 +146,14 @@ export default function VideoWorkflowPage() {
 
   /* ---- Handlers ---- */
   const handleSelectNovelLevel = useCallback(() => {
-    setIsNovelLevel(true);
+    setPageMode("novel");
     setCurrentSessionId(undefined);
     setChatKey(crypto.randomUUID());
   }, []);
 
   const handleSelectEpisode = useCallback(
     (ep: typeof epData.episodes[number]) => {
-      setIsNovelLevel(false);
+      setPageMode("episode");
       epData.selectEpisode(ep);
       pendingEpAutoSelect.current = ep.scriptKey;
       sawSessionLoading.current = false;
@@ -201,6 +209,15 @@ export default function VideoWorkflowPage() {
     void sessionsHook.refreshSessions();
   }, [isNovelLevel, epData, novelData, sessionsHook]);
 
+  /* ---- Prompt mode handlers ---- */
+  const handleEnterPrompts = useCallback(() => {
+    setPageMode("prompts");
+  }, []);
+
+  const handleExitPrompts = useCallback(() => {
+    setPageMode("novel");
+  }, []);
+
   /* ---- Jump-to-task logic (shared across monitor, notifications, EP dots) ---- */
   const handleJumpToTask = useCallback(
     (scriptKey: string | null, sessionId: string) => {
@@ -208,12 +225,12 @@ export default function VideoWorkflowPage() {
         // EP-level task
         const ep = epData.episodes.find((e) => e.scriptKey === scriptKey);
         if (ep) {
-          setIsNovelLevel(false);
+          setPageMode("episode");
           epData.selectEpisode(ep);
         }
       } else {
         // Novel-level task
-        setIsNovelLevel(true);
+        setPageMode("novel");
       }
       setCurrentSessionId(sessionId);
       setChatKey(crypto.randomUUID());
@@ -246,60 +263,87 @@ export default function VideoWorkflowPage() {
       }}
     >
       <main className="flex h-screen w-full bg-slate-950 text-slate-100">
-        {/* Left panel — Episode list + sessions */}
-        <EpisodeList
-          novelName={novelName}
-          episodes={epData.episodes}
-          isLoading={epData.isLoadingEpisodes}
-          selectedEpisode={epData.selectedEpisode}
-          onSelectEpisode={handleSelectEpisode}
-          onRefresh={() => void epData.refreshEpisodes()}
-          onReUpload={(json) => void handleReUpload(json)}
-          isReUploading={isReUploading}
-          sessions={sessionsHook.sessions}
-          currentSessionId={currentSessionId}
-          onSelectSession={switchSession}
-          onNewSession={handleNewSession}
-          onDeleteSession={(id) => void handleDeleteSession(id)}
-          isNovelLevelSelected={isNovelLevel}
-          onSelectNovelLevel={handleSelectNovelLevel}
-          epTaskStatuses={taskMonitor.epStatuses}
-        />
+        {/* Left panel */}
+        {isPromptMode ? (
+          <PromptList
+            prompts={promptsHook.prompts}
+            isLoading={promptsHook.isLoadingList}
+            selectedPrompt={promptsHook.selectedPrompt}
+            onSelectPrompt={promptsHook.selectPrompt}
+            onRefresh={() => void promptsHook.refreshList()}
+            onBack={handleExitPrompts}
+          />
+        ) : (
+          <EpisodeList
+            novelName={novelName}
+            episodes={epData.episodes}
+            isLoading={epData.isLoadingEpisodes}
+            selectedEpisode={epData.selectedEpisode}
+            onSelectEpisode={handleSelectEpisode}
+            onRefresh={() => void epData.refreshEpisodes()}
+            onReUpload={(json) => void handleReUpload(json)}
+            isReUploading={isReUploading}
+            sessions={sessionsHook.sessions}
+            currentSessionId={currentSessionId}
+            onSelectSession={switchSession}
+            onNewSession={handleNewSession}
+            onDeleteSession={(id) => void handleDeleteSession(id)}
+            isNovelLevelSelected={isNovelLevel}
+            onSelectNovelLevel={handleSelectNovelLevel}
+            epTaskStatuses={taskMonitor.epStatuses}
+            onEnterPrompts={handleEnterPrompts}
+          />
+        )}
 
-        {/* Center — Chat */}
-        <section className="min-w-0 flex-1">
-          {isNovelLevel ? (
-            <NovelChat
-              key={chatKey}
-              novelId={novelId}
-              initialSessionId={currentSessionId}
-              skills={NOVEL_SKILLS}
-              onSessionCreated={handleSessionCreated}
-              onRefreshNeeded={handleRefreshNeeded}
-              showEmptyState={!currentSessionId && sessionsHook.sessions.length === 0 && !sessionsHook.isLoadingSessions}
-            />
-          ) : (
-            <VideoChat
-              key={chatKey}
-              initialSessionId={currentSessionId}
-              videoContext={videoContext}
-              skills={EP_SKILLS}
-              onSessionCreated={handleSessionCreated}
-              onRefreshNeeded={handleRefreshNeeded}
-              episodeStatus={epData.selectedEpisode?.status}
-            />
-          )}
-        </section>
+        {/* Center panel */}
+        {isPromptMode ? (
+          <PromptEditor
+            prompt={promptsHook.selectedPrompt}
+            isLoading={promptsHook.isLoadingDetail}
+            versions={promptsHook.versions}
+            isLoadingVersions={promptsHook.isLoadingVersions}
+            onSelectVersion={promptsHook.selectVersion}
+            onSave={promptsHook.saveNewVersion}
+            isSaving={promptsHook.isSaving}
+          />
+        ) : (
+          <section className="min-w-0 flex-1">
+            {isNovelLevel ? (
+              <NovelChat
+                key={chatKey}
+                novelId={novelId}
+                initialSessionId={currentSessionId}
+                skills={NOVEL_SKILLS}
+                onSessionCreated={handleSessionCreated}
+                onRefreshNeeded={handleRefreshNeeded}
+                showEmptyState={!currentSessionId && sessionsHook.sessions.length === 0 && !sessionsHook.isLoadingSessions}
+              />
+            ) : (
+              <VideoChat
+                key={chatKey}
+                initialSessionId={currentSessionId}
+                videoContext={videoContext}
+                skills={EP_SKILLS}
+                onSessionCreated={handleSessionCreated}
+                onRefreshNeeded={handleRefreshNeeded}
+                episodeStatus={epData.selectedEpisode?.status}
+              />
+            )}
+          </section>
+        )}
 
-        {/* Right panel — Resources */}
-        <ResourcePanel
-          resources={isNovelLevel ? novelData.resources : epData.resources}
-          isLoading={isNovelLevel ? novelData.isLoading : epData.isLoadingResources}
-          novelId={novelId}
-          scriptId={isNovelLevel ? null : epData.selectedEpisode?.id ?? null}
-          sessionId={currentSessionId}
-          onRefresh={() => isNovelLevel ? void novelData.refresh() : void epData.refreshResources()}
-        />
+        {/* Right panel — Resources (hidden in prompt mode) */}
+        {!isPromptMode && (
+          <ResourcePanel
+            resources={isNovelLevel ? novelData.resources : epData.resources}
+            isLoading={isNovelLevel ? novelData.isLoading : epData.isLoadingResources}
+            novelId={novelId}
+            scriptId={isNovelLevel ? null : epData.selectedEpisode?.id ?? null}
+            sessionId={currentSessionId}
+            isNovelLevel={isNovelLevel}
+            onRefresh={() => isNovelLevel ? void novelData.refresh() : void epData.refreshResources()}
+          />
+        )}
         {/* Task Monitor floating panel */}
         <TaskMonitor
           monitor={taskMonitor}

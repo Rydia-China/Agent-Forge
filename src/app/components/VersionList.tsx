@@ -44,10 +44,10 @@ export function VersionList({ versions, isPublishing, onPublish }: VersionListPr
               </Button>
             )}
           </div>
-          <Typography.Text style={{ fontSize: 12, display: "block", marginTop: 4 }}>
+          <Typography.Text style={{ fontSize: 16, display: "block", marginTop: 4 }}>
             {v.description || "No description"}
           </Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 14 }}>
             {formatTimestamp(v.createdAt)}
           </Typography.Text>
         </div>

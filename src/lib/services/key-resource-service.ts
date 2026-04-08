@@ -147,6 +147,7 @@ export interface GenerateImageInput {
   key: string;
   prompt: string;
   refUrls?: string[];
+  model?: string;
 }
 
 export interface GenerateImageResult {
@@ -159,7 +160,7 @@ export interface GenerateImageResult {
 export async function generateImage(
   input: GenerateImageInput,
 ): Promise<GenerateImageResult> {
-  const { scopeType, scopeId, key, prompt, refUrls } = input;
+  const { scopeType, scopeId, key, prompt, refUrls, model } = input;
 
   // 1. Upsert identity
   const resource = await prisma.keyResource.upsert({
@@ -169,7 +170,7 @@ export async function generateImage(
   });
 
   // 2. Call FC FIRST — no empty version row created until we have a result
-  const imageUrl = await callFcGenerateImage(prompt, refUrls);
+  const imageUrl = await callFcGenerateImage(prompt, refUrls, model);
 
   // 3. Create version + bump currentVersion in one transaction (with retry for race)
   const maxRetries = 3;

@@ -168,23 +168,23 @@ export function McpDrawer({
                 }}
               >
                 {/* Expand arrow */}
-                <span style={{ width: 14, display: "inline-flex", alignItems: "center", justifyContent: "center", opacity: hasChildren ? 1 : 0.2 }}>
+                <span style={{ width: 28, display: "inline-flex", alignItems: "center", justifyContent: "center", opacity: hasChildren ? 1 : 0.2 }}>
                   {isExpanded
-                    ? <DownOutlined style={{ fontSize: 9 }} />
-                    : <RightOutlined style={{ fontSize: 9 }} />}
+                    ? <DownOutlined style={{ fontSize: 28 }} />
+                    : <RightOutlined style={{ fontSize: 28 }} />}
                 </span>
 
                 {/* Icon */}
                 {node.kind === "builtin"
-                  ? <ThunderboltOutlined style={{ fontSize: 12, color: "#faad14" }} />
-                  : <ApiOutlined style={{ fontSize: 12, color: "#1677ff" }} />}
+                  ? <ThunderboltOutlined style={{ fontSize: 28, color: "#faad14" }} />
+                  : <ApiOutlined style={{ fontSize: 28, color: "#1677ff" }} />}
 
                 {/* Name */}
                 <Typography.Text
                   ellipsis
                   style={{
                     flex: 1,
-                    fontSize: 12,
+                    fontSize: 16,
                     fontWeight: 500,
                     opacity: node.available ? 1 : 0.4,
                     textDecoration: !node.available ? "line-through" : undefined,
@@ -218,7 +218,7 @@ export function McpDrawer({
                   <Button
                     type="link"
                     size="small"
-                    style={{ fontSize: 10, padding: 0, height: "auto", lineHeight: 1 }}
+                    style={{ fontSize: 14, padding: 0, height: "auto", lineHeight: 1 }}
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectMcp({ type: "mcp", name: node.name });
@@ -237,7 +237,7 @@ export function McpDrawer({
                     <Tag
                       key={s.name}
                       color={s.productionVersion > 0 ? "blue" : "green"}
-                      style={{ cursor: "pointer", fontSize: 11 }}
+                      style={{ cursor: "pointer", fontSize: 14 }}
                       title={s.description}
                       onClick={() => {
                         onSelectMcp({ type: "skill", name: s.name });
@@ -254,7 +254,7 @@ export function McpDrawer({
         })}
 
         {nodes.length === 0 && !isLoadingMcp && (
-          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 14 }}>
             No MCP providers loaded.
           </Typography.Text>
         )}

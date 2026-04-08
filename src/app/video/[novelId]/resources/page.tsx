@@ -102,7 +102,7 @@ export default function NovelResourcesPage() {
                   onClick={() => switchSession(s.id)}
                 >
                   <div className="truncate font-medium">{s.title || "未命名对话"}</div>
-                  <div className="mt-0.5 text-[10px] text-slate-500">
+                  <div className="mt-0.5 text-sm text-slate-500">
                     {new Date(s.updatedAt).toLocaleString("zh-CN")}
                   </div>
                 </div>

@@ -27,5 +27,8 @@ wait_for_db "$DATABASE_URL" "数据库"
 echo "📦 同步数据库 schema..."
 npx prisma db push --skip-generate
 
+echo "📥 导入初始数据..."
+node scripts/db-import.js || echo "⚠️ 数据导入失败（非致命，继续启动）"
+
 echo "🚀 启动应用..."
 exec pnpm start

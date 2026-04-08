@@ -89,6 +89,7 @@
 - `docs/dataflow.md` — 跨边界数据流（仅记录跨系统边界）
 - `docs/api-playbook.md` — 接口调用次序与验证手册（给 AI agent）
 - `docs/skill-management.md` — Skill 管理规范（API 操作，禁止 seed 脚本）
+- `docs/release-sop.md` — 发布 SOP（构建、部署、数据导入、验证、回滚）
 
 ## 端口
 - 8001 (env `PORT`)

@@ -32,7 +32,7 @@ export function McpEditor({
       <div className="space-y-4">
         <Card size="small">
           <Typography.Text strong>{detail.name}</Typography.Text>
-          <div><Typography.Text type="secondary" style={{ fontSize: 12 }}>Production v{detail.productionVersion}</Typography.Text></div>
+          <div><Typography.Text type="secondary" style={{ fontSize: 14 }}>Production v{detail.productionVersion}</Typography.Text></div>
           <Tag color={detail.enabled ? "green" : "default"} style={{ marginTop: 4 }}>
             {detail.enabled ? "Enabled" : "Disabled"}
           </Tag>
@@ -40,7 +40,7 @@ export function McpEditor({
         <Card size="small">
           <div className="space-y-3">
             <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>Description</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 14 }}>Description</Typography.Text>
               <Input.TextArea
                 rows={4}
                 value={edit.description}
@@ -49,7 +49,7 @@ export function McpEditor({
               />
             </div>
             <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>Code</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 14 }}>Code</Typography.Text>
               <Input.TextArea
                 rows={10}
                 value={edit.code}

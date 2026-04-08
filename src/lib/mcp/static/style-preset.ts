@@ -26,12 +26,8 @@ function json(data: unknown): CallToolResult {
 /* ------------------------------------------------------------------ */
 
 const GetStyleParams = z.object({
-  id: z.string().min(1).optional(),
-  name: z.string().min(1).optional(),
-}).refine(
-  (d) => d.id || d.name,
-  { message: "Either id or name must be provided" },
-);
+  name: z.string().min(1),
+});
 
 /* ------------------------------------------------------------------ */
 /*  Tool Definitions                                                   */
@@ -42,7 +38,8 @@ const TOOLS: Tool[] = [
     name: "list_styles",
     description:
       "List all available style presets. Returns [{id, name, prompt, referenceImageUrl}]. " +
-      "Use this to discover which styles are available before calling generate_* tools with styleId.",
+      "Each preset has: prompt (style words, shared for image and video). " +
+      "Use this to discover which styles are available before calling generate_* tools with styleName.",
     inputSchema: {
       type: "object" as const,
       properties: {},
@@ -51,14 +48,14 @@ const TOOLS: Tool[] = [
   {
     name: "get_style",
     description:
-      "Get a single style preset by id or name. " +
-      "Returns {id, name, prompt, referenceImageUrl}.",
+      "Get a single style preset by name. " +
+      "Returns {name, prompt, referenceImageUrl}.",
     inputSchema: {
       type: "object" as const,
       properties: {
-        id: { type: "string", description: "Style preset ID" },
-        name: { type: "string", description: "Style preset name (alternative to id)" },
+        name: { type: "string", description: "StylePreset unique name (e.g. 'location_style')" },
       },
+      required: ["name"],
     },
   },
 ];
@@ -92,13 +89,10 @@ export const stylePresetMcp: McpProvider = {
       }
 
       case "get_style": {
-        const params = GetStyleParams.parse(args);
-        const preset = params.id
-          ? await stylePresetService.getById(params.id)
-          : await stylePresetService.getByName(params.name!);
-        if (!preset) return text("Style preset not found");
+        const { name } = GetStyleParams.parse(args);
+        const preset = await stylePresetService.getByName(name);
+        if (!preset) return text(`Style preset not found: ${name}`);
         return json({
-          id: preset.id,
           name: preset.name,
           prompt: preset.prompt,
           referenceImageUrl: preset.referenceImageUrl,

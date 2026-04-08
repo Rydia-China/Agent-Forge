@@ -160,11 +160,11 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh, sessionId }:
         detail ? (
           <div className="flex items-center gap-2">
             <span className="truncate font-mono text-sm">{detail.key}</span>
-            <Tag color="blue" style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>
+            <Tag color="blue" style={{ fontSize: 14, lineHeight: "22px", margin: 0 }}>
               v{detail.currentVersion}
             </Tag>
             {!isViewingCurrent && (
-              <Tag color="orange" style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>
+              <Tag color="orange" style={{ fontSize: 14, lineHeight: "22px", margin: 0 }}>
                 viewing v{viewedVersion}
               </Tag>
             )}
@@ -247,11 +247,11 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh, sessionId }:
                             />
                           )
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-slate-800 text-[10px] text-slate-500">
+                          <div className="flex h-full w-full items-center justify-center bg-slate-800 text-sm text-slate-500">
                             …
                           </div>
                         )}
-                        <div className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 text-center text-[10px] font-medium text-white">
+                        <div className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 text-center text-sm font-medium text-white">
                           v{ver.version}{isCurrent ? " ✓" : ""}
                         </div>
                       </div>
@@ -266,7 +266,7 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh, sessionId }:
           <div className="flex w-1/2 flex-col gap-3">
             {/* Prompt header + copy */}
             <div className="flex items-center justify-between">
-              <Typography.Text type="secondary" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <Typography.Text type="secondary" style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Prompt
               </Typography.Text>
               <Tooltip title="Copy prompt">
@@ -288,7 +288,7 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh, sessionId }:
                 value={editPrompt}
                 onChange={(e) => setEditPrompt(e.target.value)}
                 autoSize={{ minRows: 6, maxRows: 24 }}
-                style={{ fontSize: 12 }}
+                style={{ fontSize: 16 }}
               />
             </div>
 

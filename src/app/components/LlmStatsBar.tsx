@@ -93,9 +93,9 @@ export function LlmStatsBar({ stats }: { stats: LlmStats }) {
     <div className="group fixed bottom-3 left-3 z-50">
       {/* Badge (always visible) */}
       <div
-        className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-mono shadow-lg backdrop-blur-sm cursor-default select-none ${badgeColor}`}
+        className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm font-mono shadow-lg backdrop-blur-sm cursor-default select-none ${badgeColor}`}
       >
-        <span className="text-[10px]">◉</span>
+        <span className="text-sm">◉</span>
         <span>{fmtM(stats.totalTokens)}</span>
         <span className="text-slate-600">|</span>
         <span className="text-emerald-400">{fmtCost(cost)}</span>
@@ -106,9 +106,9 @@ export function LlmStatsBar({ stats }: { stats: LlmStats }) {
       {/* Hover popup — pb-1.5 keeps hover zone contiguous between card & badge */}
       <div className="absolute bottom-full left-0 hidden w-72 pb-1.5 group-hover:block">
         <div className="rounded-lg border border-slate-700/60 bg-slate-900/95 shadow-xl backdrop-blur-sm">
-        <div className="px-3 py-2 text-[11px]">
+        <div className="px-3 py-2 text-sm">
           {/* Section: Tokens & Cost */}
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+          <div className="mb-1.5 text-sm font-semibold uppercase tracking-wider text-slate-600">
             Tokens
           </div>
           <Row label="Prompt" value={fmtM(stats.totalPromptTokens)} />
@@ -127,7 +127,7 @@ export function LlmStatsBar({ stats }: { stats: LlmStats }) {
           <Row label="Est. cost" value={fmtCost(cost)} />
 
           {/* Section: Tools */}
-          <div className="mb-1.5 mt-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+          <div className="mb-1.5 mt-2.5 text-sm font-semibold uppercase tracking-wider text-slate-600">
             Tools
           </div>
           <Row
@@ -144,7 +144,7 @@ export function LlmStatsBar({ stats }: { stats: LlmStats }) {
           {/* Section: Subagent (conditional) */}
           {stats.subagentCallCount > 0 && (
             <>
-              <div className="mb-1.5 mt-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+              <div className="mb-1.5 mt-2.5 text-sm font-semibold uppercase tracking-wider text-slate-600">
                 Subagent
               </div>
               <Row label="Calls" value={String(stats.subagentCallCount)} />
@@ -158,7 +158,7 @@ export function LlmStatsBar({ stats }: { stats: LlmStats }) {
 
           {/* Model */}
           {stats.model && (
-            <div className="mt-2 border-t border-slate-800 pt-1.5 text-[10px] text-slate-600">
+            <div className="mt-2 border-t border-slate-800 pt-1.5 text-sm text-slate-600">
               {stats.model}
             </div>
           )}

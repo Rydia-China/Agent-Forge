@@ -108,7 +108,7 @@ export function NovelChat({
 
         {/* Active tool indicator */}
         {chat.activeTool && (
-          <div className="flex items-center gap-2 border-t border-slate-800 bg-slate-900/60 px-3 py-1.5 text-[11px] text-slate-300">
+          <div className="flex items-center gap-2 border-t border-slate-800 bg-slate-900/60 px-3 py-1.5 text-sm text-slate-300">
             <LoadingOutlined className="text-blue-400" />
             <span className="truncate">{chat.activeTool.name}</span>
             <span className="shrink-0 text-slate-500">
@@ -128,7 +128,7 @@ export function NovelChat({
                   <img src={url} alt={`Pending ${i + 1}`} className="h-12 w-12 rounded border border-slate-700 object-cover" />
                   <CloseCircleFilled
                     className="absolute -right-1 -top-1 cursor-pointer text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-rose-400"
-                    style={{ fontSize: 14 }}
+                    style={{ fontSize: 28 }}
                     onClick={() => img.setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
                   />
                 </div>
@@ -158,7 +158,7 @@ export function NovelChat({
               disabled={chat.isSending}
               className="shrink-0 text-slate-400 hover:text-slate-200 disabled:opacity-50"
             >
-              <PictureOutlined style={{ fontSize: 16 }} />
+              <PictureOutlined style={{ fontSize: 28 }} />
             </button>
             <Input.TextArea
               autoSize={{ minRows: 1, maxRows: 4 }}
@@ -190,7 +190,7 @@ export function NovelChat({
               onCompositionEnd={() => { img.isComposingRef.current = false; }}
               disabled={chat.isSending}
               variant="borderless"
-              style={{ fontSize: 12 }}
+              style={{ fontSize: 16 }}
             />
             <div className="flex shrink-0 items-center gap-1.5 pb-0.5">
               {models.length > 1 && (
@@ -199,7 +199,7 @@ export function NovelChat({
                   value={selectedModel || undefined}
                   onChange={setSelectedModel}
                   options={models.map((m) => ({ value: m.id, label: m.label }))}
-                  style={{ minWidth: 80, fontSize: 11 }}
+                  style={{ minWidth: 80, fontSize: 14 }}
                   disabled={chat.isSending || chat.isStreaming}
                 />
               )}

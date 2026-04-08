@@ -11,8 +11,18 @@ import {
   mcpToolToOpenAI,
   type LlmMessage,
 } from "./llm-client";
-import { resolveSubagentModel, SUBAGENT_DEFAULT_MODEL } from "./models";
+import { resolveModelByType, type ModelUsageType } from "./models";
 import type { ToolContext } from "@/lib/mcp/types";
+
+/* ================================================================== */
+/*  Usage-type inference                                                */
+/* ================================================================== */
+
+/** Infer the model usage type from a SubAgentConfig when not explicitly set. */
+function inferUsageType(config: SubAgentConfig): ModelUsageType {
+  if (config.mcpScope && config.mcpScope.length > 0) return "task-execution";
+  return "prompt-execution";
+}
 
 /* ================================================================== */
 /*  Types                                                              */
@@ -27,8 +37,16 @@ export interface SubAgentConfig {
    * Non-empty → tool-loop mode (multi-iteration agent loop).
    */
   mcpScope?: string[];
-  /** LLM model. Defaults to SUBAGENT_DEFAULT_MODEL. */
+  /**
+   * LLM model override. When omitted the model is auto-selected by usageType.
+   * Only specify when the user explicitly requests a model or a skill mandates one.
+   */
   model?: string;
+  /**
+   * Categorises this call for model routing.
+   * Auto-inferred when omitted: mcpScope → "task-execution", else "prompt-execution".
+   */
+  usageType?: ModelUsageType;
   /** Max tool-use iterations (tool-loop mode). Default 20. */
   maxIterations?: number;
   /** Additional context injected into the system prompt. */
@@ -341,7 +359,8 @@ export class SubAgent {
   constructor(config: SubAgentConfig, depth = 0) {
     this.id = `sa_${++agentCounter}_${Date.now()}`;
     this.config = config;
-    this.model = resolveSubagentModel(config.model);
+    const usageType = config.usageType ?? inferUsageType(config);
+    this.model = resolveModelByType(usageType, config.model);
     this.isToolLoop = !!(config.mcpScope && config.mcpScope.length > 0);
     this.parentAgentId = config.parentAgentId ?? null;
     this.depth = depth;

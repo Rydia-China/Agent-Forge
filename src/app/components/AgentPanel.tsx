@@ -75,10 +75,10 @@ export function AgentPanel({
       {/* Header */}
       <header className="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
         <div className="min-w-0 flex-1">
-          <Typography.Text strong ellipsis style={{ display: "block", fontSize: 14 }}>
+          <Typography.Text strong ellipsis style={{ display: "block", fontSize: 18 }}>
             {displayTitle}
           </Typography.Text>
-          <Typography.Text type="secondary" ellipsis style={{ display: "block", fontSize: 11 }}>
+          <Typography.Text type="secondary" ellipsis style={{ display: "block", fontSize: 14 }}>
             {chat.sessionId ? chat.sessionId.slice(0, 12) + "…" : "Not created"}
           </Typography.Text>
         </div>

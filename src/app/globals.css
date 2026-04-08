@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+/* ── Design Tokens ── */
+:root {
+  --text-title: 24px;
+  --text-subtitle: 18px;
+  --text-body: 16px;
+  --text-desc: 14px;
+  --icon-size: 28px;
+}

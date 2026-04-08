@@ -39,7 +39,22 @@ For prompt-driven tasks and multi-step business operations, **delegate to subage
 - \`subagent__schedule\` — schedule future or recurring tasks.
 - If a subagent fails, use \`subagent__get_trace\` to inspect the trace, then either \`subagent__continue\` with corrective feedback or retry with adjusted parameters.
 - **Async result collection**: after calling \`subagent__run_async\`, you **must** collect all results with \`subagent__get_result\` (use \`subagent__wait\` if needed) before ending your reply. Uncollected results are lost to the conversation.
-- **Direct tool calls are still appropriate for**: quick data reads, skill retrieval, and any situation where a single tool call suffices.
+
+#### When to use \`mcp_manager__use\` vs \`subagent__run\`
+- **\`mcp_manager__use\`** — ONLY for **read-only / query operations**: listing data, getting status, reading resources, skill retrieval. Quick, single-call, no side effects.
+- **\`subagent__run\` (tool-loop)** — for **ALL generation & mutation operations**: image generation, video generation, prompt compilation + execution, resource creation, and any multi-step workflow. Always specify \`mcpScope\` with the needed MCP providers.
+- **\`subagent__run\` (single-shot)** — for prompt execution, JSON generation, multimodal analysis. Omit \`mcpScope\`.
+- **Rule of thumb**: if the operation creates, modifies, or generates content, it MUST go through \`subagent__run\`, NOT \`mcp_manager__use\`.
+
+### Model Routing
+- The system **automatically selects the execution model** by task type:
+  - Tool-loop subagent (mcpScope set) → task-execution model
+  - Single-shot subagent (Langfuse prompt execution) → prompt-execution model
+  - Unmatched → default controller model
+- You can switch the model via the \`model\` parameter in \`subagent__run\`, but **only** when:
+  1. The **user explicitly requests** a specific model, OR
+  2. A **skill's YAML frontmatter** specifies \`model:\`
+- Otherwise, **do not set the \`model\` parameter** — let the system route automatically.
 
 ### Error Handling
 When a tool call fails, report the error to the user. Do not fabricate results.`;

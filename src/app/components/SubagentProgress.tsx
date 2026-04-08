@@ -28,14 +28,14 @@ function isOk(status: SubagentTaskInfo["status"]): boolean {
 function StatusIcon({ status }: { status: SubagentTaskInfo["status"] }) {
   switch (status) {
     case "running":
-      return <LoadingOutlined className="text-blue-400" style={{ fontSize: 11 }} spin />;
+      return <LoadingOutlined className="text-blue-400" style={{ fontSize: 28 }} spin />;
     case "ok":
     case "completed":
-      return <CheckCircleFilled className="text-emerald-400" style={{ fontSize: 11 }} />;
+      return <CheckCircleFilled className="text-emerald-400" style={{ fontSize: 28 }} />;
     case "max_iterations":
-      return <WarningOutlined className="text-amber-400" style={{ fontSize: 11 }} />;
+      return <WarningOutlined className="text-amber-400" style={{ fontSize: 28 }} />;
     default:
-      return <CloseCircleFilled className="text-red-400" style={{ fontSize: 11 }} />;
+      return <CloseCircleFilled className="text-red-400" style={{ fontSize: 28 }} />;
   }
 }
 
@@ -47,7 +47,7 @@ function TaskCard({ task }: { task: SubagentTaskInfo }) {
   return (
     <div
       className={`
-        flex min-w-[130px] max-w-[220px] flex-col gap-1 rounded-md border px-2.5 py-2 text-[10px]
+        flex min-w-[130px] max-w-[220px] flex-col gap-1 rounded-md border px-2.5 py-2 text-sm
         transition-all duration-300
         ${isRunning
           ? isToolLoop
@@ -68,7 +68,7 @@ function TaskCard({ task }: { task: SubagentTaskInfo }) {
           {shortModel(task.model)}
         </span>
         {isToolLoop && (
-          <span className="rounded bg-violet-500/20 px-1 text-[8px] text-violet-300">
+          <span className="rounded bg-violet-500/20 px-1 text-sm text-violet-300">
             {task.mode === "continue" ? "cont" : "loop"}
           </span>
         )}
@@ -82,13 +82,13 @@ function TaskCard({ task }: { task: SubagentTaskInfo }) {
       {/* Current tool (tool-loop only, animated when running) */}
       {task.currentTool && (
         <div className="flex items-center gap-1 text-blue-300">
-          <ToolOutlined className="animate-pulse" style={{ fontSize: 9 }} />
+          <ToolOutlined className="animate-pulse" style={{ fontSize: 28 }} />
           <span className="truncate">{shortTool(task.currentTool)}</span>
         </div>
       )}
 
       {/* Stats line */}
-      <div className="flex items-center gap-2 text-[9px] text-slate-500">
+      <div className="flex items-center gap-2 text-sm text-slate-500">
         {task.toolCallCount > 0 && (
           <span>{task.toolCallCount} tool{task.toolCallCount > 1 ? "s" : ""}</span>
         )}
@@ -115,10 +115,10 @@ export function SubagentProgress({ tasks }: SubagentProgressProps) {
 
   return (
     <div className="mt-2 rounded-md border border-slate-800 bg-slate-950/80 p-2.5">
-      <div className="mb-2 flex items-center gap-2 text-[10px] text-slate-400">
+      <div className="mb-2 flex items-center gap-2 text-sm text-slate-400">
         <LoadingOutlined
           className={allDone ? "text-emerald-400" : "text-blue-400"}
-          style={{ fontSize: 10 }}
+          style={{ fontSize: 28 }}
           spin={!allDone}
         />
         <span>

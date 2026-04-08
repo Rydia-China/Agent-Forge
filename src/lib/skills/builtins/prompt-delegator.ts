@@ -22,6 +22,12 @@ requires_mcps:
 **所有从 Langfuse 获取的 prompt 必须通过 subagent 执行，禁止在主控上下文中混合使用。**
 **多步业务操作应委托给 tool-loop 模式的 subagent，而非主控直接调用工具。**
 
+### 禁止用 mcp_manager__use 做生成/变更操作
+
+- \`mcp_manager__use\` **仅用于只读查询**：list、get、status 等无副作用的调用
+- **图片生成、视频生成、Prompt 编译+执行、资源创建** → 必须走 \`subagent__run\`（tool-loop 模式，指定 mcpScope）
+- 即使只是一次 generate_portrait / generate_scene 调用，也必须通过 subagent 执行，**不得绕过**
+
 ## 统一工具
 
 - \`subagent__run\` — 统一执行入口。模式由 \`mcpScope\` 决定：
@@ -34,7 +40,8 @@ requires_mcps:
 
 - \`instruction\`（必填）— prompt 或指令
 - \`mcpScope\`（可选）— 为空=单次调用，非空=tool-loop 模式
-- \`model\`（可选）— 模型名称，默认 \`anthropic/claude-sonnet-4.6\`
+- \`model\`（可选）— 模型名称覆盖。**系统按 usageType 自动选择模型**（tool-loop → grok, single-shot → glm, 未匹配 → claude）。仅在用户明确要求或 skill 明确写明模型时才指定
+- \`usageType\`（可选）— 模型路由类型：\`task-execution\` | \`prompt-execution\` | \`controller\` | \`utility\`。通常自动推断，无需手动设置
 - \`imageUrls\`（可选）— 图片 URL 数组，用于多模态任务
 - \`outputSchema\`（可选）— JSON Schema 校验 + 自动重试
 - \`maxRetries\`（可选，默认 2，最大 5）— 含首次在内的最大尝试次数
@@ -48,13 +55,13 @@ requires_mcps:
 
 \\\`\\\`\\\`
 # Step 1: 查看模板变量名
-langfuse__get_prompts({ names: ["common__gen_scenery_shot__prompt"] })
+langfuse__get_prompts({ names: ["common__portrait__image"] })
 
 # Step 2: 编译
-langfuse__compile_prompts({ items: [{ name: "...", variables: { nodeContent: "..." } }] })
+langfuse__compile_prompts({ items: [{ name: "common__portrait__image", variables: { stylePrompt: "...", demographics: "..." } }] })
 
-# Step 3: 执行
-subagent__run({ tasks: [{ instruction: compiledPrompt, model: "google/gemini-3.1-pro-preview" }] })
+# Step 3: 执行（模型自动路由，无需指定 model）
+subagent__run({ tasks: [{ instruction: compiledPrompt }] })
 \\\`\\\`\\\`
 
 ### 带 Schema 校验的 JSON 生成
@@ -62,7 +69,6 @@ subagent__run({ tasks: [{ instruction: compiledPrompt, model: "google/gemini-3.1
 \\\`\\\`\\\`
 subagent__run({ tasks: [{
   instruction: compiledPrompt,
-  model: "google/gemini-3.1-pro-preview",
   outputSchema: { type: "object", properties: { shots: { type: "array", ... } }, required: ["shots"] },
   maxRetries: 3
 }] })
@@ -101,7 +107,8 @@ subagent__get_trace({ agentId: result.agentId })
 ## 约束
 
 - Single-shot 模式下每次调用独立；tool-loop 和 continue 模式下保留对话历史
-- 默认模型 \`anthropic/claude-sonnet-4.6\`，skill 可显式覆盖
+- **模型自动路由**：tool-loop → \`x-ai/grok-4.1-fast-non-reasoning\`，single-shot（Langfuse prompt）→ \`z-ai/glm-5-turbo\`，未匹配 → \`anthropic/claude-sonnet-4.6\`
+- **更换模型**必须满足以下条件之一：①用户明确要求 ②skill 的 YAML frontmatter 明确写明 \`model:\`。否则禁止手动指定 model 参数
 - 未传 outputSchema 时返回原始文本；传了 schema 时返回经过校验的 JSON 字符串
 - **凡是需要 subagent 输出结构化 JSON 的场景，必须传 outputSchema**
 - **禁止硬编码风格词** — 风格词由运营在 Langfuse 维护

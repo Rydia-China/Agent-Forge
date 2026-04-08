@@ -1,5 +1,5 @@
 import { chatCompletion, type LlmMessage } from "./llm-client";
-import { SUBAGENT_DEFAULT_MODEL } from "./models";
+import { resolveModelByType } from "./models";
 import type { ChatMessage } from "./types";
 
 /* ------------------------------------------------------------------ */
@@ -135,7 +135,7 @@ export async function compressToCheckpoint(
     const completion = await chatCompletion(
       llmMessages,
       undefined, // no tools
-      SUBAGENT_DEFAULT_MODEL,
+      resolveModelByType("utility"),
     );
 
     const summary = completion.choices[0]?.message.content?.trim();

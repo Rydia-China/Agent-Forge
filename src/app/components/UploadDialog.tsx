@@ -36,7 +36,7 @@ export function UploadDialog({
     >
       <div className="space-y-3">
         <div>
-          <Typography.Text type="secondary" style={{ fontSize: 11 }}>Endpoint</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 14 }}>Endpoint</Typography.Text>
           <Input
             size="small"
             value={dialog.endpoint}
@@ -46,7 +46,7 @@ export function UploadDialog({
           />
         </div>
         {dialog.maxSizeMB && (
-          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 14 }}>
             最大: {dialog.maxSizeMB}MB
           </Typography.Text>
         )}

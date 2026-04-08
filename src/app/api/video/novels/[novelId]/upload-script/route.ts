@@ -33,9 +33,9 @@ export async function POST(
   }
 
   try {
-    const episodes = await replaceNovelScript(novelId, parsed.data);
+    const { episodes, diff } = await replaceNovelScript(novelId, parsed.data);
     return NextResponse.json(
-      { count: episodes.length, episodes },
+      { count: episodes.length, episodes, diff },
       { status: 200 },
     );
   } catch (err: unknown) {

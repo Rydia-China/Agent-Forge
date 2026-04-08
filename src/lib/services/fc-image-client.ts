@@ -24,6 +24,7 @@ function getFcImageConfig() {
 export async function callFcGenerateImage(
   prompt: string,
   referenceImageUrls?: string[],
+  model?: string,
 ): Promise<string> {
   const fc = getFcImageConfig();
   if (!fc.url || !fc.token) {
@@ -36,7 +37,7 @@ export async function callFcGenerateImage(
       "Content-Type": "application/json",
       Authorization: `Bearer ${fc.token}`,
     },
-    body: JSON.stringify({ prompt, referenceImageUrls }),
+    body: JSON.stringify({ prompt, referenceImageUrls, ...(model && { model }) }),
   });
 
   const data: unknown = await res.json();

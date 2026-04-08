@@ -69,7 +69,7 @@ export function ChatInput({
                 />
                 <CloseCircleFilled
                   className="absolute -right-1 -top-1 cursor-pointer text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-rose-400"
-                  style={{ fontSize: 14 }}
+                  style={{ fontSize: 28 }}
                   onClick={() =>
                     setPendingImages((prev) => prev.filter((_, idx) => idx !== i))
                   }

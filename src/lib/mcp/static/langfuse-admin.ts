@@ -1,12 +1,7 @@
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
-import {
-  langfuseFetch,
-  extractTemplate,
-  fetchAllPrompts,
-  PromptDetailSchema,
-} from "./langfuse-helpers";
+import * as svc from "@/lib/services/langfuse-prompt-service";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -96,7 +91,7 @@ export const langfuseAdminMcp: McpProvider = {
   ): Promise<CallToolResult> {
     switch (name) {
       case "list_prompts": {
-        const all = await fetchAllPrompts();
+        const all = await svc.listPrompts();
         const list = all.map((p) => ({
           name: p.name,
           versions: p.versions,
@@ -110,16 +105,13 @@ export const langfuseAdminMcp: McpProvider = {
         const { names } = GetPromptParams.parse(args);
         const results = await Promise.allSettled(
           names.map(async (promptName) => {
-            const raw = await langfuseFetch(
-              `/api/public/v2/prompts/${encodeURIComponent(promptName)}`,
-            );
-            const parsed = PromptDetailSchema.parse(raw);
+            const detail = await svc.getPrompt(promptName);
             return {
-              name: parsed.name,
-              version: parsed.version,
-              labels: parsed.labels,
-              tags: parsed.tags,
-              template: extractTemplate(parsed),
+              name: detail.name,
+              version: detail.version,
+              labels: detail.labels,
+              tags: detail.tags,
+              template: detail.template,
             };
           }),
         );
@@ -134,20 +126,14 @@ export const langfuseAdminMcp: McpProvider = {
       case "create_prompt": {
         const { name: promptName, prompt, labels } =
           CreatePromptParams.parse(args);
-        const body: Record<string, unknown> = {
-          name: promptName,
+        const detail = await svc.createPromptVersion(
+          promptName,
           prompt,
-          type: "text",
-        };
-        if (labels) body.labels = labels;
-        const raw = await langfuseFetch("/api/public/v2/prompts", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const parsed = PromptDetailSchema.parse(raw);
+          "text",
+          labels,
+        );
         return text(
-          `Prompt "${parsed.name}" v${parsed.version} created${parsed.labels?.includes("production") ? " (production)" : ""}`,
+          `Prompt "${detail.name}" v${detail.version} created${detail.labels.includes("production") ? " (production)" : ""}`,
         );
       }
 

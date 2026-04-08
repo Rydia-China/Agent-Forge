@@ -123,7 +123,7 @@ export default function VideoNovelListPage() {
         {/* Header */}
         <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
           <div className="flex items-center gap-2">
-            <VideoCameraOutlined style={{ fontSize: 20 }} />
+            <VideoCameraOutlined style={{ fontSize: 28 }} />
             <Typography.Title level={4} style={{ margin: 0 }}>
               Video Workflow
             </Typography.Title>
@@ -185,7 +185,7 @@ export default function VideoNovelListPage() {
                   }}
                 >
                   <div className="flex items-start justify-between">
-                    <Typography.Text strong style={{ fontSize: 14 }}>
+                    <Typography.Text strong style={{ fontSize: 18 }}>
                       {novel.name}
                     </Typography.Text>
                     <Button
@@ -194,10 +194,10 @@ export default function VideoNovelListPage() {
                       danger
                       icon={<DeleteOutlined />}
                       onClick={(e) => { e.stopPropagation(); void handleDelete(novel); }}
-                      style={{ width: 24, height: 24, minWidth: 24 }}
+                      style={{ width: 28, height: 28, minWidth: 28 }}
                     />
                   </div>
-                  <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-400">
+                  <div className="mt-2 flex items-center gap-3 text-sm text-slate-400">
                     <span>{novel.episodeCount} episodes</span>
                     <span>{new Date(novel.createdAt).toLocaleDateString()}</span>
                   </div>

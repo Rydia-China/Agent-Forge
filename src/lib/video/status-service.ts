@@ -50,20 +50,14 @@ async function resolveUrl(resourceId: string, currentVersion: number): Promise<s
 
 export interface CharacterStatus {
   name: string;
-  /** Merged description from novel-level character_arcs (appearance + personality + gender + socialStatus). */
+  /** Appearance description from novel-level character_arcs (contains gender and other visual info). */
   description: string;
   portraitUrl: string | null;
 }
 
-/** Merge key fields from a character arc into a single description string for portrait generation. */
+/** Extract appearance from a character arc for portrait generation. */
 function mergeCharacterDescription(arc: Record<string, unknown>): string {
-  const parts: string[] = [];
-  if (arc.gender) parts.push(String(arc.gender));
-  if (arc.age) parts.push(String(arc.age));
-  if (arc.appearance) parts.push(String(arc.appearance));
-  if (arc.personality) parts.push(String(arc.personality));
-  if (arc.socialStatus) parts.push(String(arc.socialStatus));
-  return parts.join("\n");
+  return arc.appearance ? String(arc.appearance) : "";
 }
 
 export async function getCharacterStatuses(novelId: string): Promise<CharacterStatus[]> {

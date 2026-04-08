@@ -9,7 +9,7 @@ import {
   type SubAgentResult,
   type SubAgentProgressCallbacks,
 } from "@/lib/agent/subagent";
-import { SUBAGENT_DEFAULT_MODEL } from "@/lib/agent/models";
+import { SUBAGENT_DEFAULT_MODEL, type ModelUsageType } from "@/lib/agent/models";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
 import {
@@ -30,10 +30,18 @@ function json(data: unknown): CallToolResult {
 /*  Zod schemas                                                        */
 /* ------------------------------------------------------------------ */
 
+const USAGE_TYPES: [ModelUsageType, ...ModelUsageType[]] = [
+  "task-execution",
+  "prompt-execution",
+  "controller",
+  "utility",
+];
+
 const TaskSchema = z.object({
   instruction: z.string().min(1),
   mcpScope: z.array(z.string()).optional(),
   model: z.string().optional(),
+  usageType: z.enum(USAGE_TYPES).optional(),
   maxIterations: z.number().int().min(1).max(100).optional(),
   timeout: z.number().positive().optional(),
   context: z.string().optional(),
@@ -247,8 +255,16 @@ const TASK_ITEM_SCHEMA = {
     model: {
       type: "string",
       description:
-        `LLM model. Default: '${SUBAGENT_DEFAULT_MODEL}'. ` +
-        "Do NOT specify unless you have a clear reason.",
+        "LLM model override. The system auto-selects a model based on usageType. " +
+        "Only specify when the user explicitly requests a model or a skill mandates one.",
+    },
+    usageType: {
+      type: "string",
+      enum: ["task-execution", "prompt-execution", "controller", "utility"],
+      description:
+        "Model routing category. Auto-inferred when omitted: " +
+        "tool-loop (mcpScope set) → 'task-execution', single-shot → 'prompt-execution'. " +
+        "Rarely needs to be set manually.",
     },
     maxIterations: {
       type: "number",

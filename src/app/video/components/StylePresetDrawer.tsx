@@ -18,6 +18,15 @@ interface StylePreset {
   referenceImageUrl: string | null;
 }
 
+/** Built-in names — name field is read-only, delete is blocked. */
+const BUILTIN_NAMES = new Set([
+  "location_style",
+  "location_grid_style",
+  "sub_location_style",
+  "portrait-style",
+  "video_style",
+]);
+
 type EditingState =
   | { mode: "idle" }
   | { mode: "create"; name: string; prompt: string; referenceImageUrl: string }
@@ -169,16 +178,17 @@ export function StylePresetDrawer({ open, onClose }: StylePresetDrawerProps) {
               onChange={(e) => setEditing({ ...editing, name: e.target.value })}
               placeholder="e.g. anime-flat"
               size="small"
+              disabled={editing.mode === "edit" && BUILTIN_NAMES.has(editing.name)}
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-slate-400">Prompt (style words)</label>
+            <label className="mb-1 block text-xs text-slate-400">Prompt (style words, shared for image & video)</label>
             <Input.TextArea
               value={editing.prompt}
               onChange={(e) => setEditing({ ...editing, prompt: e.target.value })}
               placeholder="e.g. anime style, flat color, soft lighting, ..."
               autoSize={{ minRows: 3, maxRows: 8 }}
-              style={{ fontSize: 12 }}
+              style={{ fontSize: 16 }}
             />
           </div>
           <div>
@@ -279,14 +289,16 @@ export function StylePresetDrawer({ open, onClose }: StylePresetDrawerProps) {
                     })
                   }
                 />
-                <Popconfirm
-                  title="Delete this style preset?"
-                  onConfirm={() => void handleDelete(item.id)}
-                  okText="Delete"
-                  cancelText="Cancel"
-                >
-                  <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
+                {!BUILTIN_NAMES.has(item.name) && (
+                  <Popconfirm
+                    title="Delete this style preset?"
+                    onConfirm={() => void handleDelete(item.id)}
+                    okText="Delete"
+                    cancelText="Cancel"
+                  >
+                    <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                  </Popconfirm>
+                )}
               </Flex>
             </Flex>
           ))}

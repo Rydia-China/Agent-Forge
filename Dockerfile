@@ -27,6 +27,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/src/generated ./src/generated
+COPY --from=builder /app/data ./data
+COPY --from=builder /app/scripts/db-import.js ./scripts/db-import.js
 
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh

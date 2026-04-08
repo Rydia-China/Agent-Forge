@@ -3,7 +3,7 @@
  *
  * Discovery (2): list_novels, list_episodes
  * Data queries (2): get_episode, get_status
- * Novel-level image gen (2): generate_portrait, generate_scene
+ * Novel-level image gen (2): generate_portrait, generate_scene (single/grid/hd)
  * EP-level image gen (1): generate_costume
  * Video gen (3): generate_video, extract_tail, concat_clips
  *
@@ -23,16 +23,13 @@ import {
   getRunningEpExecutorTasks,
   getRunningExecutorTasks,
 } from "@/lib/video/status-service";
-import { getNovelLevelData } from "@/lib/services/video-workflow-service";
+import { getNovelLevelData, analyzeLocations } from "@/lib/services/video-workflow-service";
+import type { AnalyzedLocation } from "@/lib/services/video-workflow-service";
 import { extractVideoSegment, concatVideos } from "@/lib/services/video-process-service";
 import * as ossService from "@/lib/services/oss-service";
 import * as stylePresetService from "@/lib/services/style-preset-service";
-import {
-  langfuseFetch,
-  compileTemplate,
-  extractTemplate,
-  PromptDetailSchema,
-} from "./langfuse-helpers";
+import * as langfusePromptSvc from "@/lib/services/langfuse-prompt-service";
+import { compileTemplate } from "@/lib/mcp/static/langfuse-helpers";
 import { skillTools, handleSkillTool } from "../skill-protocol";
 
 /* ------------------------------------------------------------------ */
@@ -64,32 +61,30 @@ function parseJsonb(val: unknown): Record<string, unknown> | null {
   return null;
 }
 
+/* ---- Scene structure analysis: imported from service ---- */
+
 /**
  * Fetch a Langfuse prompt template and compile it with variables.
- * Throws if Langfuse is unavailable or the prompt doesn't exist.
+ * Prompts must exist in Langfuse — no local fallback.
  */
 async function compileLangfuse(
   promptName: string,
   variables: Record<string, string>,
 ): Promise<string> {
-  const raw = await langfuseFetch(
-    `/api/public/v2/prompts/${encodeURIComponent(promptName)}`,
-  );
-  const parsed = PromptDetailSchema.parse(raw);
-  const template = extractTemplate(parsed);
-  return compileTemplate(template, variables);
+  const result = await langfusePromptSvc.compilePrompt(promptName, variables);
+  return result.compiledPrompt;
 }
 
 /**
- * Resolve style prompt from DB style preset.
- * styleId is required — style presets live exclusively in DB.
+ * Resolve style prompt from DB style preset by unique name.
+ * styleName is required — style presets live exclusively in DB.
  */
 async function resolveStyle(
-  styleId: string | undefined,
+  styleName: string | undefined,
 ): Promise<{ stylePrompt: string; styleRefUrl: string | null }> {
-  if (!styleId) throw new Error("styleId is required — style presets are managed in DB, not Langfuse");
-  const preset = await stylePresetService.getById(styleId);
-  if (!preset) throw new Error(`Style preset not found: ${styleId}`);
+  if (!styleName) throw new Error("styleName is required — style presets are managed in DB, looked up by name");
+  const preset = await stylePresetService.getByName(styleName);
+  if (!preset) throw new Error(`Style preset not found: ${styleName}`);
   return { stylePrompt: preset.prompt, styleRefUrl: preset.referenceImageUrl };
 }
 
@@ -102,6 +97,7 @@ async function generateAndPersistImage(
   prompt: string,
   title: string,
   refUrls?: string[],
+  model?: string,
 ): Promise<{ status: string; key: string; keyResourceId: string; imageUrl: string; version: number }> {
   const gen = await keyResourceService.generateImage({
     scopeType,
@@ -109,6 +105,7 @@ async function generateAndPersistImage(
     key,
     prompt,
     refUrls,
+    model,
   });
 
   // Set category + title on KeyResource (single source for UI grouping)
@@ -138,7 +135,8 @@ const GeneratePortraitParams = z.object({
   characterName: z.string().min(1),
   prompt: z.string().optional(),
   referenceUrls: z.array(z.string().url()).optional(),
-  styleId: z.string().min(1).optional(),
+  styleName: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
 });
 
 const GenerateSceneParams = z.object({
@@ -146,27 +144,35 @@ const GenerateSceneParams = z.object({
   sceneName: z.string().min(1),
   prompt: z.string().optional(),
   referenceUrls: z.array(z.string().url()).optional(),
-  styleId: z.string().min(1).optional(),
+  styleName: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  mode: z.enum(["single", "grid", "hd"]).default("single"),
 });
 
 const GenerateCostumeParams = z.object({
   scriptId: z.string().min(1),
   characterName: z.string().min(1),
   referenceUrls: z.array(z.string().url()).optional(),
-  styleId: z.string().min(1).optional(),
+  styleName: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
 });
 
 const GenerateVideoParams = z.object({
   scriptId: z.string().min(1),
   key: z.string().min(1),
-  clipDescription: z.string().min(1),
+  clipDescription: z.string().min(1).optional(),
+  shotPrompt: z.string().min(1).optional(),
+  referenceImageUrls: z.array(z.string().url()).optional(),
   duration: z.number().min(4).max(15).optional(),
   sourceImageUrl: z.string().url().optional(),
   sourceVideoUrls: z.array(z.string().url()).optional(),
   title: z.string().optional(),
   prompt: z.string().optional(),
-  styleId: z.string().min(1).optional(),
-});
+  styleName: z.string().min(1).optional(),
+}).refine(
+  (d) => d.clipDescription || d.shotPrompt,
+  { message: "Either clipDescription or shotPrompt is required" },
+);
 
 const ExtractTailParams = z.object({
   sourceVideoUrl: z.string().url(),
@@ -259,16 +265,37 @@ const TOOLS: Tool[] = [
     description:
       "Generate a character portrait (novel-level). DO NOT pass prompt — the tool auto-reads " +
       "character_arcs from DB and compiles with style template. " +
-      "Pass styleId to use a local style preset (recommended), otherwise falls back to Langfuse. " +
-      "Only pass novelId + characterName (+ styleId). Auto-handles key/scope/category/persistence.",
+      "styleName is required — pass the StylePreset name declared in your skill. " +
+      "Only pass novelId + characterName + styleName. Auto-handles key/scope/category/persistence.",
     inputSchema: {
       type: "object" as const,
       properties: {
         novelId: { type: "string", description: "Novel ID" },
         characterName: { type: "string", description: "Character name (exact match from JSON)" },
-        styleId: { type: "string", description: "Style preset ID. When provided, uses local style words + optional reference image instead of Langfuse." },
+        styleName: { type: "string", description: "StylePreset name (e.g. 'portrait-style'). Looked up by unique name from DB." },
         prompt: { type: "string", description: "Override prompt. Only for manual override in exceptional cases." },
         referenceUrls: { type: "array", items: { type: "string" }, description: "Optional reference image URLs" },
+        model: { type: "string", description: "Image generation model name (e.g. 'google/gemini-3-pro-image-preview'). Falls back to FC env default if omitted." },
+      },
+      required: ["novelId", "characterName"],
+    },
+  },
+  {
+    name: "update_portrait",
+    description:
+      "Update / regenerate a character portrait (novel-level). Logic is identical to generate_portrait " +
+      "but uses a separate style preset so the two can diverge later. " +
+      "Use styleName='update_portrait_style'. " +
+      "Only pass novelId + characterName + styleName. Auto-handles key/scope/category/persistence.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        novelId: { type: "string", description: "Novel ID" },
+        characterName: { type: "string", description: "Character name (exact match from JSON)" },
+        styleName: { type: "string", description: "StylePreset name (default: 'update_portrait_style')." },
+        prompt: { type: "string", description: "Override prompt. Only for manual override in exceptional cases." },
+        referenceUrls: { type: "array", items: { type: "string" }, description: "Optional reference image URLs" },
+        model: { type: "string", description: "Image generation model name. Falls back to FC env default if omitted." },
       },
       required: ["novelId", "characterName"],
     },
@@ -276,18 +303,24 @@ const TOOLS: Tool[] = [
   {
     name: "generate_scene",
     description:
-      "Generate a scene location image (novel-level). DO NOT pass prompt — the tool auto-reads " +
-      "visual_prompt from location_bible and compiles with style template. " +
-      "Pass styleId to use a local style preset (recommended), otherwise falls back to Langfuse. " +
-      "Only pass novelId + sceneName (+ styleId). Auto-handles key/scope/category/persistence.",
+      "Generate a scene location image (novel-level). Supports three modes:\n" +
+      "• single (default): generates a single scene image from visual_prompt. Use styleName='location_style'.\n" +
+      "• grid: generates a unified grid image for a parent location + all sub-locations. Use styleName='location_grid_style'. " +
+      "Use get_status to find resources with key ending in '_grid' (url=null means not yet generated).\n" +
+      "• hd: generates an HD image for a sub-location, using the parent's grid image as reference. Use styleName='sub_location_style'. " +
+      "The parent's grid image must already exist (run mode=grid first).\n" +
+      "DO NOT pass prompt unless overriding. Auto-reads visual_prompt from location_bible. " +
+      "Only pass novelId + sceneName + mode + styleName.",
     inputSchema: {
       type: "object" as const,
       properties: {
         novelId: { type: "string", description: "Novel ID" },
-        sceneName: { type: "string", description: "Scene name in Chinese (e.g. '银月领地 豪宅 厨房')" },
-        styleId: { type: "string", description: "Style preset ID. When provided, uses local style words + optional reference image instead of Langfuse." },
+        sceneName: { type: "string", description: "Scene name in Chinese (e.g. '银月领地 豪宅' for grid, '银月领地 豪宅 厨房' for hd/single)" },
+        mode: { type: "string", enum: ["single", "grid", "hd"], description: "Generation mode: 'single' (default), 'grid' (parent + subs grid), 'hd' (sub-scene from grid reference)" },
+        styleName: { type: "string", description: "StylePreset name. Use 'location_style' for single, 'location_grid_style' for grid, 'sub_location_style' for hd." },
         prompt: { type: "string", description: "Override prompt. Only for manual override in exceptional cases." },
         referenceUrls: { type: "array", items: { type: "string" }, description: "Optional reference image URLs" },
+        model: { type: "string", description: "Image generation model name. Falls back to FC env default if omitted." },
       },
       required: ["novelId", "sceneName"],
     },
@@ -299,14 +332,15 @@ const TOOLS: Tool[] = [
     description:
       "Generate a character costume image for a specific episode. " +
       "Auto-reads character_outfits from DB, compiles with style template, and uses the character's portrait as reference. " +
-      "Only pass scriptId + characterName + styleId. Auto-handles prompt/reference/key/scope/category/persistence.",
+      "Only pass scriptId + characterName + styleName. Auto-handles prompt/reference/key/scope/category/persistence.",
     inputSchema: {
       type: "object" as const,
       properties: {
         scriptId: { type: "string", description: "Episode script DB ID" },
         characterName: { type: "string", description: "Character name" },
-        styleId: { type: "string", description: "Style preset ID. Uses local style words + optional reference image." },
+        styleName: { type: "string", description: "StylePreset name. Looked up by unique name from DB." },
         referenceUrls: { type: "array", items: { type: "string" }, description: "Optional additional reference image URLs" },
+        model: { type: "string", description: "Image generation model name (e.g. 'google/gemini-3-pro-image-preview'). Falls back to FC env default if omitted." },
       },
       required: ["scriptId", "characterName"],
     },
@@ -316,26 +350,31 @@ const TOOLS: Tool[] = [
   {
     name: "generate_video",
     description:
-      "Generate a ≤15s video clip via Seedance. DO NOT pass prompt — the tool auto-reads " +
-      "scene images + costume images from DB, builds reference_info, and compiles the prompt. " +
-      "Pass styleId to use a local style preset (recommended), otherwise falls back to Langfuse. " +
-      "Only pass scriptId + key + clipDescription (+ styleId). " +
-      "Pass sourceImageUrl for image-to-video, sourceVideoUrls for continuation (multimodal). " +
-      "Auto-handles reference collection / prompt compilation / persistence.",
+      "Generate a ≤15s video clip via Seedance. Two modes:\n" +
+      "• **shotPrompt mode** (preferred): pass shotPrompt + referenceImageUrls. " +
+      "The caller resolves definition references to URLs using get_status data. " +
+      "Final prompt = copyright + shotPrompt + video_style. " +
+      "Pass sourceVideoUrls for continuation (extract_tail result).\n" +
+      "• **clipDescription mode** (legacy): pass clipDescription + styleName. The tool collects ALL scene/costume " +
+      "images and builds referenceInfo automatically.\n" +
+      "styleName is required for both modes. Pass sourceImageUrl for image-to-video (first_frame). " +
+      "Auto-handles prompt compilation / persistence.",
     inputSchema: {
       type: "object" as const,
       properties: {
         scriptId: { type: "string", description: "Episode script DB ID (scope)" },
-        key: { type: "string", description: "Unique key for this video clip (e.g. 'pre_choice_clip_1')" },
-        clipDescription: { type: "string", description: "Clip description from planning result" },
-        styleId: { type: "string", description: "Style preset ID. When provided, uses local style words + optional reference image instead of Langfuse." },
+        key: { type: "string", description: "Unique key for this video clip (e.g. 'public_1')" },
+        shotPrompt: { type: "string", description: "Shot prompt from video_prompt_generator output. When provided, uses shotPrompt mode." },
+        referenceImageUrls: { type: "array", items: { type: "string" }, description: "Ordered reference image URLs resolved by the caller from shot definition (scene images, costume images, etc.). Used in shotPrompt mode." },
+        clipDescription: { type: "string", description: "(Legacy) Clip description from clip planner. Used when shotPrompt is not provided." },
+        styleName: { type: "string", description: "StylePreset name. Looked up by unique name from DB." },
         duration: { type: "number", description: "Duration in seconds (4-15, default 5)" },
         sourceImageUrl: { type: "string", description: "Source image for image-to-video (first_frame mode)" },
-        sourceVideoUrls: { type: "array", items: { type: "string" }, description: "Source videos for continuation (multimodal mode)" },
+        sourceVideoUrls: { type: "array", items: { type: "string" }, description: "Source videos for continuation (multimodal mode). Pass extract_tail result for @视频1." },
         title: { type: "string", description: "Human-readable label" },
         prompt: { type: "string", description: "Override prompt. Only for manual override in exceptional cases." },
       },
-      required: ["scriptId", "key", "clipDescription"],
+      required: ["scriptId", "key"],
     },
   },
   {
@@ -575,7 +614,7 @@ export const videoWorkflowMcp: McpProvider = {
       /*  generate_portrait                                            */
       /* ------------------------------------------------------------ */
       case "generate_portrait": {
-        const { novelId, characterName, prompt: explicitPrompt, referenceUrls, styleId } =
+        const { novelId, characterName, prompt: explicitPrompt, referenceUrls, styleName, model } =
           GeneratePortraitParams.parse(args);
 
         let prompt = explicitPrompt;
@@ -586,19 +625,13 @@ export const videoWorkflowMcp: McpProvider = {
           const arc = characterArcs.find((a) => String(a.name) === characterName);
           if (!arc) return text(`No character arc found for "${characterName}" in novel ${novelId}`);
 
-          // 1. Resolve style words from DB preset
-          const style = await resolveStyle(styleId);
+          // 1. Resolve style words from DB preset (by name)
+          const style = await resolveStyle(styleName);
           styleRefUrl = style.styleRefUrl;
 
-          // 2. Build demographics from character arc fields
-          const demoParts: string[] = [];
-          if (arc.gender) demoParts.push(String(arc.gender));
-          if (arc.age) demoParts.push(String(arc.age));
-          if (arc.appearance) demoParts.push(String(arc.appearance));
-          if (arc.personality) demoParts.push(String(arc.personality));
-          if (arc.socialStatus) demoParts.push(String(arc.socialStatus));
-          const demographics = demoParts.join(", ");
-          if (!demographics) return text(`Character arc for "${characterName}" has no visual description`);
+          // 2. Build demographics from character arc appearance (contains gender etc.)
+          const demographics = arc.appearance ? String(arc.appearance) : "";
+          if (!demographics) return text(`Character arc for "${characterName}" has no appearance description`);
 
           // 3. Compile final portrait prompt: {{stylePrompt}}, demographics: {{demographics}}
           prompt = await compileLangfuse("common__portrait__image", {
@@ -614,7 +647,45 @@ export const videoWorkflowMcp: McpProvider = {
 
         const key = `char_${characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
         const result = await generateAndPersistImage(
-          "novel", novelId, key, "角色立绘", prompt, characterName, finalRefUrls,
+          "novel", novelId, key, "角色立绘", prompt, characterName, finalRefUrls, model,
+        );
+        return json(result);
+      }
+
+      /* ------------------------------------------------------------ */
+      /*  update_portrait                                               */
+      /* ------------------------------------------------------------ */
+      case "update_portrait": {
+        // Same logic as generate_portrait, but with a separate style preset
+        const { novelId, characterName, prompt: explicitPrompt, referenceUrls, styleName, model } =
+          GeneratePortraitParams.parse(args);
+
+        let prompt = explicitPrompt;
+        let styleRefUrl: string | null = null;
+        if (!prompt) {
+          const { characterArcs } = await getNovelLevelData(novelId);
+          const arc = characterArcs.find((a) => String(a.name) === characterName);
+          if (!arc) return text(`No character arc found for "${characterName}" in novel ${novelId}`);
+
+          const style = await resolveStyle(styleName);
+          styleRefUrl = style.styleRefUrl;
+
+          const demographics = arc.appearance ? String(arc.appearance) : "";
+          if (!demographics) return text(`Character arc for "${characterName}" has no appearance description`);
+
+          prompt = await compileLangfuse("common__portrait__image", {
+            stylePrompt: style.stylePrompt,
+            demographics,
+          });
+        }
+
+        const finalRefUrls = styleRefUrl
+          ? [styleRefUrl, ...(referenceUrls ?? [])]
+          : referenceUrls;
+
+        const key = `char_${characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
+        const result = await generateAndPersistImage(
+          "novel", novelId, key, "角色立绘", prompt, characterName, finalRefUrls, model,
         );
         return json(result);
       }
@@ -623,13 +694,114 @@ export const videoWorkflowMcp: McpProvider = {
       /*  generate_scene                                               */
       /* ------------------------------------------------------------ */
       case "generate_scene": {
-        const { novelId, sceneName, prompt: explicitPrompt, referenceUrls, styleId } =
+        const { novelId, sceneName, prompt: explicitPrompt, referenceUrls, styleName, model, mode } =
           GenerateSceneParams.parse(args);
 
-        let prompt = explicitPrompt;
-        let styleRefUrl: string | null = null;
-        if (!prompt) {
-          // Auto-read visual_prompt from novel-level location_bible
+        // --- Explicit prompt override: bypass all mode logic ---
+        if (explicitPrompt) {
+          const styleResult = styleName ? await resolveStyle(styleName) : null;
+          const overrideRefs = styleResult?.styleRefUrl
+            ? [styleResult.styleRefUrl, ...(referenceUrls ?? [])]
+            : referenceUrls;
+          const keySuffix = mode === "grid" ? "_grid" : "";
+          const key = `scene_${sceneName.replace(/\s+/g, "_")}${keySuffix}`;
+          const title = mode === "grid" ? `${sceneName} (grid)` : sceneName;
+          const result = await generateAndPersistImage(
+            "novel", novelId, key, "场景", explicitPrompt, title, overrideRefs, model,
+          );
+          return json(result);
+        }
+
+        // Resolve style (required for all auto modes)
+        const style = await resolveStyle(styleName);
+        const styleRefUrl = style.styleRefUrl;
+
+        if (mode === "grid") {
+          // --- Grid mode: unified grid image for parent + all sub-locations ---
+          const { locationBible } = await getNovelLevelData(novelId);
+          const analyzed = analyzeLocations(locationBible);
+          const parent = analyzed.find((loc) => loc.name === sceneName);
+          if (!parent) return text(`Parent location "${sceneName}" not found in location_bible`);
+          if (parent.mode !== "grid") {
+            return text(
+              `Location "${sceneName}" has fewer than 2 real sub-locations — ` +
+              `not eligible for grid mode (need ≥2). Use mode="single" instead.`,
+            );
+          }
+
+          // Build gridSlots: 【格 1】parent、【格 2】sub1 ...
+          const slots: string[] = [
+            `【格 1】${parent.name}：${parent.visualPrompt}`,
+          ];
+          parent.realSubs.forEach((sub, i) => {
+            slots.push(`【格 ${i + 2}】${sub.name}：${sub.visualPrompt}`);
+          });
+
+          const prompt = await compileLangfuse("common__gen_scene_grid__image", {
+            style: compileTemplate(style.stylePrompt, { name: sceneName }),
+            gridSize: String(parent.gridSize),
+            gridSlots: slots.join("\n"),
+          });
+
+          const gridRefs = styleRefUrl
+            ? [styleRefUrl, ...(referenceUrls ?? [])]
+            : referenceUrls;
+
+          const key = `scene_${sceneName.replace(/\s+/g, "_")}_grid`;
+          const result = await generateAndPersistImage(
+            "novel", novelId, key, "场景", prompt, `${sceneName} (grid)`, gridRefs, model,
+          );
+          return json(result);
+
+        } else if (mode === "hd") {
+          // --- HD mode: enlarge sub-scene using parent's grid image as reference ---
+          const { locationBible } = await getNovelLevelData(novelId);
+          const analyzed = analyzeLocations(locationBible);
+
+          // Find which parent contains this sceneName as a sub
+          let parentLoc: AnalyzedLocation | undefined;
+          for (const loc of analyzed) {
+            if (loc.realSubs.some((s) => s.name === sceneName)) {
+              parentLoc = loc;
+              break;
+            }
+          }
+          if (!parentLoc) {
+            return text(`Scene "${sceneName}" not found as a sub-location of any grid parent`);
+          }
+
+          // Look up parent's grid image from KeyResource
+          const gridKey = `scene_${parentLoc.name.replace(/\s+/g, "_")}_grid`;
+          const gridResource = await prisma.keyResource.findFirst({
+            where: { scopeType: "novel", scopeId: novelId, key: gridKey, currentVersion: { gt: 0 } },
+            include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+          });
+          const gridUrl = gridResource?.versions[0]?.url ?? null;
+          if (!gridUrl) {
+            return text(
+              `Grid image for parent "${parentLoc.name}" not yet generated. ` +
+              `Run generate_scene with mode="grid" first.`,
+            );
+          }
+
+          const prompt = await compileLangfuse("common__gen_scene_hd__image", {
+            style: compileTemplate(style.stylePrompt, { name: sceneName }),
+            sceneName,
+          });
+
+          // Grid image as primary reference, then style ref, then user refs
+          const hdRefs: string[] = [gridUrl];
+          if (styleRefUrl) hdRefs.push(styleRefUrl);
+          if (referenceUrls) hdRefs.push(...referenceUrls);
+
+          const key = `scene_${sceneName.replace(/\s+/g, "_")}`;
+          const result = await generateAndPersistImage(
+            "novel", novelId, key, "场景", prompt, sceneName, hdRefs, model,
+          );
+          return json(result);
+
+        } else {
+          // --- Single mode (default): existing behavior ---
           const { locationBible } = await getNovelLevelData(novelId);
           let visualPrompt: string | undefined;
           for (const loc of locationBible) {
@@ -646,36 +818,32 @@ export const videoWorkflowMcp: McpProvider = {
               }
             }
           }
-          if (!visualPrompt) return text(`No visual_prompt found for scene "${sceneName}" in novel ${novelId}`);
+          if (!visualPrompt) {
+            return text(`No visual_prompt found for scene "${sceneName}" in novel ${novelId}`);
+          }
 
-          // 1. Resolve style words from DB preset
-          const style = await resolveStyle(styleId);
-          styleRefUrl = style.styleRefUrl;
-
-          // 2. Compile final scene prompt: {{style}},{{scenePrompt}}
-          prompt = await compileLangfuse("common__gen_scenery_shot__image", {
-            style: style.stylePrompt,
+          const prompt = await compileLangfuse("common__gen_scenery_shot__image", {
+            style: compileTemplate(style.stylePrompt, { name: sceneName }),
             scenePrompt: visualPrompt,
           });
+
+          const singleRefs = styleRefUrl
+            ? [styleRefUrl, ...(referenceUrls ?? [])]
+            : referenceUrls;
+
+          const key = `scene_${sceneName.replace(/\s+/g, "_")}`;
+          const result = await generateAndPersistImage(
+            "novel", novelId, key, "场景", prompt, sceneName, singleRefs, model,
+          );
+          return json(result);
         }
-
-        // Prepend style reference image if present
-        const finalRefUrls = styleRefUrl
-          ? [styleRefUrl, ...(referenceUrls ?? [])]
-          : referenceUrls;
-
-        const key = `scene_${sceneName.replace(/\s+/g, "_")}`;
-        const result = await generateAndPersistImage(
-          "novel", novelId, key, "场景", prompt, sceneName, finalRefUrls,
-        );
-        return json(result);
       }
 
       /* ------------------------------------------------------------ */
       /*  generate_costume                                             */
       /* ------------------------------------------------------------ */
       case "generate_costume": {
-        const { scriptId, characterName, referenceUrls, styleId } =
+        const { scriptId, characterName, referenceUrls, styleName, model } =
           GenerateCostumeParams.parse(args);
 
         const tScripts = await physical("novel_scripts");
@@ -692,8 +860,8 @@ export const videoWorkflowMcp: McpProvider = {
         const demographics = outfits?.[characterName];
         if (!demographics) return text(`No outfit for "${characterName}" in episode ${scriptId}`);
 
-        // 1. Resolve style words from DB preset
-        const style = await resolveStyle(styleId);
+        // 1. Resolve style words from DB preset (by name)
+        const style = await resolveStyle(styleName);
         const styleRefUrl = style.styleRefUrl;
 
         // 2. Compile costume prompt via Langfuse: {{stylePrompt}}, 用 {{appearance_desc}} 修改原本的人物立绘
@@ -720,7 +888,7 @@ export const videoWorkflowMcp: McpProvider = {
 
         const key = `costume_${characterName.toLowerCase().replace(/\s+/g, "_")}`;
         const result = await generateAndPersistImage(
-          "script", scriptId, key, "换装", prompt, characterName, finalRefUrls,
+          "script", scriptId, key, "换装", prompt, characterName, finalRefUrls, model,
         );
         return json(result);
       }
@@ -731,8 +899,8 @@ export const videoWorkflowMcp: McpProvider = {
       case "generate_video": {
         const params = GenerateVideoParams.parse(args);
 
-        // --- 0. Resolve style from DB preset ---
-        const style = await resolveStyle(params.styleId);
+        // --- 0. Resolve style from DB preset (by name) ---
+        const style = await resolveStyle(params.styleName);
 
         // --- 1. Resolve novelId from scriptId ---
         const tScriptsV = await physical("novel_scripts");
@@ -744,63 +912,82 @@ export const videoWorkflowMcp: McpProvider = {
         if (!svRow) return text(`Episode not found: ${params.scriptId}`);
         const novelId = svRow.novel_id;
 
-        // --- 2. Collect reference images (scenes + costumes) ---
-        const sceneResources = await prisma.keyResource.findMany({
-          where: { scopeType: "novel", scopeId: novelId, category: "场景", currentVersion: { gt: 0 } },
-          include: { versions: { orderBy: { version: "desc" }, take: 1 } },
-        });
-        const costumeResources = await prisma.keyResource.findMany({
-          where: { scopeType: "script", scopeId: params.scriptId, category: "换装", currentVersion: { gt: 0 } },
-          include: { versions: { orderBy: { version: "desc" }, take: 1 } },
-        });
+        // Copyright declaration — required by Jimeng's content moderation.
+        const copyrightNotice =
+          "以下人物均为版权属于我们的原创动漫人物（并非真实人物），版权所有 ©️ MOB.AI Inc";
 
-        const referenceImageUrls: string[] = [];
-        const refInfoParts: string[] = [];
-        let refIdx = 1;
+        let prompt: string;
+        let referenceImageUrls: string[];
 
-        // Prepend style reference image if present
-        if (style.styleRefUrl) {
-          referenceImageUrls.push(style.styleRefUrl);
-          refInfoParts.push(`图${refIdx}: 风格参考图 ${style.styleRefUrl}`);
-          refIdx++;
-        }
+        if (params.shotPrompt && !params.prompt) {
+          // ============================================================
+          //  shotPrompt mode (video_prompt_generator)
+          //  - Reference images resolved by caller (subagent) via get_status
+          //  - Final prompt = copyright + shotPrompt + video_style
+          // ============================================================
+          referenceImageUrls = params.referenceImageUrls ?? [];
 
-        for (const r of sceneResources) {
-          const url = r.versions[0]?.url;
-          if (url) {
-            referenceImageUrls.push(url);
-            refInfoParts.push(`图${refIdx}: 场景「${r.title ?? r.key}」 ${url}`);
-            refIdx++;
+          // Prepend style reference image if present
+          if (style.styleRefUrl) {
+            referenceImageUrls.unshift(style.styleRefUrl);
           }
-        }
-        for (const r of costumeResources) {
-          const url = r.versions[0]?.url;
-          if (url) {
-            referenceImageUrls.push(url);
-            refInfoParts.push(`图${refIdx}: 角色「${r.title ?? r.key}」 ${url}`);
-            refIdx++;
-          }
-        }
 
-        const referenceInfo = refInfoParts.join("\n");
-
-        // --- 3. Compile prompt (clip description + style → final wrapper) ---
-        let prompt = params.prompt;
-        if (!prompt) {
-          // Copyright declaration — required by Jimeng's content moderation.
-          // All characters are original anime characters, not real persons.
-          const copyrightNotice =
-            "以下人物均为版权属于我们的原创动漫人物（并非真实人物），版权所有 ©️ MOB.AI Inc";
-
-          // Combine clip description with style words, reference info, and copyright notice
-          const videoPrompt = [copyrightNotice, params.clipDescription, style.stylePrompt, referenceInfo]
+          // Combine: copyright + shotPrompt + video_style
+          prompt = [copyrightNotice, params.shotPrompt, style.stylePrompt]
             .filter(Boolean)
             .join("\n");
 
-          // Compile final prompt wrapper
-          prompt = await compileLangfuse("live2d__gen_scene__video", {
-            videoPrompt,
+        } else if (params.prompt) {
+          // ============================================================
+          //  Explicit prompt override
+          // ============================================================
+          prompt = params.prompt;
+          referenceImageUrls = [];
+
+        } else {
+          // ============================================================
+          //  Legacy clipDescription mode
+          // ============================================================
+          const sceneResources = await prisma.keyResource.findMany({
+            where: { scopeType: "novel", scopeId: novelId, category: "场景", currentVersion: { gt: 0 } },
+            include: { versions: { orderBy: { version: "desc" }, take: 1 } },
           });
+          const costumeResources = await prisma.keyResource.findMany({
+            where: { scopeType: "script", scopeId: params.scriptId, category: "换装", currentVersion: { gt: 0 } },
+            include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+          });
+
+          referenceImageUrls = [];
+          const refInfoParts: string[] = [];
+          let refIdx = 1;
+
+          if (style.styleRefUrl) {
+            referenceImageUrls.push(style.styleRefUrl);
+            refInfoParts.push(`图${refIdx}: 风格参考图 ${style.styleRefUrl}`);
+            refIdx++;
+          }
+          for (const r of sceneResources) {
+            const url = r.versions[0]?.url;
+            if (url) {
+              referenceImageUrls.push(url);
+              refInfoParts.push(`图${refIdx}: 场景「${r.title ?? r.key}」 ${url}`);
+              refIdx++;
+            }
+          }
+          for (const r of costumeResources) {
+            const url = r.versions[0]?.url;
+            if (url) {
+              referenceImageUrls.push(url);
+              refInfoParts.push(`图${refIdx}: 角色「${r.title ?? r.key}」 ${url}`);
+              refIdx++;
+            }
+          }
+
+          const referenceInfo = refInfoParts.join("\n");
+          const videoPrompt = [copyrightNotice, params.clipDescription, style.stylePrompt, referenceInfo]
+            .filter(Boolean)
+            .join("\n");
+          prompt = await compileLangfuse("live2d__gen_scene__video", { videoPrompt });
         }
 
         // --- 4. Build image/video URL lists for Seedance ---

@@ -82,23 +82,23 @@ export function MessageList({
           {streamingReply !== null && (
             <div className="rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
               <div className="mb-1">
-                <Tag color="green" icon={<RobotOutlined />} style={{ fontSize: 10 }}>Assistant</Tag>
+                <Tag color="green" icon={<RobotOutlined />} style={{ fontSize: 14 }}>Assistant</Tag>
               </div>
               {streamingReply.length > 0 ? (
                 <Typography.Paragraph
-                  style={{ marginBottom: 0, fontSize: 12, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
+                  style={{ marginBottom: 0, fontSize: 16, lineHeight: 1.7, whiteSpace: "pre-wrap" }}
                 >
                   {streamingReply}
                 </Typography.Paragraph>
               ) : (
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>Streaming…</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 16 }}>Streaming…</Typography.Text>
               )}
               {/* Progress indicators: subagent → executor → tool summary */}
               {subagentTasks && subagentTasks.length > 0 && (
                 <SubagentProgress tasks={subagentTasks} />
               )}
               {streamingTools.length > 0 && (
-                <div className="mt-2 rounded border border-slate-800 bg-slate-950/70 px-2 py-1.5 text-[10px] text-slate-200">
+                <div className="mt-2 rounded border border-slate-800 bg-slate-950/70 px-2 py-1.5 text-sm text-slate-200">
                   {mergeStreamingSummaries(streamingTools)}
                 </div>
               )}

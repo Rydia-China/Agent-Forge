@@ -37,14 +37,15 @@ Langfuse prompt 使用 \`{{variableName}}\` 语法标记变量占位符。
 **重要：风格词、比例、约束等全部由 Langfuse 模板控制，禁止在代码或对话中硬编码任何风格词。**
 
 编译调用示例：
-\\\\\`\\\\\`\\\\\`json
+\\\`\\\`\\\`json
 {
-  "name": "common__gen_scenery_shot__prompt",
+  "name": "common__gen_scenery_shot__image",
   "variables": {
-    "nodeContent": "“前情提要 + 当前节点内容”"
+    "style": "<风格词>",
+    "scenePrompt": "<场景视觉描述>"
   }
 }
-\\\\\`\\\\\`\\\\\`
+\\\`\\\`\\\`
 
 ## Prompt 命名约定
 
@@ -52,12 +53,14 @@ Prompt 名称遵循 \`{workflow}__{step}__{type}\` 格式：
 
 - **workflow**: \`common\`（共用）、\`live2d\`、\`intro\`
 - **step**: 步骤名（如 \`gen_scenery_shot\`、\`gen_scene\`）
-- **type**: \`prompt\`（文本提示词生成）、\`image\`（图片生成）、\`video\`（视频生成）、\`video_prompt\`（视频提示词生成）
+- **type**: \`image\`（图片生成）、\`video\`（视频生成）、\`video_prompt\`（视频提示词生成）
 
 示例：
-- \`common__gen_scenery_shot__prompt\` — 空镜提示词生成
+- \`common__gen_scenery_shot__image\` — 空镜图片生成
 - \`live2d__gen_scene__image\` — Live2D 分镜图生成
 - \`intro__gen_scene__video_prompt\` — Intro 视频提示词生成
+
+**禁止猜测 prompt 名称** — 必须先通过 \`langfuse__list_prompts\` 或 \`langfuse__get_prompts\` 确认实际存在的名称。
 
 ## 典型工作流
 

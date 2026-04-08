@@ -15,12 +15,12 @@ export function StatusBadge({ status }: { status: AgentStatus }) {
     case "idle":
       return <Badge status="default" />;
     case "running":
-      return <LoadingOutlined style={{ color: "#52c41a", fontSize: 12 }} spin />;
+      return <LoadingOutlined style={{ color: "#52c41a", fontSize: 28 }} spin />;
     case "needs_attention":
-      return <ExclamationCircleFilled style={{ color: "#faad14", fontSize: 12 }} />;
+      return <ExclamationCircleFilled style={{ color: "#faad14", fontSize: 28 }} />;
     case "done":
-      return <CheckCircleFilled style={{ color: "#52c41a", fontSize: 12 }} />;
+      return <CheckCircleFilled style={{ color: "#52c41a", fontSize: 28 }} />;
     case "error":
-      return <CloseCircleFilled style={{ color: "#ff4d4f", fontSize: 12 }} />;
+      return <CloseCircleFilled style={{ color: "#ff4d4f", fontSize: 28 }} />;
   }
 }

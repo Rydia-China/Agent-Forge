@@ -59,12 +59,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div className={`rounded border px-3 py-2 ${cfg.tone}`}>
       <div className="mb-1">
-        <Tag color={cfg.color} icon={cfg.icon} style={{ fontSize: 10 }}>
+        <Tag color={cfg.color} icon={cfg.icon} style={{ fontSize: 14 }}>
           {cfg.label}
         </Tag>
       </div>
       {message.content ? (
-        <div className="markdown-body" style={{ fontSize: 12, lineHeight: 1.7 }}>
+        <div className="markdown-body" style={{ fontSize: 16, lineHeight: 1.7 }}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
@@ -77,7 +77,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 <p style={{ marginBottom: "0.4em" }}>{children}</p>
               ),
               table: ({ children }) => (
-                <table style={{ borderCollapse: "collapse", fontSize: 11, margin: "0.5em 0" }}>
+                <table style={{ borderCollapse: "collapse", fontSize: 14, margin: "0.5em 0" }}>
                   {children}
                 </table>
               ),
@@ -94,7 +94,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               code: ({ className, children, ...props }) => {
                 const isInline = !className;
                 return isInline ? (
-                  <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 4px", borderRadius: 3, fontSize: 11 }} {...props}>
+                  <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 4px", borderRadius: 3, fontSize: 14 }} {...props}>
                     {children}
                   </code>
                 ) : (
@@ -109,7 +109,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </ReactMarkdown>
         </div>
       ) : (
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>No content</Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 16 }}>No content</Typography.Text>
       )}
       {message.images && message.images.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -127,7 +127,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         </div>
       )}
       {message.role === "assistant" && message.tool_calls && message.tool_calls.length > 0 && (
-        <div className="mt-2 rounded border border-slate-800 bg-slate-950/70 px-2 py-1.5 text-[10px] text-slate-200">
+        <div className="mt-2 rounded border border-slate-800 bg-slate-950/70 px-2 py-1.5 text-sm text-slate-200">
           {summarizeToolCalls(message.tool_calls)}
         </div>
       )}

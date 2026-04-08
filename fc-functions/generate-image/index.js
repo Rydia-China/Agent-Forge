@@ -195,7 +195,7 @@ exports.handler = async (event, context) => {
     
     console.log('Parsed request body:', JSON.stringify(body))
 
-    const { prompt, referenceImageUrls } = body
+    const { prompt, referenceImageUrls, model: bodyModel } = body
 
     if (!prompt || prompt.trim() === '') {
       return {
@@ -207,7 +207,7 @@ exports.handler = async (event, context) => {
 
     const baseURL = process.env.GEMINI_BASE_URL
     const apiKey = process.env.GEMINI_API_KEY
-    const model = process.env.GEMINI_MODEL || 'google/gemini-3-pro-image-preview'
+    const model = bodyModel || process.env.GEMINI_MODEL || 'google/gemini-3-pro-image-preview'
 
     if (!baseURL || !apiKey) {
       return {

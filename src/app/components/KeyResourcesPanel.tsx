@@ -74,7 +74,7 @@ export function KeyResourcesPanel({
         : "flex w-72 shrink-0 flex-col border-l border-slate-800 bg-slate-950/80"
       }>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-950/90 px-3 py-2 backdrop-blur">
-          <Typography.Text type="secondary" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <Typography.Text type="secondary" style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             关键资源
           </Typography.Text>
           <Badge count={keyResources.length} size="small" color="gray" />
@@ -85,12 +85,12 @@ export function KeyResourcesPanel({
               <div className="flex items-start justify-between gap-1">
                 <div className="flex flex-1 items-center gap-1" style={{ marginBottom: 6 }}>
                   {kr.title && (
-                    <Typography.Text style={{ fontSize: 11, fontWeight: 500, flex: 1 }}>
+                    <Typography.Text style={{ fontSize: 14, fontWeight: 500, flex: 1 }}>
                       {kr.title}
                     </Typography.Text>
                   )}
                   {kr.currentVersion > 1 && (
-                    <Tag color="blue" style={{ fontSize: 9, lineHeight: "14px", margin: 0, padding: "0 4px" }}>
+                    <Tag color="blue" style={{ fontSize: 14, lineHeight: "22px", margin: 0, padding: "0 6px" }}>
                       v{kr.currentVersion}
                     </Tag>
                   )}
@@ -102,7 +102,7 @@ export function KeyResourcesPanel({
                       size="small"
                       icon={<EditOutlined />}
                       onClick={() => openEditor(kr)}
-                      style={{ fontSize: 10 }}
+                      style={{ fontSize: 14 }}
                     />
                   )}
                   {onDelete && (
@@ -112,7 +112,7 @@ export function KeyResourcesPanel({
                       danger
                       icon={<DeleteOutlined />}
                       onClick={() => void handleDelete(kr.id)}
-                      style={{ fontSize: 10 }}
+                      style={{ fontSize: 14 }}
                     />
                   )}
                 </div>
@@ -143,7 +143,7 @@ export function KeyResourcesPanel({
                 </div>
               )}
               {!kr.url && kr.mediaType !== "json" && (
-                <Typography.Text type="secondary" style={{ fontSize: 10 }}>No content</Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 14 }}>No content</Typography.Text>
               )}
             </Card>
           ))}
@@ -171,7 +171,7 @@ export function KeyResourcesPanel({
           value={editText}
           onChange={(e) => setEditText(e.target.value)}
           autoSize={{ minRows: 20, maxRows: 40 }}
-          style={{ fontFamily: "monospace", fontSize: 12 }}
+          style={{ fontFamily: "monospace", fontSize: 16 }}
         />
       </Drawer>
     </>

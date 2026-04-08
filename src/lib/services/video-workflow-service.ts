@@ -27,6 +27,33 @@ async function physical(logicalName: string): Promise<string> {
 
 export type EpStatus = "empty" | "uploaded" | "has_resources";
 
+export interface ResourceDiffItem {
+  key: string;
+  category: string;
+  title: string;
+  scopeType: string;
+  scopeId: string;
+  /** generated = currentVersion > 0 (already has content); pending = needs generation */
+  status: "generated" | "pending";
+  /** true if this KeyResource didn't exist before this upload */
+  isNew: boolean;
+}
+
+export interface StaleResourceItem {
+  key: string;
+  category: string;
+  title: string;
+  scopeType: string;
+  scopeId: string;
+}
+
+export interface ResourceDiff {
+  /** Complete target structure — every resource that SHOULD exist, with progress */
+  expected: ResourceDiffItem[];
+  /** Resources in DB that are no longer part of the expected structure */
+  stale: StaleResourceItem[];
+}
+
 export interface NovelSummary {
   id: string;
   name: string;
@@ -164,7 +191,7 @@ export async function deleteEpisode(scriptId: string): Promise<void> {
 export async function createNovelWithScript(
   name: string,
   upload: NovelScriptUpload,
-): Promise<{ novelId: string; episodes: EpisodeSummary[] }> {
+): Promise<{ novelId: string; episodes: EpisodeSummary[]; diff: ResourceDiff }> {
   const tNovels = await physical("novels");
   const tScripts = await physical("novel_scripts");
   const episodes = upload.episodes;
@@ -189,9 +216,9 @@ export async function createNovelWithScript(
   const created = await insertEpisodes(tScripts, novelId, episodes);
 
   // 3. Create empty KeyResource entries from novel-level data
-  await createEmptyKeyResources(novelId, upload, created);
+  const diff = await createEmptyKeyResourcesWithDiff(novelId, upload, created);
 
-  return { novelId, episodes: created };
+  return { novelId, episodes: created, diff };
 }
 
 /**
@@ -204,7 +231,7 @@ export async function createNovelWithScript(
 export async function replaceNovelScript(
   novelId: string,
   upload: NovelScriptUpload,
-): Promise<EpisodeSummary[]> {
+): Promise<{ episodes: EpisodeSummary[]; diff: ResourceDiff }> {
   const tNovels = await physical("novels");
   const tScripts = await physical("novel_scripts");
   const episodes = upload.episodes;
@@ -315,9 +342,9 @@ export async function replaceNovelScript(
   );
 
   // 6. Create empty KeyResource entries for any new characters/scenes/costumes (upsert — safe)
-  await createEmptyKeyResources(novelId, upload, result);
+  const diff = await createEmptyKeyResourcesWithDiff(novelId, upload, result);
 
-  return result;
+  return { episodes: result, diff };
 }
 
 /* ------------------------------------------------------------------ */
@@ -331,8 +358,154 @@ function portraitKey(name: string): string {
 function sceneKey(sceneName: string): string {
   return `scene_${sceneName.replace(/\s+/g, "_")}`;
 }
+function sceneGridKey(sceneName: string): string {
+  return `scene_${sceneName.replace(/\s+/g, "_")}_grid`;
+}
 function costumeKey(name: string): string {
   return `costume_${name.toLowerCase().replace(/\s+/g, "_")}`;
+}
+
+/**
+ * Ensure correct structure exists, then backfill progress from DB.
+ *
+ * Flow:
+ *   1. Snapshot existing keys (for isNew detection)
+ *   2. Compute expected structure from upload data
+ *   3. Upsert all expected KeyResources
+ *   4. Query currentVersion for each to determine generated/pending
+ *   5. Identify stale resources (exist in DB but not in expected structure)
+ */
+async function createEmptyKeyResourcesWithDiff(
+  novelId: string,
+  upload: NovelScriptUpload,
+  createdEpisodes: EpisodeSummary[],
+): Promise<ResourceDiff> {
+  // 1. Snapshot existing keys BEFORE upsert — for isNew flag
+  const scriptIds = createdEpisodes.map((e) => e.id);
+  const existingNovel = await prisma.keyResource.findMany({
+    where: { scopeType: "novel", scopeId: novelId },
+    select: { key: true, category: true, title: true, scopeType: true, scopeId: true },
+  });
+  const existingScript = scriptIds.length > 0
+    ? await prisma.keyResource.findMany({
+        where: { scopeType: "script", scopeId: { in: scriptIds } },
+        select: { key: true, category: true, title: true, scopeType: true, scopeId: true },
+      })
+    : [];
+  const existingKeys = new Set(
+    [...existingNovel, ...existingScript].map((r) => `${r.scopeType}:${r.scopeId}:${r.key}`),
+  );
+
+  // 2. Compute expected structure from upload data
+  const expectedMeta = computeExpectedKeys(novelId, upload, createdEpisodes);
+  const expectedKeySet = new Set(expectedMeta.map((i) => `${i.scopeType}:${i.scopeId}:${i.key}`));
+
+  // 3. Upsert all expected KeyResources
+  await createEmptyKeyResources(novelId, upload, createdEpisodes);
+
+  // 4. Query currentVersion for all expected resources (after upsert)
+  const novelResources = await prisma.keyResource.findMany({
+    where: { scopeType: "novel", scopeId: novelId },
+    select: { key: true, scopeType: true, scopeId: true, currentVersion: true },
+  });
+  const scriptResources = scriptIds.length > 0
+    ? await prisma.keyResource.findMany({
+        where: { scopeType: "script", scopeId: { in: scriptIds } },
+        select: { key: true, scopeType: true, scopeId: true, currentVersion: true },
+      })
+    : [];
+  const versionMap = new Map<string, number>();
+  for (const r of [...novelResources, ...scriptResources]) {
+    versionMap.set(`${r.scopeType}:${r.scopeId}:${r.key}`, r.currentVersion);
+  }
+
+  // Build expected list with status + isNew
+  const expected: ResourceDiffItem[] = expectedMeta.map((item) => {
+    const compositeKey = `${item.scopeType}:${item.scopeId}:${item.key}`;
+    const currentVersion = versionMap.get(compositeKey) ?? 0;
+    return {
+      ...item,
+      status: currentVersion > 0 ? "generated" as const : "pending" as const,
+      isNew: !existingKeys.has(compositeKey),
+    };
+  });
+
+  // 5. Identify and clean up stale resources
+  const stale: StaleResourceItem[] = [];
+  for (const r of [...existingNovel, ...existingScript]) {
+    const compositeKey = `${r.scopeType}:${r.scopeId}:${r.key}`;
+    if (!expectedKeySet.has(compositeKey)) {
+      const version = versionMap.get(compositeKey) ?? 0;
+      if (version === 0) {
+        // Never generated — safe to auto-delete
+        await prisma.keyResource.deleteMany({
+          where: { scopeType: r.scopeType, scopeId: r.scopeId, key: r.key },
+        });
+      } else {
+        // Has generated content — keep for manual review
+        stale.push({
+          key: r.key,
+          category: r.category ?? "",
+          title: r.title ?? r.key,
+          scopeType: r.scopeType,
+          scopeId: r.scopeId,
+        });
+      }
+    }
+  }
+
+  return { expected, stale };
+}
+
+/**
+ * Compute expected resource metadata from upload data.
+ * Pure computation — no DB writes, no status.
+ */
+function computeExpectedKeys(
+  novelId: string,
+  upload: NovelScriptUpload,
+  createdEpisodes: EpisodeSummary[],
+): Array<{ key: string; category: string; title: string; scopeType: string; scopeId: string }> {
+  const items: Array<{ key: string; category: string; title: string; scopeType: string; scopeId: string }> = [];
+
+  // Portraits
+  for (const arc of upload.character_arcs ?? []) {
+    items.push({ key: portraitKey(arc.name), category: "角色立绘", title: arc.name, scopeType: "novel", scopeId: novelId });
+  }
+
+  // Scenes + grids
+  const locations = upload.location_bible ?? [];
+  const allSceneNames = new Set<string>();
+  const gridParents: string[] = [];
+  for (const loc of locations) {
+    if (loc.visual_prompt?.trim()) allSceneNames.add(loc.name);
+    const realSubs = (loc.sub_locations ?? []).filter((sub) => sub.id !== loc.id);
+    if (realSubs.length >= 2) gridParents.push(loc.name);
+    for (const sub of loc.sub_locations ?? []) {
+      if (sub.visual_prompt?.trim()) allSceneNames.add(sub.name);
+    }
+  }
+  for (const name of allSceneNames) {
+    items.push({ key: sceneKey(name), category: "场景", title: name, scopeType: "novel", scopeId: novelId });
+  }
+  for (const name of gridParents) {
+    items.push({ key: sceneGridKey(name), category: "场景", title: `${name} (grid)`, scopeType: "novel", scopeId: novelId });
+  }
+
+  // Costumes
+  const episodes = upload.episodes;
+  for (let i = 0; i < episodes.length; i++) {
+    const ep = episodes[i]!;
+    const scriptId = createdEpisodes[i]?.id;
+    if (!scriptId) continue;
+    const outfits = ep.output.character_outfits;
+    if (!outfits) continue;
+    for (const name of Object.keys(outfits)) {
+      items.push({ key: costumeKey(name), category: "换装", title: name, scopeType: "script", scopeId: scriptId });
+    }
+  }
+
+  return items;
 }
 
 /**
@@ -364,12 +537,21 @@ async function createEmptyKeyResources(
   }
 
   // Novel-level: scenes from location_bible (including sub_locations)
+  // Also creates grid entries for parent locations with >1 real sub-locations.
   const locations = upload.location_bible ?? [];
   const allSceneNames = new Set<string>();
+  const gridParents: Array<{ name: string }> = [];
   for (const loc of locations) {
     // Parent location
     if (loc.visual_prompt?.trim()) {
       allSceneNames.add(loc.name);
+    }
+    // Determine real sub-locations (id differs from parent)
+    const realSubs = (loc.sub_locations ?? []).filter(
+      (sub) => sub.id !== loc.id,
+    );
+    if (realSubs.length >= 2) {
+      gridParents.push({ name: loc.name });
     }
     // Sub-locations
     for (const sub of loc.sub_locations ?? []) {
@@ -390,6 +572,21 @@ async function createEmptyKeyResources(
         title: sceneName,
       },
       update: { category: "场景", title: sceneName },
+    });
+  }
+  // Grid entries for parent locations eligible for grid mode
+  for (const parent of gridParents) {
+    await prisma.keyResource.upsert({
+      where: { scopeType_scopeId_key: { scopeType: "novel", scopeId: novelId, key: sceneGridKey(parent.name) } },
+      create: {
+        scopeType: "novel",
+        scopeId: novelId,
+        key: sceneGridKey(parent.name),
+        mediaType: "image",
+        category: "场景",
+        title: `${parent.name} (grid)`,
+      },
+      update: { category: "场景", title: `${parent.name} (grid)` },
     });
   }
 
@@ -528,6 +725,321 @@ export async function getNovelLevelData(novelId: string): Promise<NovelLevelData
     locationBible: Array.isArray(locs) ? locs : [],
     synopsis: (syn && !Array.isArray(syn)) ? syn : null,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Scene structure analysis (shared with MCP provider)                 */
+/* ------------------------------------------------------------------ */
+
+export interface LocationSub {
+  id: string;
+  name: string;
+  visualPrompt: string;
+  description: string;
+}
+
+export interface AnalyzedLocation {
+  id: string;
+  name: string;
+  visualPrompt: string;
+  description: string;
+  mode: "grid" | "single";
+  gridSize: number;
+  realSubs: LocationSub[];
+}
+
+/**
+ * Analyze location_bible entries and determine grid/single mode.
+ * Grid mode: parent has ≥ 2 real sub-locations (id differs from parent).
+ * A single sub-location uses single mode — no need for a grid.
+ */
+export function analyzeLocations(
+  locationBible: Array<Record<string, unknown>>,
+): AnalyzedLocation[] {
+  return locationBible.map((loc) => {
+    const parentId = String(loc.id ?? "");
+    const subs = (loc.sub_locations as Array<Record<string, unknown>> | undefined) ?? [];
+    const realSubs = subs
+      .filter((s) => String(s.id ?? "") !== parentId)
+      .map((s): LocationSub => ({
+        id: String(s.id ?? ""),
+        name: String(s.name ?? ""),
+        visualPrompt: String(s.visual_prompt ?? ""),
+        description: String(s.description ?? ""),
+      }));
+    const mode = realSubs.length >= 2 ? "grid" as const : "single" as const;
+    return {
+      id: parentId,
+      name: String(loc.name ?? ""),
+      visualPrompt: String(loc.visual_prompt ?? ""),
+      description: String(loc.description ?? ""),
+      mode,
+      gridSize: mode === "grid" ? realSubs.length + 1 : 1,
+      realSubs,
+    };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/*  Prompt Preview                                                     */
+/* ------------------------------------------------------------------ */
+
+export interface CharacterPreview {
+  name: string;
+  gender: string | null;
+  age: string | null;
+  appearance: string | null;
+  personality: string | null;
+  socialStatus: string | null;
+  compiledPrompt: string | null;   // null when styleName not provided
+  portraitUrl: string | null;
+}
+
+export interface ScenePreview {
+  name: string;
+  visualPrompt: string | null;
+  description: string | null;
+  compiledPrompt: string | null;
+  mode: "single" | "grid" | "hd";
+  imageUrl: string | null;
+  parentName: string | null;       // null for top-level locations
+}
+
+export interface PromptPreviewResult {
+  characters: CharacterPreview[];
+  scenes: ScenePreview[];
+}
+
+/** Default StylePreset names per generation mode — match the conventions in style-preset skill. */
+const DEFAULT_PORTRAIT_STYLE = "portrait-style";
+const DEFAULT_SINGLE_STYLE = "location_style";
+const DEFAULT_GRID_STYLE = "location_grid_style";
+const DEFAULT_HD_STYLE = "sub_location_style";
+
+/**
+ * Build a prompt preview for all characters and scenes in a novel.
+ * portraitStyleName / sceneStyleName select the style for each category.
+ * Defaults are applied if omitted. Pass explicit `null` to skip compilation.
+ */
+export async function getPromptPreview(
+  novelId: string,
+  portraitStyleName?: string | null,
+  sceneStyleName?: string | null,
+): Promise<PromptPreviewResult> {
+  const { characterArcs, locationBible } = await getNovelLevelData(novelId);
+
+  const stylePresetSvc = await import("@/lib/services/style-preset-service");
+
+  // Resolve portrait style (use default if undefined, skip if null)
+  let portraitStylePrompt: string | null = null;
+  const resolvedPortraitName = portraitStyleName === undefined ? DEFAULT_PORTRAIT_STYLE : portraitStyleName;
+  if (resolvedPortraitName) {
+    const preset = await stylePresetSvc.getByName(resolvedPortraitName);
+    if (preset) portraitStylePrompt = preset.prompt;
+  }
+
+  // Resolve scene styles per mode
+  let singleStylePrompt: string | null = null;
+  const resolvedSingleName = sceneStyleName === undefined ? DEFAULT_SINGLE_STYLE : sceneStyleName;
+  if (resolvedSingleName) {
+    const preset = await stylePresetSvc.getByName(resolvedSingleName);
+    if (preset) singleStylePrompt = preset.prompt;
+  }
+
+  let gridStylePrompt: string | null = null;
+  {
+    const preset = await stylePresetSvc.getByName(DEFAULT_GRID_STYLE);
+    if (preset) gridStylePrompt = preset.prompt;
+  }
+
+  let hdStylePrompt: string | null = null;
+  {
+    const preset = await stylePresetSvc.getByName(DEFAULT_HD_STYLE);
+    if (preset) hdStylePrompt = preset.prompt;
+  }
+
+  // Fetch portrait URLs in batch
+  const portraitResources = await prisma.keyResource.findMany({
+    where: { scopeType: "novel", scopeId: novelId, category: "角色立绘" },
+    include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+  });
+  const portraitUrlByTitle = new Map<string, string | null>();
+  for (const r of portraitResources) {
+    if (r.title) portraitUrlByTitle.set(r.title, r.versions[0]?.url ?? null);
+  }
+
+  // Fetch scene URLs in batch
+  const sceneResources = await prisma.keyResource.findMany({
+    where: { scopeType: "novel", scopeId: novelId, category: "场景" },
+    include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+  });
+  const sceneUrlByTitle = new Map<string, string | null>();
+  for (const r of sceneResources) {
+    if (r.title) sceneUrlByTitle.set(r.title, r.versions[0]?.url ?? null);
+  }
+
+  // Build character previews
+  const langfusePromptSvc = await import("@/lib/services/langfuse-prompt-service");
+  const characters: CharacterPreview[] = [];
+  for (const arc of characterArcs) {
+    const name = String(arc.name ?? "");
+    const gender = arc.gender ? String(arc.gender) : null;
+    const age = arc.age ? String(arc.age) : null;
+    const appearance = arc.appearance ? String(arc.appearance) : null;
+    const personality = arc.personality ? String(arc.personality) : null;
+    const socialStatus = arc.socialStatus ?? arc.social_status;
+    const socialStatusStr = socialStatus ? String(socialStatus) : null;
+
+    let compiledPrompt: string | null = null;
+    if (portraitStylePrompt && appearance) {
+      const result = await langfusePromptSvc.compilePrompt(
+        "common__portrait__image",
+        { stylePrompt: portraitStylePrompt, demographics: appearance },
+      );
+      compiledPrompt = result.compiledPrompt;
+    }
+
+    characters.push({
+      name,
+      gender,
+      age,
+      appearance,
+      personality,
+      socialStatus: socialStatusStr,
+      compiledPrompt,
+      portraitUrl: portraitUrlByTitle.get(name) ?? null,
+    });
+  }
+
+  // Analyze locations to determine mode per parent
+  const analyzed = analyzeLocations(locationBible);
+  const { compileTemplate } = await import("@/lib/mcp/static/langfuse-helpers");
+
+  // Build scene previews (mode-aware)
+  const scenes: ScenePreview[] = [];
+  for (const loc of analyzed) {
+    if (loc.mode === "single") {
+      // Single mode: parent with no real sub-locations
+      let compiled: string | null = null;
+      if (singleStylePrompt && loc.visualPrompt) {
+        const result = await langfusePromptSvc.compilePrompt(
+          "common__gen_scenery_shot__image",
+          { style: compileTemplate(singleStylePrompt, { name: loc.name }), scenePrompt: loc.visualPrompt },
+        );
+        compiled = result.compiledPrompt;
+      }
+      scenes.push({
+        name: loc.name,
+        visualPrompt: loc.visualPrompt || null,
+        description: loc.description || null,
+        compiledPrompt: compiled,
+        mode: "single",
+        imageUrl: sceneUrlByTitle.get(loc.name) ?? null,
+        parentName: null,
+      });
+    } else {
+      // Grid mode: parent with real sub-locations → compile grid prompt
+      let gridCompiled: string | null = null;
+      if (gridStylePrompt) {
+        const slots = [
+          `【格 1】${loc.name}：${loc.visualPrompt}`,
+          ...loc.realSubs.map((sub, i) => `【格 ${i + 2}】${sub.name}：${sub.visualPrompt}`),
+        ];
+        const result = await langfusePromptSvc.compilePrompt(
+          "common__gen_scene_grid__image",
+          {
+            style: compileTemplate(gridStylePrompt, { name: loc.name }),
+            gridSize: String(loc.gridSize),
+            gridSlots: slots.join("\n"),
+          },
+        );
+        gridCompiled = result.compiledPrompt;
+      }
+      scenes.push({
+        name: loc.name,
+        visualPrompt: loc.visualPrompt || null,
+        description: loc.description || null,
+        compiledPrompt: gridCompiled,
+        mode: "grid",
+        imageUrl: sceneUrlByTitle.get(loc.name) ?? null,
+        parentName: null,
+      });
+
+      // HD mode for each real sub-location
+      for (const sub of loc.realSubs) {
+        let hdCompiled: string | null = null;
+        if (hdStylePrompt) {
+          const result = await langfusePromptSvc.compilePrompt(
+            "common__gen_scene_hd__image",
+            {
+              style: compileTemplate(hdStylePrompt, { name: sub.name }),
+              sceneName: sub.name,
+            },
+          );
+          hdCompiled = result.compiledPrompt;
+        }
+        scenes.push({
+          name: sub.name,
+          visualPrompt: sub.visualPrompt || null,
+          description: sub.description || null,
+          compiledPrompt: hdCompiled,
+          mode: "hd",
+          imageUrl: sceneUrlByTitle.get(sub.name) ?? null,
+          parentName: loc.name,
+        });
+      }
+    }
+  }
+
+  return { characters, scenes };
+}
+
+/**
+ * Update a single field in character_arcs or location_bible.
+ * Operates on the JSONB array in the novels table.
+ */
+export async function updateNovelField(
+  novelId: string,
+  target: "character" | "location" | "sub_location",
+  name: string,
+  field: string,
+  value: string,
+  parentName?: string, // required for sub_location
+): Promise<void> {
+  const { characterArcs, locationBible } = await getNovelLevelData(novelId);
+  const tNovels = await physical("novels");
+
+  if (target === "character") {
+    const arc = characterArcs.find((a) => String(a.name) === name);
+    if (!arc) throw new Error(`Character "${name}" not found`);
+    arc[field] = value;
+    await bizPool.query(
+      `UPDATE "${tNovels}" SET character_arcs = $1::jsonb WHERE id = $2`,
+      [JSON.stringify(characterArcs), novelId],
+    );
+  } else if (target === "location") {
+    const loc = locationBible.find((l) => String(l.name) === name);
+    if (!loc) throw new Error(`Location "${name}" not found`);
+    loc[field] = value;
+    await bizPool.query(
+      `UPDATE "${tNovels}" SET location_bible = $1::jsonb WHERE id = $2`,
+      [JSON.stringify(locationBible), novelId],
+    );
+  } else {
+    // sub_location
+    if (!parentName) throw new Error("parentName required for sub_location");
+    const parent = locationBible.find((l) => String(l.name) === parentName);
+    if (!parent) throw new Error(`Parent location "${parentName}" not found`);
+    const subs = parent.sub_locations as Array<Record<string, unknown>> | undefined;
+    if (!subs) throw new Error(`No sub_locations in "${parentName}"`);
+    const sub = subs.find((s) => String(s.name) === name);
+    if (!sub) throw new Error(`Sub-location "${name}" not found in "${parentName}"`);
+    sub[field] = value;
+    await bizPool.query(
+      `UPDATE "${tNovels}" SET location_bible = $1::jsonb WHERE id = $2`,
+      [JSON.stringify(locationBible), novelId],
+    );
+  }
 }
 
 /* ------------------------------------------------------------------ */

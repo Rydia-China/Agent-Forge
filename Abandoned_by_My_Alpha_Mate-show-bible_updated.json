@@ -1,0 +1,391 @@
+{
+  "synopsis": {
+    "worldBuilding": "故事发生在一个人类与狼性共存的变形者世界。每个人体内居住着一只内狼（Sylvia的内狼名为Lyra），在特定条件下可变形为狼。社会以\"领地\"为基本单位，由最强大的雄性或雌性担任Alpha，统御整个Pack（狼群）。Alpha配偶称为Luna，地位仅次于Alpha，负责狼群内部事务与凝聚力。\n\n核心机制有三：\n① 命运连结（Fate Bond）：月神赐予的精神链接，将两只命运中属于彼此的狼绑定。连结建立后，双方可感知对方的情绪与位置；若一方持续选择他人，连结将进入\"近拒绝\"状态，以缓慢折磨双方为代价悬而未决，对弱势方造成生理损伤。正式解除需通过当众宣读拒绝誓词（Rejection Vow）完成。\n② 选择配偶（Chosen Mate）：区别于月神命运连结，由Alpha主动以意志和誓言选择的伴侣，不受月神约束，但同样具有神圣性。\n③ Alpha权威：Alpha可对Pack成员发出强制命令，迫使其身体服从，凌驾于个人意志之上。\n\n关键术语：Pack = 狼群氏族；Lyra/Kael = 主角内狼与男二内狼的名字；Luna = Alpha配偶头衔；近拒绝（Near Rejection）= 连结悬而未决的折磨状态。",
+    "plot summary": "Sylvia以为自己拥有一段命运赐予的婚姻——她是银月领地Alpha James的Luna，怀有七个月身孕。然而一场公墓偶遇将一切击碎：James跪在前任爱人Kennedy的父亲墓前，以从未给过Sylvia的温柔将她拥入怀，两人的精神连结冰冷如死水。\n\n真相一层层被剥开：这段命运连结从一开始就是婆婆Luna Miller为解决继承难题而设计的政治安排。Kennedy因遗传缺陷无法生育，被强行拆散；Sylvia的唯一价值，是她能替James生下继承人。James心中从未有过她，却也不愿放手，反以Alpha权威强压她就范。\n\n在命运折磨肉身的至暗时刻，Sylvia做出了最决绝的选择：亲手熄灭腹中的生命，以避免孩子在破碎连结的阴影中成长，随后当众宣读拒绝誓词，在议事厅正面硬扛James的Alpha命令，宁愿被压跪在地也不撤回。最终在闺蜜Daisy与战士Huxley的庇护下，她以流浪狼身份只身出逃。\n\n在河谷领地Alpha Iris的收容下，Sylvia用十个月愈合了破碎的连结，重新找回自我与内狼Lyra。流亡近一年后，她与一直在中立区等候的Huxley重逢——那个三年前便认出她是自己命运伴侣、却为尊重她的选择而沉默的男人。这一次，没有命令，没有强迫，只有双向平等的给予与接纳。两只狼在满月下正式相认，Sylvia与Huxley共同北上，奔赴属于他们的全新开始。"
+  },
+  "character_arcs": [
+    {
+      "arcType": "protagonist",
+      "name": "Sylvia",
+      "age": "23",
+      "gender": "女",
+      "appearance": "二十三岁女性，深棕色波浪长发，琥珀色瞳孔，身形纤细，深灰色粗棉长外套，黑色修身长裤，黑色系带短靴，肩背军绿色大背包。",
+      "personality": "隐忍却有底线，情感细腻敏锐，外表克制内里有烈火；在极度压迫下反而愈发冷静清醒；对真实的善意怀有极强的感知力，一旦确认便全然托付。性格缺陷：长期被驯化为\"工具\"，起初倾向于自我消化痛苦而非主动抗争，需要彻底的至暗时刻方能触发破釜沉舟的决断。",
+      "socialStatus": "银月领地Luna（Alpha之妻）-> 被政治利用的弃妇 -> 流浪狼 -> 河谷领地重建者 -> 北极光领地新生者",
+      "familyRole": "工具性妻子 -> 背叛的受害者 -> 主动终结者 -> 平等关系中的伴侣",
+      "keyRelationships": [
+        {
+          "target": "James",
+          "targetRole": "核心反派 / 命运连结的持有者 / 银月领地Alpha",
+          "relationshipTrack": "被月神赐予命运连结、以为是真实婚姻的丈夫 -> 公墓目击其对Kennedy温柔、确认情感背叛 -> 遭其以Alpha权威强压、人身囚禁，彻底认清其本质 -> 当众宣读拒绝誓词、正面对抗、单方面斩断连结的前夫与宿敌"
+        },
+        {
+          "target": "Luna Miller",
+          "targetRole": "幕后反派 / 婆婆 / 银月领地前任Luna",
+          "relationshipTrack": "表面上的婆婆与领地权威 -> 被揭穿是拆散James与Kennedy、强行安排命运连结的幕后推手 -> 亲口承认Sylvia不过是\"继承问题的解决方案\"的政治操纵者 -> Sylvia出逃后成为其永久切割的过去"
+        },
+        {
+          "target": "Huxley",
+          "targetRole": "男主角 / 银月领地战士 / 真命伴侣（内狼Kael的主人）",
+          "relationshipTrack": "领地内沉默守护的存在、其气息令Lyra异常平静 -> 昏倒后将她抱往治疗师、全程守候并表达陪伴意愿 -> 议事厅当众挑战James权威为她撑腰、出逃夜在边界等候交予物资与承诺 -> 流亡一年后中立区重逢，两狼正式相认，以平等追求建立真实连结，共赴北方新生"
+        },
+        {
+          "target": "Daisy",
+          "targetRole": "挚友 / 助攻 / 救命恩人",
+          "relationshipTrack": "Sylvia在银月领地最亲近的姐妹与信息来源 -> 被James以Alpha权威强制噤声，亲身展示了压迫的残酷 -> 危急时刻秘密潜入囚禁卧室、组织出逃 -> 流亡期间持续传递情报的后方支柱"
+        },
+        {
+          "target": "Kennedy",
+          "targetRole": "直接导火索 / James的前任\"选择配偶\" / 新月领地成员",
+          "relationshipTrack": "从未谋面的情感威胁 -> 公墓目击其被James拥抱，成为婚姻崩塌的具象化符号 -> 被Sylvia彻底清算后黯然离开新月领地，间接成为James威信崩塌的导火索"
+        },
+        {
+          "target": "Iris Blackwood",
+          "targetRole": "庇护者 / 河谷领地Alpha / 精神引路人",
+          "relationshipTrack": "初见时救起溪流旁昏倒的流浪狼 -> 以\"母狼价值不依附于命运连结\"为信念庇护Sylvia -> 在其治下用十个月完成愈合与自我重建的见证者与守护者"
+        },
+        {
+          "target": "Elara Vance",
+          "targetRole": "关键配角 / 银月领地治疗师",
+          "relationshipTrack": "诊断出近拒绝状态对Sylvia肉体的侵蚀 -> 如实告知终止妊娠的连锁反应 -> 仍将草药交到Sylvia手中，尊重她的自主抉择"
+        }
+      ],
+      "coreObjective": {
+        "externalGoal": "解除被政治设计的命运连结，带着完整的自我离开银月领地，在一个真正以平等为基础的领地开始新生活。",
+        "internalMotivation": [
+          "证明自己的价值从不依附于任何连结或命令",
+          "让内狼Lyra在真实的平等中重燃生机，而非在权威的压制下消亡",
+          "第一次为自己做选择，而非成为他人政治棋局中的棋子"
+        ]
+      },
+      "progressiveActions": [
+        {
+          "sequence": 1,
+          "phase": "Phase 1 起",
+          "description": "Alpha Barnes去世，Sylvia感知到精神连结骤然冰冷，James以\"身体不宜\"为由拒绝她同行，独自赶赴新月领地 -> Sylvia等待数小时后独自追往公墓 -> 在公墓角落亲眼目睹James将Kennedy揽入怀中、给予从未给过自己的温柔，婚姻裂痕彻底曝光。"
+        },
+        {
+          "sequence": 2,
+          "phase": "Phase 1 起",
+          "description": "Sylvia追问James与Kennedy的关系 -> James以Alpha命令强压她并强制噤声护姐的Daisy -> Sylvia第一次以愤怒而非隐忍直面Alpha权威的本质。"
+        },
+        {
+          "sequence": 3,
+          "phase": "Phase 1 起",
+          "description": "婆婆Luna Miller介入，以\"Alpha的复杂过去\"与\"狼群利益优先\"为由要求Sylvia接受现实 -> Sylvia逼问其是否早知内情 -> Luna Miller神情中闪过满意，Sylvia彻底意识到这桩婚姻从一开始便是政治安排。"
+        },
+        {
+          "sequence": 4,
+          "phase": "Phase 1 起",
+          "description": "Daisy告知James本周已第三次前往新月领地 -> 走廊偷听到狼群成员谈及Luna Miller当年以\"Alpha配偶必须能延续血脉\"为由强制拆散James与Kennedy的真相 -> Sylvia确认自己不过是政治替代品。"
+        },
+        {
+          "sequence": 5,
+          "phase": "Phase 2 承",
+          "description": "精神连结持续恶化引发剧烈眩晕，Sylvia在行政办公室昏倒 -> Huxley将她抱往治疗师，Lyra对其气息异常平静 -> 治疗师Elara确诊近拒绝状态正在摧毁Sylvia与Lyra，Huxley在窗边守候全程，表示愿陪在身边。"
+        },
+        {
+          "sequence": 6,
+          "phase": "Phase 2 承",
+          "description": "Luna Miller召见Sylvia，亲口披露当年James以放弃Alpha继承权威胁换取Kennedy、自己强制终止后月神赐予命运连结的完整真相 -> Sylvia得到最后一块证据：她从未被爱过，命运连结本身也不过是\"继承问题的解决方案\"。"
+        },
+        {
+          "sequence": 7,
+          "phase": "Phase 2 承",
+          "description": "全体集会上James携Kennedy气味入场 -> Sylvia身体失控启动变形，Huxley及时以气息压制帮她渡过危机 -> James目睹后嫉妒，却对自身的Kennedy气味只字不提，坦然落座主持会议，自私本质毕露。"
+        },
+        {
+          "sequence": 8,
+          "phase": "Phase 3 转",
+          "description": "Sylvia在卧室直接质问James身上的Kennedy气味与全部行踪，逐条列举他每次选择Kennedy而非自己的事实 -> James沉默，无法否认 -> Sylvia当众宣告：她明白自己从一开始就只是政治解决方案，他的心从未属于过她，内心决断已成。"
+        },
+        {
+          "sequence": 9,
+          "phase": "Phase 3 转",
+          "description": "Sylvia夜访Elara，表明无法再将孩子带入破碎连结 -> Elara确认终止妊娠将令连结瞬间撕裂、James会立刻感知，仍将草药交予她，尊重其决定 -> Sylvia返回卧室独自服下草药茶，在剧烈痛苦中亲手熄灭腹中生命，于黎明前感受到连结松弛，以最决绝的代价宣告彻底清醒。"
+        },
+        {
+          "sequence": 10,
+          "phase": "Phase 3 转",
+          "description": "James冲破卧室门质问Sylvia，扑前欲掐其咽喉 -> Sylvia平静对视，眼中毫无惧色，James双手震慑于她神情停在半空 -> 随后Sylvia在全体长老面前当众宣读拒绝誓词，遭James以Alpha命令强压跪地，仍拒绝撤回；Huxley当众走出，挑战James滥用权威，议事厅正面对峙，誓词悬而未决。"
+        },
+        {
+          "sequence": 11,
+          "phase": "Phase 4 合",
+          "description": "James以拒绝誓词悬而未决为由将Sylvia锁入主卧、命令Kennedy出席集会期间她不得露面 -> Sylvia被困期间因不完整的拒绝状态开始高烧，Lyra存在感濒临消亡 -> Daisy秘密潜入，断言若不立即出逃二者皆亡，当机立断组织今夜行动。"
+        },
+        {
+          "sequence": 12,
+          "phase": "Phase 4 合",
+          "description": "Daisy与Kayden趁巡逻换班护送虚弱的Sylvia出逃至东部边界 -> Huxley早已等候，将装有地图、物资与中立区联络人信息的大背包交予她，坦言内狼Kael三年前便认出她是命运伴侣，却因她已与James连结而选择沉默 -> Sylvia第一次感受到真实的希望，踏过边界线，独自走入黑暗森林。"
+        },
+        {
+          "sequence": 13,
+          "phase": "Phase 5 终",
+          "description": "以流浪狼身份独自流亡一个月后在河谷领地溪流旁昏倒，被Alpha Iris Blackwood救回 -> Iris以平等与慈悲治理领地，告知\"母狼价值不依附于命运连结\" -> Sylvia在其庇护下协助领地行政、与Lyra重学变形，历时十个月彻底愈合破碎连结，重拾完整自我；期间获悉Kennedy已离开、James因拒绝接受拒绝誓词而威信扫地。"
+        },
+        {
+          "sequence": 14,
+          "phase": "Phase 5 终",
+          "description": "流亡近一年后赴中立区咖啡馆与Huxley重逢，Lyra轻唤\"Kael\"，对方以绵延多年的情感回应 -> Huxley以正式追求方式提出建立关系，每一步以Sylvia意愿为先，Sylvia接受 -> 满月之夜两狼在中立区草地建立连结，如归家般温暖平等，共同决定北上北极光领地，在以平等为核心的新狼群中开始真正属于自己的生活。"
+        }
+      ],
+      "narrativeArc": "从被政治设计的命运囚徒，经由最决绝的自我牺牲与抗争，蜕变为以自身意志重新定义命运连结的自由者。",
+      "keyConflict": [
+        "外部：James以命运连结与Alpha权威的双重枷锁拒绝放手；Luna Miller自始至终将她视为可操控的政治工具；银月领地的等级制度将个人意志系统性压制",
+        "内部：对\"命运安排\"的最后一丝期盼与已摧枯拉朽的清醒之间的拉锯；对主动终结孩子生命这一抉择的道德重量的独自承担；在长期被工具化后重建对真实情感的信任能力"
+      ],
+      "resolution": {
+        "externalOutcome": "单方面完成拒绝誓词、切断命运连结，出逃银月领地，在河谷领地痊愈后与Huxley在中立区重建平等连结，共赴北极光领地开始全新生活。James威信崩塌，Luna Miller的政治算计彻底落空。",
+        "characterGrowth": "从隐忍等待他人给予价值认可，到亲手定义自身价值；从在命运连结的框架内寻求被爱，到主动选择以平等为前提的真实连结；Lyra从濒死边缘重焕生机，成为Sylvia内在力量复苏的最直接象征。"
+      },
+      "arcSummary": "月神的赐予可以是牢笼，但打碎牢笼的钥匙，始终只在自己手中。"
+    },
+    {
+      "arcType": "supporting",
+      "name": "James",
+      "age": "28",
+      "gender": "男",
+      "appearance": "二十八岁男性，深棕色短发，冷灰色瞳孔，身形高大魁梧，深色剪裁西装，黑色高领衬衫，皮带扣金属质感，黑色皮鞋。",
+      "personality": "专制，掌控欲极强，情感上懦弱逃避，习惯以Alpha权威代替真正的沟通；对Kennedy执念入骨，对Sylvia则始终保持距离。",
+      "socialStatus": "银月领地 Alpha / 因拒绝接受拒绝誓词而威信扫地的领主",
+      "familyRole": "Luna Miller之子 / Sylvia名义上的命运伴侣",
+      "bio": "James是Sylvia痛苦的直接制造者。十七岁时便认定Kennedy为一生所爱，在Luna Miller以遗传缺陷为由强行拆散两人后，他被迫接受了月神赐予的命运连结，娶Sylvia为伴侣，却从未将心交出。整段婚姻期间，他频繁奔赴新月领地陪伴Kennedy，以Alpha命令压制追问的Sylvia，甚至在Sylvia昏倒、高烧危及生命时将Kennedy请入集会，将妻子锁入卧室。Sylvia当众宣读拒绝誓词时，他以Alpha权威强制逼她跪地撤回，彻底暴露其本质。Sylvia出逃后，因无法重新接受命运连结而威信扫地，Kennedy亦随之离开，最终落得双失的结局——既未能守护真爱，也亲手毁掉了本可能拥有的一切。"
+    },
+    {
+      "arcType": "supporting",
+      "name": "Huxley",
+      "age": "35",
+      "gender": "男",
+      "appearance": "三十五岁男性，深色短发鬓角染霜白，深灰色瞳孔，身形高大沉稳，深灰色厚实军事夹克，黑色战术长裤，黑色军靴。",
+      "personality": "沉默隐忍，极具原则，将对方的意愿置于自身渴望之上；在关键时刻敢于正面挑战权威，忠诚而有力量。",
+      "socialStatus": "银月领地高阶成员 / 北极光领地准成员",
+      "familyRole": "Sylvia真正命运伴侣的主人 / 守候者",
+      "bio": "Huxley是贯穿全剧的隐线与情感终点。三年前Sylvia初抵银月领地，他的狼Kael便已认出她是命运伴侣，但因她已与James连结，他选择了彻底沉默。整段时间里，他以旁观者身份见证了Sylvia所受的一切伤害，始终以行动而非言语守护：在行政办公室将晕倒的Sylvia抱去就医，在集会上以气息帮她压制失控的狼性冲动，在议事厅公开挑战James的Alpha权威为她发声，最终在东部边界备好地图、物资与联络人信息，让她有能力独自离开。他从不要求回报，只告知她：若有一天愿意回来，他会在此等候。近一年后在中立区咖啡馆重逢，他以正式追求而非命运强制的方式开始两人的关系，与Sylvia共赴北极光领地，成为她真正意义上的归宿。"
+    },
+    {
+      "arcType": "supporting",
+      "name": "Kennedy Barnes",
+      "age": "26",
+      "gender": "女",
+      "appearance": "二十六岁女性，浅棕色波浪长发，浅绿色瞳孔，身形娇小纤细，素色深灰长裙，黑色针织开衫，黑色平底鞋。",
+      "personality": "深陷悲痛，被动承受，似乎并未主动破坏Sylvia的婚姻，却是整段关系破裂的核心诱因。",
+      "socialStatus": "新月领地故Alpha Barnes之女 / 无法生育的遗传缺陷携带者 / 已离开新月领地的流亡者",
+      "familyRole": "James执念所系的旧爱",
+      "bio": "Kennedy是整个故事悲剧的起点，却几乎从未真正出场。她与James的青梅竹马之情被Luna Miller以\"无法生育\"为由强行斩断，命运将她与James永久隔开，却未能斩断James对她的执念。父亲Barnes Alpha去世后，她的悲痛成为James一次次出走新月领地的理由，她身上的气味频繁附着在James身上归来，成为刺入Sylvia心口的利刃。然而最终，James对她的执念并未为她换来任何结果——Sylvia出走后，她同样离开了新月领地，James的一意孤行换来的是双线皆空。"
+    },
+    {
+      "arcType": "supporting",
+      "name": "Luna Miller",
+      "age": "52",
+      "gender": "女",
+      "appearance": "五十二岁女性，银灰色发丝梳为盘发，冷灰色瞳孔，身形端庄挺拔，深色合身套装，珍珠耳钉，黑色细跟高跟鞋。",
+      "personality": "冷酷理性，以狼群利益为最高准则，将人视为棋子，擅长以道德与家族话语体系包装权力意志。",
+      "socialStatus": "银月领地前Luna / 家族实际操控者",
+      "familyRole": "James之母 / Sylvia婚姻的幕后设计者",
+      "bio": "Luna Miller是Sylvia命运的终极幕后推手。她查明Kennedy携带遗传缺陷、无法生育后，动用Alpha权威强制拆散了James与Kennedy，随后将月神赐予的命运连结视为\"解决继承问题的完美方案\"，主动撮合并巩固了James与Sylvia的婚姻。当Sylvia追问时，她以\"狼群利益优先\"作答，神情中闪过满意；当Sylvia的精神连结近乎断裂时，她不但不制止儿子，反劝Sylvia\"专注于Luna与母亲的职责\"。她亲口向Sylvia揭露了这一切的真相，而这份揭露本身也带着居高临下的控制意味——她从未认为自己有任何错。Sylvia的出逃与James威信扫地，是她精密棋局最终崩盘的代价。"
+    },
+    {
+      "arcType": "supporting",
+      "name": "Lyra",
+      "age": "23",
+      "gender": "女",
+      "appearance": "Sylvia的内狼，狼形体型纤长，深银灰色毛色，琥珀色狼眸，连结受损时毛色黯淡消沉，痊愈后毛色重焕光泽。",
+      "personality": "本能敏锐，情感忠诚，比Sylvia更早感知到真正的命运连结；在痛苦中愈发焦躁，在希望中逐渐苏醒。",
+      "socialStatus": "Sylvia的内在狼 / 与Kael（Huxley之狼）相互认定的命运伴侣",
+      "familyRole": "Sylvia的内在自我与直觉投射",
+      "bio": "Lyra作为Sylvia的内在狼，是贯穿全剧的情感晴雨表。她在James与Kennedy的气息中焦躁不安，在精神连结恶化时愈发微弱，在Huxley靠近时却出乎意料地平静——这份本能的识别，远早于Sylvia的意识层面。草药茶服下后，连结骤然松弛，Lyra的存在感几近消散。流亡期间，在Iris Blackwood的庇护下，Sylvia与Lyra重新学习变形，历经十个月共同愈合。中立区的满月夜，Lyra轻唤\"Kael\"，正式确认了这段迟到三年的命运，与Sylvia一同踏向北方的新生。"
+    },
+    {
+      "arcType": "supporting",
+      "name": "Daisy",
+      "age": "22",
+      "gender": "女",
+      "appearance": "二十二岁女性，棕色中长直发，暖棕色瞳孔，身形娇小，米白色针织上衣，深色修身牛仔裤，白色运动鞋。",
+      "personality": "忠诚护主，行动力强，敢于与强权正面冲撞，在Sylvia最危险的时刻始终第一个出现。",
+      "socialStatus": "银月领地普通成员 / Sylvia的贴身支持者",
+      "familyRole": "Sylvia的妹妹/挚友",
+      "bio": "Daisy是Sylvia在银月领地最可靠的后盾。James以Alpha命令强压Sylvia时，她第一个冲入客厅护姐，随即被James的Alpha权威强制噤声，身体僵直，却仍用眼神传递忠诚。她暗中告知Sylvia James频繁出走的次数，在厨房将走廊偷听来的真相转述给她。在Sylvia因不完整的拒绝状态高烧危及生命、被困卧室时，Daisy秘密潜入，当机立断与Kayden联手将她护送至东部边界。出逃后，她仍保持与Sylvia的秘密联络，带来Kennedy已离开、James威信扫地的消息，成为Sylvia在银月领地内部最后的眼与耳。"
+    },
+    {
+      "arcType": "supporting",
+      "name": "Elara Vance",
+      "age": "35",
+      "gender": "女",
+      "appearance": "三十五岁女性，深棕色发丝束成低髻，深绿色瞳孔，身形沉静匀称，浅灰色麻布长裙，白色短围裙，腰间挂草药香囊，棕色平底鞋。",
+      "personality": "客观冷静，尊重自主意志，不以道德施压，以真相而非安慰对待求助者。",
+      "socialStatus": "银月领地治疗师",
+      "familyRole": "Sylvia出逃前的最后守护者",
+      "bio": "Elara Vance是Sylvia在银月领地内少数不带立场的声音。她诊断出Sylvia正遭受\"近拒绝\"状态的侵蚀——James选择了另一个人却未正式解除连结，这种悬而未决的状态正在缓慢摧毁Sylvia与Lyra。她不回避James的责任，直言\"那是他自己的选择\"。当Sylvia夜访表明终止妊娠的意志时，Elara如实告知后果与风险，却未以任何道德话语阻拦，而是将草药交到她手中，叮嘱她用沸水冲泡后迅速饮尽。在Sylvia做出一生中最沉重的决定的那一夜，Elara是唯一真正尊重她意志的人。"
+    },
+    {
+      "arcType": "supporting",
+      "name": "Iris Blackwood",
+      "age": "40",
+      "gender": "女",
+      "appearance": "四十岁女性，栗棕色波浪长发发梢微卷，深绿色瞳孔，身形沉稳温柔，暖棕色皮质夹克，米白色宽松长裤，棕色皮靴。",
+      "personality": "平等，慈悲，以接纳代替审判；将领地建立在包容被驱逐者的理念之上，以实际行动践行\"母狼的价值不依附于命运连结\"。",
+      "socialStatus": "河谷领地 Alpha",
+      "familyRole": "Sylvia流亡期间的庇护者与精神引路人",
+      "bio": "Iris Blackwood是Sylvia重生路上的关键摆渡人。她收容各类被狼群驱逐或遗弃的狼，以平等与慈悲治理河谷领地。在Sylvia流亡一个月、于边境溪流旁昏倒时，Iris亲自将她救回，并在庇护期间告诉她：母狼的价值不依附于命运连结而存在。这句话成为Sylvia重建自我认知的核心锚点。在Iris的庇护下，Sylvia重新参与领地行政管理，与Lyra共同愈合，历经十个月彻底从破碎的连结中恢复。Iris并不强留，也不索取，只是以自身领地的存在方式，向Sylvia证明了另一种狼群秩序的可能性。"
+    },
+    {
+      "arcType": "supporting",
+      "name": "Kayden",
+      "age": "28",
+      "gender": "男",
+      "appearance": "二十八岁男性，深棕色短发，深棕色瞳孔，体型精干中等，深灰色战术夹克，黑色长裤，黑色军靴。",
+      "personality": "沉稳可靠，行动优先于言语，在关键时刻选择以实际行动支持正义一方。",
+      "socialStatus": "银月领地成员",
+      "familyRole": "出逃行动的执行协助者",
+      "bio": "Kayden在剧情中戏份精炼却不可或缺。在Sylvia被困卧室、高烧危及生命的那一夜，Kayden与Daisy默契配合，精准利用巡逻换班的空档，将虚弱的Sylvia经豪宅侧门护送至东部边界，与已提前等候在那里的Huxley完成交接。这场出逃行动的成功，依赖于Kayden对领地布防的熟悉与执行时的沉稳判断。他的选择本身，也是银月领地内部对James行为的一次无声表态。"
+    },
+    {
+      "arcType": "supporting",
+      "name": "Cynthia",
+      "age": "55",
+      "gender": "女",
+      "appearance": "五十五岁女性，银白色发丝盘为正式发髻，深褐色瞳孔，身形高挑挺拔，深酒红色合身套装，金色胸针，黑色高跟鞋。",
+      "personality": "务实，以家族声誉与利益为核心考量，直言不讳，却并非真正站在Sylvia一边——她的不满根源是James的行为危及门面，而非对Sylvia的同情。",
+      "socialStatus": "银月领地家族核心成员 / 疑为长老级人物",
+      "familyRole": "家族内部的利益批评者",
+      "bio": "Cynthia是银月领地内部裂缝的早期显现者。她在Luna Miller书房当面指责James频繁出入新月领地、与无法生育的Kennedy纠缠，指出此举正在危及家族声誉。然而她的批评出发点并非Sylvia所受的伤害，而是家族形象与Alpha合法性的动摇。她的存在揭示了一个关键事实：James与Kennedy的纠缠已从私人痛苦升级为公开的家族危机，即便家族内部也无法继续粉饰太平。她在书房被Luna Miller以\"狼群需要稳定\"压制后沉默，折射出整个权力结构中，所有人都服从于Luna Miller的最终裁量。"
+    }
+  ],
+  "location_bible": [
+    {
+      "id": "silver_moon_manor",
+      "name": "银月领地 豪宅",
+      "description": "银月领地权力核心，Sylvia婚姻囚笼与抗争爆发的主要舞台，几乎所有关键冲突与背叛均发生于此。",
+      "visual_prompt": "北欧风格大型豪宅，灰白石材外墙，深色木质廊柱，铸铁围栏，茂密针叶林环绕，整体色调冷峻沉肃，常年笼罩于晨雾或夜色之中。",
+      "sub_locations": [
+        {
+          "id": "silver_moon_manor_kitchen",
+          "name": "银月领地 豪宅 厨房",
+          "description": "日常生活空间，Sylvia获知关键情报与感知连结变化的私密场所。",
+          "visual_prompt": "宽敞厨房，哑光深灰橱柜，白色大理石台面，岛台中央，吊灯暖黄，窗外针叶林树影，空间整洁但气氛压抑。"
+        },
+        {
+          "id": "silver_moon_manor_living_room",
+          "name": "银月领地 豪宅 客厅",
+          "description": "家族成员冲突爆发与Alpha权威施压的主要空间。",
+          "visual_prompt": "高挑客厅，深色实木地板，落地壁炉，皮质厚重沙发组，墙面深灰石材，吊灯冷光，窗帘厚重半遮，强调等级压迫感的空间布局。"
+        },
+        {
+          "id": "silver_moon_manor_corridor",
+          "name": "银月领地 豪宅 走廊",
+          "description": "信息流通与偷听关键对话的过渡空间。",
+          "visual_prompt": "长廊，深色实木护壁板，壁灯昏黄间距排列，地面深色地毯吸音，走廊尽头光线减弱，形成视觉纵深。"
+        },
+        {
+          "id": "silver_moon_manor_admin_office",
+          "name": "银月领地 豪宅 行政办公室",
+          "description": "Sylvia处理领地行政事务的工作空间，亦是她因连结恶化昏倒的地点。",
+          "visual_prompt": "功能性办公空间，深色实木办公桌，文件架与资料柜靠墙排列，台灯暖光，窗外庭院，整体风格严肃克制。"
+        },
+        {
+          "id": "silver_moon_manor_luna_study",
+          "name": "银月领地 豪宅 Luna书房",
+          "description": "Luna Miller的私人据点，关键真相被揭露与密谋被偷听的场所。",
+          "visual_prompt": "私密书房，整面书架，深绿绒布窗帘，实木圆桌，皮质高背椅，台灯聚光，空气中有旧书与香料气息感，光线局促昏暗。"
+        },
+        {
+          "id": "silver_moon_manor_council_hall",
+          "name": "银月领地 豪宅 议事厅",
+          "description": "狼群集会与权力运作的核心场所，Sylvia宣读拒绝誓词并遭Alpha强压的决战之地。",
+          "visual_prompt": "宽阔石材厅堂，长形会议桌，高背木椅，石材地面，穹顶高挑，壁灯排列，主位设有凸起台阶强调等级，整体色调冷灰庄严。"
+        },
+        {
+          "id": "silver_moon_manor_master_bedroom",
+          "name": "银月领地 豪宅 主卧",
+          "description": "Sylvia与James婚姻关系的私密空间，亦是她服药、被囚禁、发高烧的至暗场所。",
+          "visual_prompt": "大型卧室，深色实木四柱床，厚重深色床帘，地毯柔暗，落地窗俯瞰庭院，壁灯昏黄，床头有草药茶杯遗留痕迹，空间笼罩压抑沉默。"
+        }
+      ]
+    },
+    {
+      "id": "new_moon_cemetery",
+      "name": "新月领地 公墓",
+      "description": "Sylvia目睹James对Kennedy深情告白的地点，婚姻崩塌的起点。",
+      "visual_prompt": "户外公墓，灰色石碑排列于草地间，落叶覆盖土路，枯树枝桠交错，天空阴云低压，远处针叶林深暗，整体色调冷灰沉郁。",
+      "sub_locations": [
+        {
+          "id": "new_moon_cemetery",
+          "name": "新月领地 公墓",
+          "description": "Sylvia目睹James对Kennedy深情告白的地点，婚姻崩塌的起点。",
+          "visual_prompt": "户外公墓，灰色石碑排列于草地间，落叶覆盖土路，枯树枝桠交错，天空阴云低压，远处针叶林深暗，整体色调冷灰沉郁。"
+        }
+      ]
+    },
+    {
+      "id": "silver_moon_healer_cottage",
+      "name": "银月领地 治疗师小屋",
+      "description": "Sylvia接受诊断、获悉身体真实状态并在Huxley陪伴下感受到首次真实希望的场所。",
+      "visual_prompt": "独立木制小屋，低矮屋檐，草药束悬挂于横梁，木质药柜排列，烛光与草药气息弥漫，窗台摆放干花与陶罐，整体色调暖棕，与豪宅的冷峻形成对比。",
+      "sub_locations": [
+        {
+          "id": "silver_moon_healer_cottage",
+          "name": "银月领地 治疗师小屋",
+          "description": "Sylvia接受诊断、获悉身体真实状态并在Huxley陪伴下感受到首次真实希望的场所。",
+          "visual_prompt": "独立木制小屋，低矮屋檐，草药束悬挂于横梁，木质药柜排列，烛光与草药气息弥漫，窗台摆放干花与陶罐，整体色调暖棕，与豪宅的冷峻形成对比。"
+        }
+      ]
+    },
+    {
+      "id": "silver_moon_east_border",
+      "name": "银月领地 东部边界",
+      "description": "Sylvia出逃的最终节点，Huxley等候交予物资并道出三年沉默真相的告别之地。",
+      "visual_prompt": "领地边界线，密林边缘与开阔地交界，月光从树隙投落，地面杂草与碎石，夜色深蓝，远处森林漆黑深邃，边界感强烈。",
+      "sub_locations": [
+        {
+          "id": "silver_moon_east_border",
+          "name": "银月领地 东部边界",
+          "description": "Sylvia出逃的最终节点，Huxley等候交予物资并道出三年沉默真相的告别之地。",
+          "visual_prompt": "领地边界线，密林边缘与开阔地交界，月光从树隙投落，地面杂草与碎石，夜色深蓝，远处森林漆黑深邃，边界感强烈。"
+        }
+      ]
+    },
+    {
+      "id": "river_valley_manor",
+      "name": "河谷领地 豪宅",
+      "description": "Alpha Iris Blackwood的领地核心，Sylvia流亡期间疗愈与重建自我的避风港。",
+      "visual_prompt": "河谷地带豪宅，浅色石材外墙，宽廊与拱门结构，庭院有流水声，植被茂盛温润，整体色调米白与暖棕，光线明亮柔和，与银月领地冷峻基调形成显著反差。",
+      "sub_locations": [
+        {
+          "id": "river_valley_manor_living_room",
+          "name": "河谷领地 豪宅 客厅",
+          "description": "Sylvia初抵河谷领地、被Iris接纳并开始重建生活的核心空间。",
+          "visual_prompt": "宽敞客厅，浅色石材地面，棉麻质感沙发，落地窗引入充足自然光，书架与绿植点缀，无压迫性陈设，整体温暖开阔。"
+        }
+      ]
+    },
+    {
+      "id": "neutral_zone_cafe",
+      "name": "中立区 咖啡馆",
+      "description": "Sylvia与Huxley流亡一年后重逢、两狼正式相认的地点。",
+      "visual_prompt": "中立区小型咖啡馆，砖墙裸露，木质吧台，吊灯暖黄，窗边卡座，桌面有陶瓷杯与蜡烛，整体氛围低调私密，色调暖棕米白。",
+      "sub_locations": [
+        {
+          "id": "neutral_zone_cafe",
+          "name": "中立区 咖啡馆",
+          "description": "Sylvia与Huxley流亡一年后重逢、两狼正式相认的地点。",
+          "visual_prompt": "中立区小型咖啡馆，砖墙裸露，木质吧台，吊灯暖黄，窗边卡座，桌面有陶瓷杯与蜡烛，整体氛围低调私密，色调暖棕米白。"
+        }
+      ]
+    },
+    {
+      "id": "neutral_zone_meadow",
+      "name": "中立区 草地",
+      "description": "Sylvia与Huxley两狼在满月下正式建立平等连结、共同决定北上的新生之地。",
+      "visual_prompt": "开阔草地，无遮挡满月高悬，月光均匀铺洒，草地银白与深绿交织，远处树线轮廓低缓，夜风轻动草浪，空旷宁静，无人工建筑物。",
+      "sub_locations": [
+        {
+          "id": "neutral_zone_meadow",
+          "name": "中立区 草地",
+          "description": "Sylvia与Huxley两狼在满月下正式建立平等连结、共同决定北上的新生之地。",
+          "visual_prompt": "开阔草地，无遮挡满月高悬，月光均匀铺洒，草地银白与深绿交织，远处树线轮廓低缓，夜风轻动草浪，空旷宁静，无人工建筑物。"
+        }
+      ]
+    }
+  ]
+}

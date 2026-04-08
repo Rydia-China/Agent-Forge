@@ -1,13 +1,7 @@
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
-import {
-  langfuseFetch,
-  compileTemplate,
-  extractTemplate,
-  fetchAllPrompts,
-  PromptDetailSchema,
-} from "./langfuse-helpers";
+import * as svc from "@/lib/services/langfuse-prompt-service";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -101,7 +95,7 @@ export const langfuseMcp: McpProvider = {
   ): Promise<CallToolResult> {
     switch (name) {
       case "list_prompts": {
-        const all = await fetchAllPrompts();
+        const all = await svc.listPrompts();
         const list = all.map((p) => ({
           name: p.name,
           labels: p.labels,
@@ -114,15 +108,12 @@ export const langfuseMcp: McpProvider = {
         const { names } = GetPromptParams.parse(args);
         const results = await Promise.allSettled(
           names.map(async (promptName) => {
-            const raw = await langfuseFetch(
-              `/api/public/v2/prompts/${encodeURIComponent(promptName)}`,
-            );
-            const parsed = PromptDetailSchema.parse(raw);
+            const detail = await svc.getPrompt(promptName);
             return {
-              name: parsed.name,
-              version: parsed.version,
-              labels: parsed.labels,
-              template: extractTemplate(parsed),
+              name: detail.name,
+              version: detail.version,
+              labels: detail.labels,
+              template: detail.template,
             };
           }),
         );
@@ -137,18 +128,9 @@ export const langfuseMcp: McpProvider = {
       case "compile_prompts": {
         const { items } = CompilePromptParams.parse(args);
         const results = await Promise.allSettled(
-          items.map(async ({ name: promptName, variables }) => {
-            const raw = await langfuseFetch(
-              `/api/public/v2/prompts/${encodeURIComponent(promptName)}`,
-            );
-            const parsed = PromptDetailSchema.parse(raw);
-            const compiled = compileTemplate(extractTemplate(parsed), variables);
-            return {
-              name: parsed.name,
-              version: parsed.version,
-              compiledPrompt: compiled,
-            };
-          }),
+          items.map(({ name: promptName, variables }) =>
+            svc.compilePrompt(promptName, variables),
+          ),
         );
         const output = results.map((r, i) =>
           r.status === "fulfilled"

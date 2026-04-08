@@ -28,7 +28,7 @@ const STATUS_CONFIG: Record<EpStatus, { color: string; label: string }> = {
 
 function EpStatusTag({ status }: { status: EpStatus }) {
   const cfg = STATUS_CONFIG[status];
-  return <Tag color={cfg.color} style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>{cfg.label}</Tag>;
+  return <Tag color={cfg.color} style={{ fontSize: 14, lineHeight: "22px", margin: 0 }}>{cfg.label}</Tag>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -57,6 +57,8 @@ export interface EpisodeListProps {
   onSelectNovelLevel: () => void;
   /** Per-EP task status from useTaskMonitor. */
   epTaskStatuses?: Map<string, EpTaskStatus>;
+  /** Callback to enter prompt management mode. */
+  onEnterPrompts?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -80,6 +82,7 @@ export function EpisodeList({
   isNovelLevelSelected,
   onSelectNovelLevel,
   epTaskStatuses,
+  onEnterPrompts,
 }: EpisodeListProps) {
   const reUploadRef = useRef<HTMLInputElement>(null);
   const [jsonViewEp, setJsonViewEp] = useState<EpisodeSummary | null>(null);
@@ -132,7 +135,7 @@ export function EpisodeList({
       {/* Header */}
       <div className="border-b border-slate-800 p-3">
         <div className="flex items-center justify-between">
-          <Typography.Text strong ellipsis style={{ display: "block", fontSize: 13 }}>
+          <Typography.Text strong ellipsis style={{ display: "block", fontSize: 18 }}>
             {novelName}
           </Typography.Text>
           <Button
@@ -142,7 +145,7 @@ export function EpisodeList({
             loading={isReUploading}
             onClick={() => reUploadRef.current?.click()}
             title="重传剧本数据"
-            style={{ width: 22, height: 22, minWidth: 22 }}
+            style={{ width: 28, height: 28, minWidth: 28 }}
           />
         </div>
         <input
@@ -153,6 +156,22 @@ export function EpisodeList({
           style={{ display: "none" }}
         />
       </div>
+
+      {/* Prompt management entry */}
+      {onEnterPrompts && (
+        <div className="border-b border-slate-700 p-2">
+          <button
+            type="button"
+            className="w-full rounded border border-slate-800 bg-slate-900/40 px-2.5 py-2 text-left transition hover:border-amber-400/40 hover:bg-amber-500/5"
+            onClick={onEnterPrompts}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-slate-100">📝 Prompt 管理</span>
+            </div>
+            <div className="mt-0.5 text-sm text-slate-400">Langfuse 模板</div>
+          </button>
+        </div>
+      )}
 
       {/* Novel-level resource management */}
       <div className="border-b border-slate-700 p-2">
@@ -166,23 +185,23 @@ export function EpisodeList({
           onClick={onSelectNovelLevel}
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-100">📚 小说资源</span>
-            <Tag color="purple" style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>novel</Tag>
+            <span className="text-sm font-medium text-slate-100">📚 小说资源</span>
+            <Tag color="purple" style={{ fontSize: 14, lineHeight: "22px", margin: 0 }}>novel</Tag>
           </div>
-          <div className="mt-0.5 text-[10px] text-slate-400">角色 · 场景</div>
+          <div className="mt-0.5 text-sm text-slate-400">角色 · 场景</div>
         </button>
 
         {/* Novel-level sessions */}
         {isNovelLevelSelected && (
           <div className="ml-2.5 mt-1 mb-1 border-l-2 border-purple-500/40 pl-2">
             <div className="mb-1 flex items-center justify-between">
-              <Typography.Text type="secondary" style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <Typography.Text type="secondary" style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Sessions
               </Typography.Text>
-              <Button type="text" size="small" icon={<PlusOutlined />} onClick={onNewSession} title="New Chat" style={{ width: 18, height: 18, minWidth: 18 }} />
+              <Button type="text" size="small" icon={<PlusOutlined />} onClick={onNewSession} title="New Chat" style={{ width: 28, height: 28, minWidth: 28 }} />
             </div>
             {sessions.length === 0 ? (
-              <div className="py-1 text-center text-[9px] text-slate-500">
+              <div className="py-1 text-center text-sm text-slate-500">
                 No sessions. Click + to start.
               </div>
             ) : (
@@ -193,7 +212,7 @@ export function EpisodeList({
                     <div key={s.id} className="group/s relative">
                       <button
                         type="button"
-                        className={`w-full rounded px-2 py-1 text-left text-[10px] transition ${
+                        className={`w-full rounded px-2 py-1 text-left text-sm transition ${
                           isCurrent
                             ? "bg-purple-500/15 text-purple-200"
                             : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
@@ -211,7 +230,7 @@ export function EpisodeList({
                         icon={<DeleteOutlined />}
                         className="!absolute right-0 top-0.5 opacity-0 group-hover/s:opacity-100"
                         onClick={(e) => { e.stopPropagation(); onDeleteSession(s.id); }}
-                        style={{ width: 18, height: 18, minWidth: 18 }}
+                        style={{ width: 28, height: 28, minWidth: 28 }}
                       />
                     </div>
                   );
@@ -225,7 +244,7 @@ export function EpisodeList({
       {/* Episodes */}
       <div className="flex-1 overflow-y-auto p-2">
         <div className="mb-1 flex items-center justify-between">
-          <Typography.Text type="secondary" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <Typography.Text type="secondary" style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             Episodes
           </Typography.Text>
           <Button type="text" size="small" icon={<ReloadOutlined />} loading={isLoading} onClick={onRefresh} />
@@ -251,23 +270,23 @@ export function EpisodeList({
                       onClick={() => onSelectEpisode(ep)}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-slate-100">
+                        <span className="text-sm font-medium text-slate-100">
                           {ep.scriptKey}
                         </span>
                         <div className="flex items-center gap-1">
                           {(() => {
                             const epTask = epTaskStatuses?.get(ep.scriptKey);
                             if (!epTask) return null;
-                            if (epTask.status === "running") return <LoadingOutlined className="text-blue-400" spin style={{ fontSize: 10 }} />;
-                            if (epTask.status === "queued") return <LoadingOutlined className="text-slate-400" style={{ fontSize: 10 }} />;
-                            if (epTask.status === "failed") return <ExclamationCircleFilled className="text-red-400" style={{ fontSize: 10 }} />;
+                            if (epTask.status === "running") return <LoadingOutlined className="text-blue-400" spin style={{ fontSize: 28 }} />;
+                            if (epTask.status === "queued") return <LoadingOutlined className="text-slate-400" style={{ fontSize: 28 }} />;
+                            if (epTask.status === "failed") return <ExclamationCircleFilled className="text-red-400" style={{ fontSize: 28 }} />;
                             return null;
                           })()}
                           <EpStatusTag status={ep.status} />
                         </div>
                       </div>
                       {ep.scriptName && (
-                        <div className="mt-0.5 truncate text-[10px] text-slate-400">
+                        <div className="mt-0.5 truncate text-sm text-slate-400">
                           {ep.scriptName}
                         </div>
                       )}
@@ -278,7 +297,7 @@ export function EpisodeList({
                         size="small"
                         icon={<EyeOutlined />}
                         onClick={(e) => { e.stopPropagation(); void openJsonView(ep); }}
-                        style={{ width: 20, height: 20, minWidth: 20 }}
+                        style={{ width: 28, height: 28, minWidth: 28 }}
                         title="View JSON"
                       />
                     </div>
@@ -288,13 +307,13 @@ export function EpisodeList({
                   {isActive && (
                     <div className="ml-2.5 mt-1 mb-1 border-l-2 border-emerald-500/40 pl-2">
                       <div className="mb-1 flex items-center justify-between">
-                        <Typography.Text type="secondary" style={{ fontSize: 9, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                        <Typography.Text type="secondary" style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                           Sessions
                         </Typography.Text>
-                        <Button type="text" size="small" icon={<PlusOutlined />} onClick={onNewSession} title="New Chat" style={{ width: 18, height: 18, minWidth: 18 }} />
+                        <Button type="text" size="small" icon={<PlusOutlined />} onClick={onNewSession} title="New Chat" style={{ width: 28, height: 28, minWidth: 28 }} />
                       </div>
                       {sessions.length === 0 ? (
-                        <div className="py-1 text-center text-[9px] text-slate-500">
+                        <div className="py-1 text-center text-sm text-slate-500">
                           No sessions. Click + to start.
                         </div>
                       ) : (
@@ -305,7 +324,7 @@ export function EpisodeList({
                               <div key={s.id} className="group/s relative">
                                 <button
                                   type="button"
-                                  className={`w-full rounded px-2 py-1 text-left text-[10px] transition ${
+                                  className={`w-full rounded px-2 py-1 text-left text-sm transition ${
                                     isCurrent
                                       ? "bg-emerald-500/15 text-emerald-200"
                                       : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200"
@@ -323,7 +342,7 @@ export function EpisodeList({
                                   icon={<DeleteOutlined />}
                                   className="!absolute right-0 top-0.5 opacity-0 group-hover/s:opacity-100"
                                   onClick={(e) => { e.stopPropagation(); onDeleteSession(s.id); }}
-                                  style={{ width: 18, height: 18, minWidth: 18 }}
+                                  style={{ width: 28, height: 28, minWidth: 28 }}
                                 />
                               </div>
                             );

@@ -2,12 +2,13 @@
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Button, Collapse, Drawer, Empty, Input, Spin, Typography, Image, Tag, App } from "antd";
-import { DeleteOutlined, DownloadOutlined, EditOutlined, FormatPainterOutlined } from "@ant-design/icons";
+import { DeleteOutlined, DownloadOutlined, EditOutlined, EyeOutlined, FormatPainterOutlined } from "@ant-design/icons";
 import type { ResourceData, ResourceItem } from "../types";
 import { fetchJson } from "@/app/components/client-utils";
 import { ImageDetailDrawer } from "./ImageDetailDrawer";
 import { VideoDetailDrawer } from "./VideoDetailDrawer";
 import { StylePresetDrawer } from "./StylePresetDrawer";
+import { PromptPreviewDrawer } from "./PromptPreviewDrawer";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -19,6 +20,7 @@ export interface ResourcePanelProps {
   novelId: string;
   scriptId: string | null;
   sessionId: string | undefined;
+  isNovelLevel?: boolean;
   onRefresh?: () => void;
 }
 
@@ -28,7 +30,7 @@ export interface ResourcePanelProps {
 
 const ASIDE_CLASS = "flex h-full w-56 min-w-[200px] shrink-0 flex-col border-l border-slate-800 bg-slate-950/80";
 
-export function ResourcePanel({ resources, isLoading, novelId, scriptId, sessionId, onRefresh }: ResourcePanelProps) {
+export function ResourcePanel({ resources, isLoading, novelId, scriptId, sessionId, isNovelLevel, onRefresh }: ResourcePanelProps) {
   const { message } = App.useApp();
 
   /* ---- Export state ---- */
@@ -72,6 +74,9 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
 
   /* ---- Style preset drawer state ---- */
   const [styleDrawerOpen, setStyleDrawerOpen] = useState(false);
+
+  /* ---- Prompt preview drawer state ---- */
+  const [promptPreviewOpen, setPromptPreviewOpen] = useState(false);
 
   /* ---- Collapse expand state (controlled) ---- */
   const [activeKeys, setActiveKeys] = useState<string[]>([]);
@@ -147,6 +152,45 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
       setIsSaving(false);
     }
   }, [editingItem, editText, scriptId, onRefresh]);
+
+  /* ---- Scene hierarchy grouping ---- */
+
+  interface SceneGroup {
+    parentTitle: string;
+    gridItem: ResourceItem | null;
+    subItems: ResourceItem[];
+  }
+
+  const groupSceneItems = useCallback((items: ResourceItem[]): { groups: SceneGroup[]; standalones: ResourceItem[] } => {
+    // Find grid items (key ends with _grid)
+    const gridItems = items.filter((r) => r.key.endsWith("_grid"));
+    const usedIds = new Set<string>();
+    const groups: SceneGroup[] = [];
+
+    for (const gi of gridItems) {
+      usedIds.add(gi.id);
+      const baseTitle = (gi.title ?? "").replace(/\s*\(grid\)\s*$/, "");
+      if (!baseTitle) continue;
+
+      // Sub-items: title starts with baseTitle + " " (e.g. "银月领地 豪宅 厨房")
+      const subItems = items.filter((r) =>
+        !r.key.endsWith("_grid") &&
+        r.title != null &&
+        r.title !== baseTitle &&
+        r.title.startsWith(baseTitle + " "),
+      );
+      for (const s of subItems) usedIds.add(s.id);
+
+      // Parent's own single entry (same title, no _grid suffix)
+      const parentSingle = items.find((r) => r.title === baseTitle && !r.key.endsWith("_grid"));
+      if (parentSingle) usedIds.add(parentSingle.id);
+
+      groups.push({ parentTitle: baseTitle, gridItem: gi, subItems });
+    }
+
+    const standalones = items.filter((r) => !usedIds.has(r.id));
+    return { groups, standalones };
+  }, []);
 
   /* ---- Per media_type renderers ---- */
 
@@ -269,6 +313,10 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
     const videos = g.items.filter((r) => r.mediaType === "video" || (r.mediaType === "image" && isVideoUrl(r.url)));
     const jsons = g.items.filter((r) => r.mediaType === "json");
 
+    // Scene category: hierarchical rendering (grid parent → sub-scenes)
+    const isSceneCategory = g.category === "场景";
+    const sceneGrouped = isSceneCategory ? groupSceneItems(images) : null;
+
     return {
       key: `cat-${g.category}`,
       label: (
@@ -279,7 +327,40 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
       ),
       children: (
         <div className="space-y-2">
-          {images.length > 0 && <div className="grid grid-cols-2 gap-2">{images.map(renderImageItem)}</div>}
+          {isSceneCategory && sceneGrouped ? (
+            <div className="space-y-3">
+              {/* Grid parents with sub-scenes */}
+              {sceneGrouped.groups.map((sg) => (
+                <div key={sg.parentTitle} className="space-y-1.5">
+                  {/* Group header */}
+                  <div className="flex items-center gap-1.5 px-0.5">
+                    <span className="text-sm font-semibold text-slate-200">{sg.parentTitle}</span>
+                    <Tag color="blue" style={{ fontSize: 10, lineHeight: "16px", margin: 0, padding: "0 6px" }}>
+                      宫格 {sg.subItems.length + 1}
+                    </Tag>
+                  </div>
+                  {/* Grid image — full width */}
+                  {sg.gridItem && (
+                    <div className="rounded-lg overflow-hidden">{renderImageItem(sg.gridItem)}</div>
+                  )}
+                  {/* Sub-scenes — indented with left border */}
+                  {sg.subItems.length > 0 && (
+                    <div className="ml-1.5 border-l-2 border-blue-500/30 pl-2">
+                      <div className="grid grid-cols-2 gap-1.5">{sg.subItems.map(renderImageItem)}</div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {/* Standalone scenes */}
+              {sceneGrouped.standalones.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">{sceneGrouped.standalones.map(renderImageItem)}</div>
+              )}
+            </div>
+          ) : (
+            <>
+              {images.length > 0 && <div className="grid grid-cols-2 gap-2">{images.map(renderImageItem)}</div>}
+            </>
+          )}
           {videos.length > 0 && <div className="grid grid-cols-2 gap-2">{videos.map(renderVideoItem)}</div>}
           {jsons.length > 0 && <div className="space-y-2">{jsons.map(renderJsonItem)}</div>}
         </div>
@@ -293,6 +374,16 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
         <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
           <Typography.Text strong style={{ fontSize: 12 }}>Resources</Typography.Text>
           <div className="flex items-center gap-1">
+            {isNovelLevel && (
+              <Button
+                type="text"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => setPromptPreviewOpen(true)}
+                className="!text-slate-400 hover:!text-slate-200"
+                title="Prompt Preview"
+              />
+            )}
             <Button
               type="text"
               size="small"
@@ -339,6 +430,14 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
       />
 
       <StylePresetDrawer open={styleDrawerOpen} onClose={() => setStyleDrawerOpen(false)} />
+
+      {isNovelLevel && (
+        <PromptPreviewDrawer
+          open={promptPreviewOpen}
+          onClose={() => setPromptPreviewOpen(false)}
+          novelId={novelId}
+        />
+      )}
 
       <Drawer
         title={editingItem?.title ?? "Edit JSON"}

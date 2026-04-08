@@ -17,6 +17,16 @@ export interface UpdateStylePresetInput {
   referenceImageUrl?: string | null;
 }
 
+/** Built-in style preset names that cannot be renamed or deleted. */
+export const BUILTIN_STYLE_NAMES = new Set([
+  "location_style",
+  "location_grid_style",
+  "sub_location_style",
+  "portrait-style",
+  "update_portrait_style",
+  "video_style",
+]);
+
 /* ------------------------------------------------------------------ */
 /*  CRUD                                                               */
 /* ------------------------------------------------------------------ */
@@ -47,6 +57,13 @@ export async function update(
   id: string,
   input: UpdateStylePresetInput,
 ): Promise<StylePreset> {
+  // Protect built-in preset names from being renamed
+  if (input.name !== undefined) {
+    const existing = await prisma.stylePreset.findUnique({ where: { id } });
+    if (existing && BUILTIN_STYLE_NAMES.has(existing.name) && input.name !== existing.name) {
+      throw new Error(`Cannot rename built-in style preset "${existing.name}"`);
+    }
+  }
   return prisma.stylePreset.update({
     where: { id },
     data: {
@@ -58,5 +75,9 @@ export async function update(
 }
 
 export async function remove(id: string): Promise<void> {
+  const existing = await prisma.stylePreset.findUnique({ where: { id } });
+  if (existing && BUILTIN_STYLE_NAMES.has(existing.name)) {
+    throw new Error(`Cannot delete built-in style preset "${existing.name}"`);
+  }
   await prisma.stylePreset.delete({ where: { id } });
 }

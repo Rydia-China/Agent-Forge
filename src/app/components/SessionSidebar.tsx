@@ -31,12 +31,12 @@ export function SessionSidebar({
   return (
     <aside className="flex h-full w-56 shrink-0 flex-col border-r border-slate-800 bg-slate-950/80 p-3">
       <div className="mb-3">
-        <Typography.Title level={5} style={{ margin: 0 }}>Agent Forge</Typography.Title>
-        <Typography.Text type="secondary" style={{ fontSize: 10 }}>Multi-agent console</Typography.Text>
+        <Typography.Title level={4} style={{ margin: 0 }}>Agent Forge</Typography.Title>
+        <Typography.Text type="secondary" style={{ fontSize: 14 }}>Multi-agent console</Typography.Text>
       </div>
 
       <div className="mb-3">
-        <Typography.Text type="secondary" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        <Typography.Text type="secondary" style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
           User
         </Typography.Text>
         <Space.Compact size="small" block style={{ marginTop: 4 }}>
@@ -52,7 +52,7 @@ export function SessionSidebar({
       </div>
 
       <div className="mb-1.5 flex items-center justify-between">
-        <Typography.Text type="secondary" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        <Typography.Text type="secondary" style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
           Sessions
         </Typography.Text>
         <Space size={4}>
@@ -71,14 +71,14 @@ export function SessionSidebar({
               return (
                 <div key={s.id} className="group relative">
                   <button
-                    className={`w-full rounded border px-2 py-1.5 text-left text-[11px] transition ${isActive ? "border-emerald-400/60 bg-emerald-500/10" : "border-slate-800 bg-slate-900/40 hover:border-slate-600"}`}
+                    className={`w-full rounded border px-2 py-1.5 text-left text-sm transition ${isActive ? "border-emerald-400/60 bg-emerald-500/10" : "border-slate-800 bg-slate-900/40 hover:border-slate-600"}`}
                     onClick={() => switchSession(s.id)}
                     type="button"
                   >
                     <div className="truncate pr-5 font-medium text-slate-100">
                       {s.title?.trim() || "Untitled"}
                     </div>
-                    <div className="text-[10px] text-slate-400">
+                    <div className="text-sm text-slate-400">
                       {formatTimestamp(s.updatedAt)}
                     </div>
                   </button>

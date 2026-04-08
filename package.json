@@ -11,6 +11,8 @@
     "db:push": "prisma db push",
     "release": "docker buildx build --platform linux/amd64 -t ghcr.io/rydia-china/agent-forge:latest -f Dockerfile . --load && docker push ghcr.io/rydia-china/agent-forge:latest && echo '✅ 已推送到 ghcr.io/rydia-china/agent-forge:latest'",
     "db:backup": "bash scripts/db-backup.sh",
+    "db:export": "tsx scripts/db-export.ts",
+    "db:import": "node scripts/db-import.js",
     "db:restore": "echo 'Usage: docker exec -i agent-forge-db-dev psql -U postgres -d agent_forge < backups/YOUR_FILE.sql'",
     "deploy:prod": "ssh root@47.97.112.115 'cd /war/www/soft/agent-forge && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d'"
   },

@@ -655,7 +655,7 @@ async function runAgentStreamInnerCore(
       lastReply = currentContent;
 
       // Emit usage
-      const maxCtx = MODEL_OPTIONS.find((m) => m.id === modelId)?.maxContextTokens ?? 200_000;
+const maxCtx = MODEL_OPTIONS.find((m) => m.id === modelId)?.maxContextTokens ?? 1_000_000;
       if (lastUsage) {
         // Extract cache read tokens from prompt_tokens_details (OpenAI SDK format)
         const usageRaw = lastUsage as Record<string, unknown>;

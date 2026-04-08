@@ -34,15 +34,15 @@ export interface TaskMonitorProps {
 function statusIcon(status: string) {
   switch (status) {
     case "running":
-      return <LoadingOutlined className="text-blue-400" spin style={{ fontSize: 12 }} />;
+      return <LoadingOutlined className="text-blue-400" spin style={{ fontSize: 28 }} />;
     case "pending":
-      return <ClockCircleOutlined className="text-slate-400" style={{ fontSize: 12 }} />;
+      return <ClockCircleOutlined className="text-slate-400" style={{ fontSize: 28 }} />;
     case "completed":
-      return <CheckCircleFilled className="text-emerald-400" style={{ fontSize: 12 }} />;
+      return <CheckCircleFilled className="text-emerald-400" style={{ fontSize: 28 }} />;
     case "failed":
-      return <ExclamationCircleFilled className="text-red-400" style={{ fontSize: 12 }} />;
+      return <ExclamationCircleFilled className="text-red-400" style={{ fontSize: 28 }} />;
     case "cancelled":
-      return <CloseOutlined className="text-slate-500" style={{ fontSize: 10 }} />;
+      return <CloseOutlined className="text-slate-500" style={{ fontSize: 28 }} />;
     default:
       return null;
   }
@@ -95,7 +95,7 @@ function TaskCard({
 
   return (
     <div
-      className={`rounded border px-2.5 py-2 text-[11px] transition ${
+      className={`rounded border px-2.5 py-2 text-sm transition ${
         isFailed
           ? "border-red-500/40 bg-red-500/5"
           : isActive
@@ -111,24 +111,24 @@ function TaskCard({
           </span>
           <Tag
             color={statusColor(task.status)}
-            style={{ fontSize: 9, lineHeight: "14px", margin: 0, padding: "0 4px" }}
+            style={{ fontSize: 14, lineHeight: "22px", margin: 0, padding: "0 6px" }}
           >
             {task.status}
           </Tag>
         </div>
-        <span className="shrink-0 text-[10px] text-slate-500">
+        <span className="shrink-0 text-sm text-slate-500">
           {elapsed(isActive ? task.createdAt : task.updatedAt)}
         </span>
       </div>
 
       {task.sessionTitle && (
-        <div className="mt-0.5 truncate text-[10px] text-slate-500">
+        <div className="mt-0.5 truncate text-sm text-slate-500">
           {task.sessionTitle}
         </div>
       )}
 
       {isFailed && task.error && (
-        <div className="mt-1 truncate text-[10px] text-red-400">
+        <div className="mt-1 truncate text-sm text-red-400">
           {task.error}
         </div>
       )}
@@ -142,7 +142,7 @@ function TaskCard({
             onJump();
             if (isFailed) onMarkRead?.();
           }}
-          style={{ fontSize: 10, padding: "0 4px", height: 20 }}
+          style={{ fontSize: 14, padding: "0 4px", height: 24 }}
         >
           跳转
         </Button>
@@ -153,7 +153,7 @@ function TaskCard({
             danger
             icon={<StopOutlined />}
             onClick={onCancel}
-            style={{ fontSize: 10, padding: "0 4px", height: 20 }}
+            style={{ fontSize: 14, padding: "0 4px", height: 24 }}
           >
             取消
           </Button>
@@ -200,14 +200,14 @@ export function TaskMonitor({ monitor, onJumpToTask }: TaskMonitorProps) {
                 size="small"
                 icon={<ReloadOutlined />}
                 onClick={() => void monitor.refresh()}
-                style={{ width: 20, height: 20, minWidth: 20 }}
+                style={{ width: 28, height: 28, minWidth: 28 }}
               />
               <Button
                 type="text"
                 size="small"
                 icon={<CloseOutlined />}
                 onClick={() => setOpen(false)}
-                style={{ width: 20, height: 20, minWidth: 20 }}
+                style={{ width: 28, height: 28, minWidth: 28 }}
               />
             </div>
           </div>
@@ -215,7 +215,7 @@ export function TaskMonitor({ monitor, onJumpToTask }: TaskMonitorProps) {
           {/* Active / Queued */}
           {monitor.activeTasks.length > 0 && (
             <div className="p-2">
-              <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+              <div className="mb-1.5 text-sm font-medium uppercase tracking-wider text-slate-500">
                 Running / Queued ({monitor.activeTasks.length})
               </div>
               <div className="space-y-1.5">
@@ -234,7 +234,7 @@ export function TaskMonitor({ monitor, onJumpToTask }: TaskMonitorProps) {
           {/* Recent */}
           {monitor.recentTasks.length > 0 && (
             <div className="border-t border-slate-800 p-2">
-              <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+              <div className="mb-1.5 text-sm font-medium uppercase tracking-wider text-slate-500">
                 Recent ({monitor.recentTasks.length})
               </div>
               <div className="space-y-1.5">
