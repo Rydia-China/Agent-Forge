@@ -1050,13 +1050,14 @@ export const videoWorkflowMcp: McpProvider = {
         });
 
         // 7. Call Seedance
+        // generateType: multimodal when continuing from video, otherwise text_to_video.
+        // Reference images are passed via imageUrls but don't change the mode —
+        // the prompt text (@图1 作为首帧 etc.) tells Seedance how to use them.
         const imageUrls = [...refImageUrls];
         const videoUrls = sourceVideoUrls ?? [];
         const generateType = videoUrls.length > 0
           ? "multimodal" as const
-          : refImageUrls.length > 0
-            ? "first_frame" as const
-            : "text_to_video" as const;
+          : "text_to_video" as const;
 
         let seedResult;
         try {
