@@ -9,7 +9,7 @@ import {
   type SubAgentResult,
   type SubAgentProgressCallbacks,
 } from "@/lib/agent/subagent";
-import { SUBAGENT_DEFAULT_MODEL, type ModelUsageType } from "@/lib/agent/models";
+import { resolveModelByType, type ModelUsageType } from "@/lib/agent/models";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
 import {
@@ -527,13 +527,16 @@ export const subagentMcp: McpProvider = {
         context?.onProgress?.({
           type: "subagent_tasks",
           data: {
-            tasks: tasks.map((t, i) => ({
-              index: i,
-              instruction: t.instruction.slice(0, 80),
-              model: t.model ?? SUBAGENT_DEFAULT_MODEL,
-              mcpScope: t.mcpScope ?? [],
-              mode: t.mcpScope?.length ? "tool-loop" : "single-shot",
-            })),
+            tasks: tasks.map((t, i) => {
+              const usageType: ModelUsageType = t.usageType ?? (t.mcpScope?.length ? "task-execution" : "prompt-execution");
+              return {
+                index: i,
+                instruction: t.instruction.slice(0, 80),
+                model: resolveModelByType(usageType, t.model),
+                mcpScope: t.mcpScope ?? [],
+                mode: t.mcpScope?.length ? "tool-loop" : "single-shot",
+              };
+            }),
           },
         });
 
@@ -649,13 +652,16 @@ export const subagentMcp: McpProvider = {
         context?.onProgress?.({
           type: "subagent_tasks",
           data: {
-            tasks: tasks.map((t, i) => ({
-              index: i,
-              instruction: t.instruction.slice(0, 80),
-              model: t.model ?? SUBAGENT_DEFAULT_MODEL,
-              mcpScope: t.mcpScope ?? [],
-              mode: t.mcpScope?.length ? "tool-loop" : "single-shot",
-            })),
+            tasks: tasks.map((t, i) => {
+              const usageType: ModelUsageType = t.usageType ?? (t.mcpScope?.length ? "task-execution" : "prompt-execution");
+              return {
+                index: i,
+                instruction: t.instruction.slice(0, 80),
+                model: resolveModelByType(usageType, t.model),
+                mcpScope: t.mcpScope ?? [],
+                mode: t.mcpScope?.length ? "tool-loop" : "single-shot",
+              };
+            }),
           },
         });
 

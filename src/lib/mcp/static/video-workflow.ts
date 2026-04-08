@@ -142,9 +142,7 @@ const GeneratePortraitParams = z.object({
 const GenerateSceneParams = z.object({
   novelId: z.string().min(1),
   sceneName: z.string().min(1),
-  prompt: z.string().optional(),
   referenceUrls: z.array(z.string().url()).optional(),
-  styleName: z.string().min(1).optional(),
   model: z.string().min(1).optional(),
   mode: z.enum(["single", "grid", "hd"]).default("single"),
 });
@@ -304,21 +302,18 @@ const TOOLS: Tool[] = [
     name: "generate_scene",
     description:
       "Generate a scene location image (novel-level). Supports three modes:\n" +
-      "• single (default): generates a single scene image from visual_prompt. Use styleName='location_style'.\n" +
-      "• grid: generates a unified grid image for a parent location + all sub-locations. Use styleName='location_grid_style'. " +
+      "• single (default): generates a single scene image from visual_prompt (style: location_style).\n" +
+      "• grid: generates a unified grid image for a parent location + all sub-locations (style: location_grid_style). " +
       "Use get_status to find resources with key ending in '_grid' (url=null means not yet generated).\n" +
-      "• hd: generates an HD image for a sub-location, using the parent's grid image as reference. Use styleName='sub_location_style'. " +
+      "• hd: generates an HD image for a sub-location, using the parent's grid image as reference (style: sub_location_style). " +
       "The parent's grid image must already exist (run mode=grid first).\n" +
-      "DO NOT pass prompt unless overriding. Auto-reads visual_prompt from location_bible. " +
-      "Only pass novelId + sceneName + mode + styleName.",
+      "Style is auto-selected per mode. Only pass novelId + sceneName + mode.",
     inputSchema: {
       type: "object" as const,
       properties: {
         novelId: { type: "string", description: "Novel ID" },
         sceneName: { type: "string", description: "Scene name in Chinese (e.g. '银月领地 豪宅' for grid, '银月领地 豪宅 厨房' for hd/single)" },
         mode: { type: "string", enum: ["single", "grid", "hd"], description: "Generation mode: 'single' (default), 'grid' (parent + subs grid), 'hd' (sub-scene from grid reference)" },
-        styleName: { type: "string", description: "StylePreset name. Use 'location_style' for single, 'location_grid_style' for grid, 'sub_location_style' for hd." },
-        prompt: { type: "string", description: "Override prompt. Only for manual override in exceptional cases." },
         referenceUrls: { type: "array", items: { type: "string" }, description: "Optional reference image URLs" },
         model: { type: "string", description: "Image generation model name. Falls back to FC env default if omitted." },
       },
@@ -694,26 +689,16 @@ export const videoWorkflowMcp: McpProvider = {
       /*  generate_scene                                               */
       /* ------------------------------------------------------------ */
       case "generate_scene": {
-        const { novelId, sceneName, prompt: explicitPrompt, referenceUrls, styleName, model, mode } =
+        const { novelId, sceneName, referenceUrls, model, mode } =
           GenerateSceneParams.parse(args);
 
-        // --- Explicit prompt override: bypass all mode logic ---
-        if (explicitPrompt) {
-          const styleResult = styleName ? await resolveStyle(styleName) : null;
-          const overrideRefs = styleResult?.styleRefUrl
-            ? [styleResult.styleRefUrl, ...(referenceUrls ?? [])]
-            : referenceUrls;
-          const keySuffix = mode === "grid" ? "_grid" : "";
-          const key = `scene_${sceneName.replace(/\s+/g, "_")}${keySuffix}`;
-          const title = mode === "grid" ? `${sceneName} (grid)` : sceneName;
-          const result = await generateAndPersistImage(
-            "novel", novelId, key, "场景", explicitPrompt, title, overrideRefs, model,
-          );
-          return json(result);
-        }
-
-        // Resolve style (required for all auto modes)
-        const style = await resolveStyle(styleName);
+        // Style is fixed per mode — not configurable
+        const styleByMode: Record<string, string> = {
+          single: "location_style",
+          grid: "location_grid_style",
+          hd: "sub_location_style",
+        };
+        const style = await resolveStyle(styleByMode[mode]);
         const styleRefUrl = style.styleRefUrl;
 
         if (mode === "grid") {
