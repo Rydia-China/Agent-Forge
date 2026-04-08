@@ -970,20 +970,20 @@ export const videoWorkflowMcp: McpProvider = {
           const nameMatch = ref.match(/\[([^\]]+)\]/);
           if (!nameMatch) continue;
           const refName = nameMatch[1]!;
-          // Strip common suffixes for fuzzy matching
-          const cleanName = refName.replace(/(空镜|立绘|换装)$/g, "").trim();
 
-          // Try matching: 场景 category first, then 角色立绘/换装
+          // Match: resource title appears in refName, or refName appears in title
+          // e.g. refName="Avery立绘" contains title="Avery", refName="Jason家别墅客厅空镜" contains title="Jason家别墅客厅"
           let matched: string | null = null;
           for (const r of allResources) {
             const url = r.versions[0]?.url;
             if (!url) continue;
             const title = r.title ?? "";
-            if (title.includes(cleanName) || cleanName.includes(title)) {
+            if (!title) continue;
+            if (refName.includes(title) || title.includes(refName)) {
               // Prefer 换装 over 角色立绘 for character references
               if (matched && r.category === "角色立绘") continue;
               matched = url;
-              if (r.category === "换装") break; // 换装 is preferred, stop searching
+              if (r.category === "换装") break;
             }
           }
           if (matched) refImageUrls.push(matched);
