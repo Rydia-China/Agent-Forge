@@ -39,29 +39,31 @@ async function importSkills() {
   const items = loadJson("skills.json");
   if (items.length === 0) return 0;
 
-  // 全量替换：事务内先清空再写入（SkillVersion 由 onDelete: Cascade 级联删除）
-  await prisma.$transaction(async (tx) => {
-    await tx.skill.deleteMany();
-    for (const item of items) {
-      await tx.skill.create({
-        data: {
-          name: item.name,
-          tags: item.tags,
-          provider: item.provider,
-          productionVersion: 1,
-          versions: {
-            create: {
-              version: 1,
-              description: item.version.description,
-              content: item.version.content,
-              metadata: item.version.metadata ?? undefined,
-            },
+  // create-if-not-exists：已存在的记录保留不动，仅创建缺失的
+  let created = 0;
+  for (const item of items) {
+    const exists = await prisma.skill.findUnique({ where: { name: item.name } });
+    if (exists) continue;
+
+    await prisma.skill.create({
+      data: {
+        name: item.name,
+        tags: item.tags,
+        provider: item.provider,
+        productionVersion: 1,
+        versions: {
+          create: {
+            version: 1,
+            description: item.version.description,
+            content: item.version.content,
+            metadata: item.version.metadata ?? undefined,
           },
         },
-      });
-    }
-  });
-  return items.length;
+      },
+    });
+    created++;
+  }
+  return created;
 }
 
 async function importMcpServers() {
@@ -97,20 +99,22 @@ async function importStylePresets() {
   const items = loadJson("style-presets.json");
   if (items.length === 0) return 0;
 
-  // 全量替换：事务内先清空再写入
-  await prisma.$transaction(async (tx) => {
-    await tx.stylePreset.deleteMany();
-    for (const item of items) {
-      await tx.stylePreset.create({
-        data: {
-          name: item.name,
-          prompt: item.prompt,
-          referenceImageUrl: item.referenceImageUrl ?? null,
-        },
-      });
-    }
-  });
-  return items.length;
+  // create-if-not-exists：已存在的记录保留不动，仅创建缺失的
+  let created = 0;
+  for (const item of items) {
+    const exists = await prisma.stylePreset.findFirst({ where: { name: item.name } });
+    if (exists) continue;
+
+    await prisma.stylePreset.create({
+      data: {
+        name: item.name,
+        prompt: item.prompt,
+        referenceImageUrl: item.referenceImageUrl ?? null,
+      },
+    });
+    created++;
+  }
+  return created;
 }
 
 /* ------------------------------------------------------------------ */
@@ -131,7 +135,7 @@ async function main() {
   if (total === 0) {
     console.log("📥 数据导入：无数据");
   } else {
-    console.log(`📥 数据导入完成：Skills =${skills}(全量替换), McpServers +${mcps}, StylePresets =${styles}(全量替换)`);
+    console.log(`📥 数据导入完成：Skills +${skills}, McpServers +${mcps}, StylePresets +${styles}`);
   }
 }
 

@@ -22,7 +22,8 @@ pnpm db:export
 - `data/mcp-servers.json`
 - `data/style-presets.json`
 
-> 导出的是 production 版本快照，create-if-not-exists 策略导入（已存在的不覆盖）。
+> 导出的是 production 版本快照，所有类型均使用 create-if-not-exists 策略导入（已存在的不覆盖）。
+> 如需强制同步远程修改，先通过 API 或 DB 手动更新，不要依赖发布流程覆盖。
 
 ### 2. 提交变更
 
@@ -99,7 +100,7 @@ sshpass -e ssh root@agent.mob-ai.cn 'docker logs agent-forge-app-1 2>&1 | tail -
 
 确认出现：
 - `📥 数据导入完成：Skills +N, McpServers +N, StylePresets +N`（首次）
-- 或 `📥 数据导入：无新增（全部已存在）`（重复部署）
+- 或 `📥 数据导入完成：Skills +0, McpServers +0, StylePresets +0`（重复部署，已有数据不覆盖）
 
 #### 健康检查
 
