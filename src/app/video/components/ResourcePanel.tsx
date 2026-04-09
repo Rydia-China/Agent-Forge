@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
-import { Button, Collapse, Drawer, Empty, Input, Spin, Typography, Image, Tag, App } from "antd";
-import { DeleteOutlined, DownloadOutlined, EditOutlined, EyeOutlined, FormatPainterOutlined } from "@ant-design/icons";
+import { Button, Collapse, Empty, Spin, Typography, Tag, App } from "antd";
+import { DeleteOutlined, DownloadOutlined, EyeOutlined, FormatPainterOutlined } from "@ant-design/icons";
 import type { ResourceData, ResourceItem } from "../types";
 import { fetchJson } from "@/app/components/client-utils";
 import { ImageDetailDrawer } from "./ImageDetailDrawer";
 import { VideoDetailDrawer } from "./VideoDetailDrawer";
+import { JsonDetailDrawer } from "./JsonDetailDrawer";
 import { StylePresetDrawer } from "./StylePresetDrawer";
 import { PromptPreviewDrawer } from "./PromptPreviewDrawer";
 
@@ -61,16 +62,15 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
     }
   }, [scriptId, novelId, message]);
 
-  /* ---- JSON editor drawer state ---- */
-  const [editingItem, setEditingItem] = useState<{ id: string; title: string; data: unknown } | null>(null);
-  const [editText, setEditText] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
 
   /* ---- Image detail drawer state ---- */
   const [selectedImageGenId, setSelectedImageGenId] = useState<string | null>(null);
 
   /* ---- Video detail drawer state ---- */
   const [selectedVideoId, setSelectedVideoId] = useState<string | null>(null);
+
+  /* ---- JSON detail drawer state ---- */
+  const [selectedJsonId, setSelectedJsonId] = useState<string | null>(null);
 
   /* ---- Style preset drawer state ---- */
   const [styleDrawerOpen, setStyleDrawerOpen] = useState(false);
@@ -100,16 +100,21 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!scriptId) return;
     setDeletingIds((prev) => new Set(prev).add(id));
     try {
-      await fetchJson(`/api/video/episodes/${encodeURIComponent(scriptId)}/resources`, {
+      await fetchJson(`/api/key-resources/${encodeURIComponent(id)}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resourceId: id }),
       });
       void message.success("Deleted");
       onRefresh?.();
+      // Notify the active chat session so the LLM knows resources changed
+      if (sessionId) {
+        void fetch(`/api/sessions/${encodeURIComponent(sessionId)}/notify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category: "资源" }),
+        }).catch(() => { /* best effort */ });
+      }
     } catch {
       void message.error("Delete failed");
     } finally {
@@ -119,39 +124,8 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
         return next;
       });
     }
-  }, [scriptId, onRefresh]);
+  }, [onRefresh, sessionId]);
 
-  /* ---- JSON editor ---- */
-  const openEditor = useCallback((item: { id: string; title: string; data: unknown }) => {
-    setEditingItem(item);
-    setEditText(item.data != null ? JSON.stringify(item.data, null, 2) : "");
-  }, []);
-
-  const handleSave = useCallback(async () => {
-    if (!editingItem || !scriptId) return;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(editText);
-    } catch {
-      void message.error("Invalid JSON");
-      return;
-    }
-    setIsSaving(true);
-    try {
-      await fetchJson(`/api/video/episodes/${encodeURIComponent(scriptId)}/resources`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resourceId: editingItem.id, data: parsed }),
-      });
-      void message.success("Saved");
-      setEditingItem(null);
-      onRefresh?.();
-    } catch {
-      void message.error("Save failed");
-    } finally {
-      setIsSaving(false);
-    }
-  }, [editingItem, editText, scriptId, onRefresh]);
 
   /* ---- Scene hierarchy grouping ---- */
 
@@ -264,11 +238,22 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
   const renderJsonItem = (r: ResourceItem) => (
     <div
       key={r.id}
-      className="group/card relative overflow-hidden rounded-lg bg-slate-900"
+      className="group/card relative cursor-pointer overflow-hidden rounded-lg bg-slate-900"
+      onClick={() => setSelectedJsonId(r.id)}
     >
       {renderDeleteBtn(r.id)}
+      {r.currentVersion > 1 && (
+        <div className="absolute left-1.5 top-1.5 z-10 rounded bg-blue-500/80 px-1.5 py-0.5 text-[10px] font-medium text-white">
+          v{r.currentVersion}
+        </div>
+      )}
       <pre className="max-h-32 overflow-hidden whitespace-pre-wrap break-all px-2 pt-2 pb-8 font-mono text-[9px] leading-relaxed text-slate-400">
-        {r.prompt ?? ""}
+        {r.data != null
+          ? (() => {
+              const text = JSON.stringify(r.data, null, 2);
+              return text.length > 320 ? `${text.slice(0, 320)}…` : text;
+            })()
+          : "No JSON data"}
       </pre>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-2 pb-1.5 pt-6">
         <div className="truncate text-[11px] font-medium text-white">{r.title ?? r.key}</div>
@@ -429,6 +414,13 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
         sessionId={sessionId}
       />
 
+      <JsonDetailDrawer
+        keyResourceId={selectedJsonId}
+        onClose={() => setSelectedJsonId(null)}
+        onRefresh={() => onRefresh?.()}
+        sessionId={sessionId}
+      />
+
       <StylePresetDrawer open={styleDrawerOpen} onClose={() => setStyleDrawerOpen(false)} />
 
       {isNovelLevel && (
@@ -439,24 +431,6 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
         />
       )}
 
-      <Drawer
-        title={editingItem?.title ?? "Edit JSON"}
-        open={!!editingItem}
-        onClose={() => setEditingItem(null)}
-        styles={{ wrapper: { width: 520 } }}
-        extra={
-          <Button type="primary" size="small" onClick={() => void handleSave()} loading={isSaving}>
-            Save
-          </Button>
-        }
-      >
-        <Input.TextArea
-          value={editText}
-          onChange={(e) => setEditText(e.target.value)}
-          autoSize={{ minRows: 20, maxRows: 40 }}
-          style={{ fontFamily: "monospace", fontSize: 12 }}
-        />
-      </Drawer>
     </>
   );
 }

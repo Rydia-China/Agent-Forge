@@ -22,6 +22,7 @@ export interface ResourceItem {
   mediaType: string;
   title: string | null;
   url: string | null;
+  data: unknown;
   prompt: string | null;   // from current KeyResourceVersion
   currentVersion: number;  // 0 = pending, >0 = generated
 }
