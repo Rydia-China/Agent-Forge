@@ -1,4 +1,4 @@
-import type { AssertionResult, Trace, TraceAssertions, PathAssertion, ReplyAssertion, StructuralAssertion } from "../types.js";
+import type { AssertionResult, Trace, TraceAssertions, PathAssertion, ReplyAssertion, StructuralAssertion, ExpectedTool, ToolCorrectnessConfig } from "../types.js";
 
 /** Resolve a dot-path on an object. Supports array indexing: "items[0].key" */
 function resolvePath(obj: unknown, path: string): unknown {
@@ -98,9 +98,9 @@ function evalPathAssertion(trace: Trace, a: PathAssertion, category: "outcome" |
   }
 }
 
-/** Evaluate reply assertions. */
+/** Evaluate reply assertions. For unit mode, falls back to unitResult.raw. */
 function evalReplyAssertion(trace: Trace, a: ReplyAssertion): AssertionResult {
-  const reply = trace.reply ?? "";
+  const reply = trace.reply ?? trace.unitResult?.raw ?? "";
   switch (a.type) {
     case "contains_any": {
       const found = a.values.find((v) => reply.includes(v));
@@ -189,4 +189,88 @@ export function runAssertions(trace: Trace, assertions: TraceAssertions): Assert
   }
 
   return results;
+}
+
+/** Standard DP longest common subsequence length. */
+function lcsLength(a: string[], b: string[]): number {
+  const dp = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++)
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+  return dp[a.length][b.length];
+}
+
+/**
+ * Compute a tool correctness score across three dimensions:
+ *   selection (Jaccard), ordering (LCS-based), and parameter matching.
+ */
+export function evalToolCorrectness(
+  trace: Trace,
+  expectedTools: ExpectedTool[],
+  config: ToolCorrectnessConfig,
+): AssertionResult {
+  // --- Selection Score (Jaccard similarity) ---
+  const expectedNames = new Set(expectedTools.map((t) => t.name));
+  const actualNames = new Set((trace.toolCalls ?? []).map((tc) => tc.name));
+  const intersection = new Set([...expectedNames].filter((n) => actualNames.has(n)));
+  const union = new Set([...expectedNames, ...actualNames]);
+  const selection = union.size === 0 ? 1.0 : intersection.size / union.size;
+
+  // --- Ordering Score (LCS-based) ---
+  const expectedSeq = expectedTools.map((t) => t.name);
+  const actualSeq = (trace.toolCalls ?? []).map((tc) => tc.name);
+  const lcs = lcsLength(expectedSeq, actualSeq);
+  const ordering = expectedSeq.length === 0 ? 1.0 : lcs / expectedSeq.length;
+
+  // --- Parameter Match Score ---
+  const toolsWithArgs = expectedTools.filter((t) => t.args != null);
+  let parameters: number;
+  if (toolsWithArgs.length === 0) {
+    parameters = 1.0;
+  } else {
+    let totalParamMatch = 0;
+    for (const expected of toolsWithArgs) {
+      const actual = (trace.toolCalls ?? []).find((tc) => tc.name === expected.name);
+      const expectedKeys = Object.keys(expected.args!);
+      if (expectedKeys.length === 0) {
+        totalParamMatch += 1.0;
+        continue;
+      }
+      if (!actual) {
+        totalParamMatch += 0;
+        continue;
+      }
+      let matchedKeys = 0;
+      for (const key of expectedKeys) {
+        if (
+          key in actual.args &&
+          JSON.stringify(actual.args[key]) === JSON.stringify(expected.args![key])
+        ) {
+          matchedKeys++;
+        }
+      }
+      totalParamMatch += matchedKeys / expectedKeys.length;
+    }
+    parameters = totalParamMatch / toolsWithArgs.length;
+  }
+
+  // --- Combined Score ---
+  const weights = {
+    selection: config.weights?.selection ?? 0.4,
+    ordering: config.weights?.ordering ?? 0.3,
+    parameters: config.weights?.parameters ?? 0.3,
+  };
+  const combined =
+    weights.selection * selection +
+    weights.ordering * ordering +
+    weights.parameters * parameters;
+  const pass = combined >= (config.threshold ?? 0.7);
+
+  return {
+    category: "tool_correctness",
+    type: "tool_correctness",
+    pass,
+    detail: `score=${combined.toFixed(2)} (sel=${selection.toFixed(2)} ord=${ordering.toFixed(2)} param=${parameters.toFixed(2)})`,
+    evidence: { combined, selection, ordering, parameters },
+  };
 }
