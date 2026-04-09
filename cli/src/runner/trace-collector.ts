@@ -56,6 +56,7 @@ export async function collectTrace(
   let iteration = 0;
 
   const toolStarts = new Map<string, number>();
+  const toolArgs = new Map<string, Record<string, unknown>>();
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -91,6 +92,9 @@ export async function collectTrace(
           break;
         case "tool":
           break;
+        case "tool_call_detail":
+          toolArgs.set(data.callId as string, (data.args as Record<string, unknown>) ?? {});
+          break;
         case "tool_start":
           toolStarts.set(data.callId as string, Date.now());
           iteration = Math.max(iteration, (data.index as number) ?? 0);
@@ -98,18 +102,16 @@ export async function collectTrace(
         case "tool_end": {
           const callId = data.callId as string;
           const startTime = toolStarts.get(callId) ?? Date.now();
+          const toolError = data.error ? String(data.error) : undefined;
           toolCalls.push({
             callId,
             name: data.name as string,
-            args: {},
-            result: "",
+            args: toolArgs.get(callId) ?? {},
+            result: toolError ? `ERROR: ${toolError}` : "ok",
             durationMs: (data.durationMs as number) ?? (Date.now() - startTime),
             iteration,
+            error: toolError,
           });
-          if (data.error) {
-            const tc = toolCalls[toolCalls.length - 1]!;
-            tc.result = `ERROR: ${data.error as string}`;
-          }
           break;
         }
         case "done":
