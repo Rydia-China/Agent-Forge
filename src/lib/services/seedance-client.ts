@@ -151,7 +151,7 @@ async function submitTask(opts: SeedanceVideoOptions): Promise<string> {
     model: arkModel,
     content,
     duration: opts.duration ?? 5,
-    ratio: opts.aspectRatio ?? "16:9",
+    ratio: opts.aspectRatio ?? "9:16",
     generate_audio: opts.generateAudio ?? true,
     watermark: false,
   };
