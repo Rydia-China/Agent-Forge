@@ -684,6 +684,33 @@ export class SubAgent {
           /* invalid JSON, pass empty */
         }
 
+        // Detect API proxy error injected as tool call arguments
+        if ("ERROR" in args || "error" in args) {
+          const errPayload = (args.ERROR ?? args.error) as Record<string, unknown> | string;
+          const errMsg = typeof errPayload === "string"
+            ? errPayload
+            : typeof errPayload === "object" && errPayload !== null
+              ? String((errPayload as Record<string, unknown>).message ?? JSON.stringify(errPayload))
+              : String(errPayload);
+          console.warn(`[subagent] API proxy error in tool args for ${tc.function.name}: ${errMsg}`);
+          const errorResult = `API proxy error (not a tool failure): ${errMsg}. Please retry the same tool call.`;
+          this.messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: errorResult,
+          } as unknown as LlmMessage);
+          progress?.onToolEnd?.(tc.function.name, 0, `proxy error: ${errMsg}`);
+          this.toolCallTraces.push({
+            name: tc.function.name,
+            args,
+            result: errorResult,
+            error: `proxy error: ${errMsg}`,
+            durationMs: 0,
+            iteration,
+          });
+          continue;
+        }
+
         const t1 = Date.now();
         let toolError: string | undefined;
         let resultText = "";

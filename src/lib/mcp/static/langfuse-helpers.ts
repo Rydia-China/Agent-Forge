@@ -42,9 +42,25 @@ export function compileTemplate(
   template: string,
   variables: Record<string, string>,
 ): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
-    return key in variables ? variables[key]! : match;
+  const missing: string[] = [];
+  const result = template.replace(/\{\{(\w+)\}\}/g, (match, key: string) => {
+    if (key in variables) {
+      return variables[key]!;
+    } else {
+      missing.push(key);
+      return match;  // Keep placeholder temporarily for error message
+    }
   });
+  
+  if (missing.length > 0) {
+    throw new Error(
+      `Template compilation failed: missing variables [${missing.join(", ")}]. ` +
+      `Available: [${Object.keys(variables).join(", ")}]. ` +
+      `Template preview: ${template.slice(0, 100)}...`
+    );
+  }
+  
+  return result;
 }
 
 /* ------------------------------------------------------------------ */

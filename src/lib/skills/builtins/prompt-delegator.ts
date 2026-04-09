@@ -51,19 +51,6 @@ requires_mcps:
 
 ## 典型工作流
 
-### Langfuse prompt → Subagent（single-shot）
-
-\\\`\\\`\\\`
-# Step 1: 查看模板变量名
-langfuse__get_prompts({ names: ["common__portrait__image"] })
-
-# Step 2: 编译
-langfuse__compile_prompts({ items: [{ name: "common__portrait__image", variables: { stylePrompt: "...", demographics: "..." } }] })
-
-# Step 3: 执行（模型自动路由，无需指定 model）
-subagent__run({ tasks: [{ instruction: compiledPrompt }] })
-\\\`\\\`\\\`
-
 ### 带 Schema 校验的 JSON 生成
 
 \\\`\\\`\\\`
@@ -111,6 +98,4 @@ subagent__get_trace({ agentId: result.agentId })
 - **更换模型**必须满足以下条件之一：①用户明确要求 ②skill 的 YAML frontmatter 明确写明 \`model:\`。否则禁止手动指定 model 参数
 - 未传 outputSchema 时返回原始文本；传了 schema 时返回经过校验的 JSON 字符串
 - **凡是需要 subagent 输出结构化 JSON 的场景，必须传 outputSchema**
-- **禁止硬编码风格词** — 风格词由运营在 Langfuse 维护
-- **禁止猜测变量名** — 必须先 get_prompts 查看实际模板
 `;

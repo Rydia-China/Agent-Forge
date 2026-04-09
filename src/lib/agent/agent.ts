@@ -458,6 +458,22 @@ async function runAgentInnerCore(
         /* invalid JSON, pass empty */
       }
 
+      // Detect API proxy error injected as tool call arguments
+      if (isRecord(args) && ("ERROR" in args || "error" in args)) {
+        const errPayload = (args.ERROR ?? args.error) as Record<string, unknown> | string;
+        const errMsg = typeof errPayload === "string"
+          ? errPayload
+          : (errPayload as Record<string, unknown>)?.message ?? JSON.stringify(errPayload);
+        console.warn(`[agent] API proxy error in tool args for ${tc.function.name}: ${errMsg}`);
+        const toolMsg: ChatMessage = {
+          role: "tool",
+          tool_call_id: tc.id,
+          content: `API proxy error: ${errMsg}. Please retry.`,
+        };
+        newMessages.push(toolMsg);
+        continue;
+      }
+
       const result = await registry.callTool(tc.function.name, args, toolCtx);
       const content =
         result.content
@@ -726,6 +742,27 @@ const maxCtx = MODEL_OPTIONS.find((m) => m.id === modelId)?.maxContextTokens ?? 
           if (isRecord(parsed)) args = parsed;
         } catch {
           /* invalid JSON, pass empty */
+        }
+
+        // Detect API proxy error injected as tool call arguments
+        // (e.g. zenmux returns {"ERROR": {"message": "..."}} instead of valid args)
+        if ("ERROR" in args || "error" in args) {
+          const errPayload = (args.ERROR ?? args.error) as Record<string, unknown> | string;
+          const errMsg = typeof errPayload === "string"
+            ? errPayload
+            : (errPayload as Record<string, unknown>)?.message ?? JSON.stringify(errPayload);
+          console.warn(`[agent] API proxy error in tool args for ${tc.function.name}: ${errMsg}`);
+          const toolMsg: ChatMessage = {
+            role: "tool",
+            tool_call_id: tc.id,
+            content: `API proxy error (not a tool failure): ${errMsg}. Please retry the same tool call.`,
+          };
+          newMessages.push(toolMsg);
+          callbacks.onToolEnd?.({
+            callId: tc.id, name: tc.function.name,
+            durationMs: 0, error: `proxy error: ${errMsg}`,
+          });
+          continue;
         }
 
         const t0 = Date.now();
