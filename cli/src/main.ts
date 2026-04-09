@@ -4,6 +4,8 @@ import { runCommand } from "./commands/run.js";
 import { reportCommand } from "./commands/report.js";
 import { promoteCommand } from "./commands/promote.js";
 import { diffCommand } from "./commands/diff.js";
+import { compareCommand } from "./commands/compare.js";
+import { trendCommand } from "./commands/trend.js";
 
 const program = new Command();
 
@@ -16,5 +18,7 @@ program.addCommand(runCommand);
 program.addCommand(reportCommand);
 program.addCommand(promoteCommand);
 program.addCommand(diffCommand);
+program.addCommand(compareCommand);
+program.addCommand(trendCommand);
 
 program.parse();
