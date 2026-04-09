@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
- * 发版数据导入 — 从 data/ 读取 JSON，按 name 去重写入数据库
+ * 发版数据导入 — 从 data/ 读取 JSON 写入数据库
  *
- * 策略：create-if-not-exists（已存在的记录保留不动）
+ * 策略：
+ *   - Skills / StylePresets: 全量替换（事务内先清空再写入）
+ *   - McpServers: create-if-not-exists（已存在的记录保留不动）
  * 可安全重复执行（幂等），适合放在 docker-entrypoint 中。
  *
  * 用法:
@@ -37,30 +39,29 @@ async function importSkills() {
   const items = loadJson("skills.json");
   if (items.length === 0) return 0;
 
-  let created = 0;
-  for (const item of items) {
-    const exists = await prisma.skill.findUnique({ where: { name: item.name } });
-    if (exists) continue;
-
-    await prisma.skill.create({
-      data: {
-        name: item.name,
-        tags: item.tags,
-        provider: item.provider,
-        productionVersion: 1,
-        versions: {
-          create: {
-            version: 1,
-            description: item.version.description,
-            content: item.version.content,
-            metadata: item.version.metadata ?? undefined,
+  // 全量替换：事务内先清空再写入（SkillVersion 由 onDelete: Cascade 级联删除）
+  await prisma.$transaction(async (tx) => {
+    await tx.skill.deleteMany();
+    for (const item of items) {
+      await tx.skill.create({
+        data: {
+          name: item.name,
+          tags: item.tags,
+          provider: item.provider,
+          productionVersion: 1,
+          versions: {
+            create: {
+              version: 1,
+              description: item.version.description,
+              content: item.version.content,
+              metadata: item.version.metadata ?? undefined,
+            },
           },
         },
-      },
-    });
-    created++;
-  }
-  return created;
+      });
+    }
+  });
+  return items.length;
 }
 
 async function importMcpServers() {
@@ -96,21 +97,20 @@ async function importStylePresets() {
   const items = loadJson("style-presets.json");
   if (items.length === 0) return 0;
 
-  let created = 0;
-  for (const item of items) {
-    const exists = await prisma.stylePreset.findUnique({ where: { name: item.name } });
-    if (exists) continue;
-
-    await prisma.stylePreset.create({
-      data: {
-        name: item.name,
-        prompt: item.prompt,
-        referenceImageUrl: item.referenceImageUrl ?? null,
-      },
-    });
-    created++;
-  }
-  return created;
+  // 全量替换：事务内先清空再写入
+  await prisma.$transaction(async (tx) => {
+    await tx.stylePreset.deleteMany();
+    for (const item of items) {
+      await tx.stylePreset.create({
+        data: {
+          name: item.name,
+          prompt: item.prompt,
+          referenceImageUrl: item.referenceImageUrl ?? null,
+        },
+      });
+    }
+  });
+  return items.length;
 }
 
 /* ------------------------------------------------------------------ */
@@ -129,9 +129,9 @@ async function main() {
 
   const total = skills + mcps + styles;
   if (total === 0) {
-    console.log("📥 数据导入：无新增（全部已存在）");
+    console.log("📥 数据导入：无数据");
   } else {
-    console.log(`📥 数据导入完成：Skills +${skills}, McpServers +${mcps}, StylePresets +${styles}`);
+    console.log(`📥 数据导入完成：Skills =${skills}(全量替换), McpServers +${mcps}, StylePresets =${styles}(全量替换)`);
   }
 }
 
