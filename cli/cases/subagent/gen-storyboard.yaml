@@ -19,7 +19,7 @@ input:
 
     输出格式：
     {"shots": [{"shot_id": "S1", "scene_desc": "...", "camera": "..."}]}
-  model: "google/gemini-3.1-pro-preview"
+  model: "x-ai/grok-4.1-fast-non-reasoning"
   outputSchema:
     type: object
     properties:
