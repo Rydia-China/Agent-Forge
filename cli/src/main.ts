@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { Command } from "commander";
 import { runCommand } from "./commands/run.js";
+import { reportCommand } from "./commands/report.js";
+import { promoteCommand } from "./commands/promote.js";
 
 const program = new Command();
 
@@ -10,5 +12,7 @@ program
   .version("0.1.0");
 
 program.addCommand(runCommand);
+program.addCommand(reportCommand);
+program.addCommand(promoteCommand);
 
 program.parse();
