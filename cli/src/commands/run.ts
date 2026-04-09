@@ -292,27 +292,31 @@ export const runCommand = new Command("run")
 
     // Print tool stats table
     if (summary.toolStats && Object.keys(summary.toolStats.byTool).length > 0) {
+      const pad = (s: string, w: number) => s.padEnd(w);
+      const rpad = (s: string, w: number) => s.padStart(w);
       console.log("\n  \x1b[1m═══ Tool Success Rate ═══\x1b[0m\n");
-      console.log("  %-35s %6s %8s %8s", "Tool", "Calls", "Success", "Rate");
+      console.log(`  ${pad("Tool", 35)} ${rpad("Calls", 6)} ${rpad("Success", 8)} ${rpad("Rate", 8)}`);
       for (const [name, s] of Object.entries(summary.toolStats.byTool).sort((a, b) => b[1].total - a[1].total)) {
         const rate = (s.successRate * 100).toFixed(1) + "%";
         const color = s.successRate >= 0.95 ? "\x1b[32m" : s.successRate >= 0.8 ? "\x1b[33m" : "\x1b[31m";
-        console.log(`  %-35s %6d %8d ${color}%8s\x1b[0m`, name, s.total, s.total - s.errors, rate);
+        console.log(`  ${pad(name, 35)} ${rpad(String(s.total), 6)} ${rpad(String(s.total - s.errors), 8)} ${color}${rpad(rate, 8)}\x1b[0m`);
       }
       const ts = summary.toolStats;
       console.log(`  ${"─".repeat(60)}`);
-      console.log(`  %-35s %6d %8d %8s`, "TOTAL", ts.totalCalls, ts.successCount, (ts.successRate * 100).toFixed(1) + "%");
+      console.log(`  ${pad("TOTAL", 35)} ${rpad(String(ts.totalCalls), 6)} ${rpad(String(ts.successCount), 8)} ${rpad((ts.successRate * 100).toFixed(1) + "%", 8)}`);
     }
 
     // Print dimension breakdown
     if (summary.dimensionBreakdown && Object.keys(summary.dimensionBreakdown).length > 0) {
+      const pad = (s: string, w: number) => s.padEnd(w);
+      const rpad = (s: string, w: number) => s.padStart(w);
       console.log("\n  \x1b[1m═══ Dimension Breakdown ═══\x1b[0m\n");
-      console.log("  %-18s %6s %10s %14s", "Tag", "Cases", "Pass Rate", "95% CI");
+      console.log(`  ${pad("Tag", 18)} ${rpad("Cases", 6)} ${rpad("Pass Rate", 10)} ${rpad("95% CI", 14)}`);
       for (const [tag, d] of Object.entries(summary.dimensionBreakdown).sort((a, b) => a[1].passRate - b[1].passRate)) {
         const rate = (d.passRate * 100).toFixed(0) + "%";
         const ci = `[${(d.ci95.lower * 100).toFixed(0)}%, ${(d.ci95.upper * 100).toFixed(0)}%]`;
         const color = d.passRate >= 0.9 ? "\x1b[32m" : d.passRate >= 0.7 ? "\x1b[33m" : "\x1b[31m";
-        console.log(`  %-18s %6d ${color}%10s\x1b[0m %14s`, tag, d.cases, rate, ci);
+        console.log(`  ${pad(tag, 18)} ${rpad(String(d.cases), 6)} ${color}${rpad(rate, 10)}\x1b[0m ${rpad(ci, 14)}`);
       }
     }
     console.log("");
