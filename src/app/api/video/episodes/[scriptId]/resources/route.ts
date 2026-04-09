@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import type { Prisma } from "@/generated/prisma";
 import { listResourcesByScope } from "@/lib/services/key-resource-listing";
-import { deleteResource } from "@/lib/services/key-resource-service";
-import { prisma } from "@/lib/db";
+import { deleteResource, getById, updateData } from "@/lib/services/key-resource-service";
 
 /** GET /api/video/episodes/[scriptId]/resources?novelId=xxx — get episode + novel resources from KeyResource */
 export async function GET(
@@ -39,16 +40,41 @@ export async function GET(
 
 /** PATCH /api/video/episodes/[scriptId]/resources — update a domain resource's data */
 export async function PATCH(req: NextRequest) {
+  const JsonNestedValueSchema: z.ZodType<Prisma.JsonValue> = z.lazy(() =>
+    z.union([
+      z.string(),
+      z.number(),
+      z.boolean(),
+      z.null(),
+      z.array(JsonNestedValueSchema),
+      z.record(z.string(), JsonNestedValueSchema),
+    ]),
+  );
+  const JsonValueSchema: z.ZodType<Prisma.InputJsonValue> = z.lazy(() =>
+    z.union([
+      z.string(),
+      z.number(),
+      z.boolean(),
+      z.array(JsonNestedValueSchema),
+      z.record(z.string(), JsonNestedValueSchema),
+    ]),
+  );
+  const BodySchema = z.object({
+    resourceId: z.string().min(1),
+    data: JsonValueSchema,
+  });
   try {
-    const body = (await req.json()) as { resourceId?: string; data?: unknown };
-    if (!body.resourceId || body.data === undefined) {
-      return NextResponse.json({ error: "Missing resourceId or data" }, { status: 400 });
+    const raw: unknown = await req.json();
+    const body = BodySchema.parse(raw);
+    const resource = await getById(body.resourceId);
+    if (!resource) {
+      return NextResponse.json({ error: "Resource not found" }, { status: 404 });
     }
-    await prisma.keyResource.update({
-      where: { id: body.resourceId },
-      data: { title: typeof body.data === "string" ? body.data : undefined },
-    });
-    return NextResponse.json({ ok: true });
+    if (resource.mediaType !== "json") {
+      return NextResponse.json({ error: "Only JSON resources support data updates" }, { status: 400 });
+    }
+    const result = await updateData(body.resourceId, body.data);
+    return NextResponse.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
