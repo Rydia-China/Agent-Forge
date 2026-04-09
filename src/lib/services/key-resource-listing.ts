@@ -18,6 +18,7 @@ export interface ResourceItem {
   mediaType: string;
   title: string | null;
   url: string | null;
+  data: unknown;
   prompt: string | null;
   currentVersion: number;
   createdAt: Date;
@@ -50,8 +51,7 @@ export async function listResourcesByScope(
     },
     include: {
       versions: {
-        orderBy: { version: "desc" },
-        take: 1,
+        orderBy: { version: "asc" },
       },
     },
     orderBy: [{ category: "asc" }, { createdAt: "asc" }],
@@ -69,6 +69,7 @@ export async function listResourcesByScope(
       mediaType: r.mediaType,
       title: r.title ?? currentVer?.title ?? null,
       url: currentVer?.url ?? null,
+      data: r.mediaType === "json" ? currentVer?.data ?? null : null,
       prompt: currentVer?.prompt ?? null,
       currentVersion: r.currentVersion,
       createdAt: r.createdAt,
