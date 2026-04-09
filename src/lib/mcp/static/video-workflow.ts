@@ -163,6 +163,7 @@ const GenerateVideoParams = z.object({
 );
 
 const PlanVideoShotsParams = z.object({
+  scriptId: z.string().min(1),
   scriptContent: z.string().min(1),
   shotType: z.string().min(1),
   model: z.string().optional(),
@@ -358,11 +359,12 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object" as const,
       properties: {
+        scriptId: { type: "string", description: "Episode script DB ID — used to persist the plan as a keyResource" },
         scriptContent: { type: "string", description: "Raw script content for this segment" },
         shotType: { type: "string", description: "Shot type label: 'public' for pre_choice, 'branch_1'/'branch_2'/... for outcomes" },
         model: { type: "string", description: "LLM model override (default: z-ai/glm-5-turbo)" },
       },
-      required: ["scriptContent", "shotType"],
+      required: ["scriptId", "scriptContent", "shotType"],
     },
   },
 
@@ -562,7 +564,7 @@ export const videoWorkflowMcp: McpProvider = {
         // 2. Query KeyResources across scopes
         const mediaFilter = mediaType ? { mediaType } : {};
         const includeOpts = {
-          versions: { orderBy: { version: "desc" as const }, take: 1 },
+          versions: { orderBy: { version: "asc" as const } },
         };
 
         // Novel scope (portraits, scenes)
@@ -602,16 +604,23 @@ export const videoWorkflowMcp: McpProvider = {
         }
 
         const allResources = [...novelResources, ...scriptResources];
+        const currentVersionRow = (
+          resource: (typeof allResources)[number],
+        ) => resource.versions.find((v) => v.version === resource.currentVersion) ?? null;
 
         // 3. Map to output
-        let resources = allResources.map((r) => ({
-          key: r.key,
-          mediaType: r.mediaType,
-          url: r.versions[0]?.url ?? null,
-          version: r.currentVersion,
-          title: r.title,
-          category: r.category,
-        }));
+        let resources = allResources.map((r) => {
+          const currentVer = currentVersionRow(r);
+          return {
+            key: r.key,
+            mediaType: r.mediaType,
+            url: currentVer?.url ?? null,
+            ...(r.mediaType === "json" ? { data: currentVer?.data ?? null } : {}),
+            version: r.currentVersion,
+            title: r.title,
+            category: r.category,
+          };
+        });
 
         if (keyPattern) {
           resources = resources.filter((r) => r.key.includes(keyPattern));
@@ -621,7 +630,11 @@ export const videoWorkflowMcp: McpProvider = {
         const byCategory = (cat: string) => {
           const items = allResources.filter((r) => r.category === cat);
           return {
-            done: items.filter((r) => r.currentVersion > 0 && r.versions[0]?.url).length,
+            done: items.filter((r) => {
+              const currentVer = currentVersionRow(r);
+              if (r.mediaType === "json") return r.currentVersion > 0 && currentVer?.data != null;
+              return r.currentVersion > 0 && !!currentVer?.url;
+            }).length,
             total: items.length,
           };
         };
@@ -863,7 +876,7 @@ export const videoWorkflowMcp: McpProvider = {
       /*  plan_video_shots                                              */
       /* ------------------------------------------------------------ */
       case "plan_video_shots": {
-        const { scriptContent, shotType, model } = PlanVideoShotsParams.parse(args);
+        const { scriptId: planScriptId, scriptContent, shotType, model } = PlanVideoShotsParams.parse(args);
 
         // 1. Fetch video_prompt_generator template from Langfuse (deterministic, no LLM)
         const templateDetail = await langfusePromptSvc.getPrompt("video_prompt_generator");
@@ -922,15 +935,33 @@ export const videoWorkflowMcp: McpProvider = {
           });
         }
 
-        // 5. Parse and return structured result
+        // 5. Parse and persist to keyResource
         try {
-          const parsed = JSON.parse(result.output);
-          return json({ status: "ok", shotType, ...parsed });
+          const parsed = JSON.parse(result.output) as Record<string, unknown>;
+          const planKey = `shot_plan_${shotType}`;
+          const kr = await keyResourceService.upsertResource(
+            "script", planScriptId, planKey, "json",
+            { data: parsed as import("@/generated/prisma").Prisma.InputJsonValue },
+          );
+          await prisma.keyResource.update({
+            where: { id: kr.id },
+            data: { category: "视频规划", title: `${shotType} 分镜` },
+          });
+
+          return json({
+            status: "ok",
+            shotType,
+            keyResourceId: kr.id,
+            key: planKey,
+            version: kr.version,
+            ...parsed,
+          });
         } catch {
           return json({
             status: "ok",
             shotType,
             raw: result.output,
+            warning: "Failed to parse JSON — result not persisted to keyResource",
           });
         }
       }
