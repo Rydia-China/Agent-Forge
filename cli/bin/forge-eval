@@ -1,0 +1,3 @@
+#!/usr/bin/env npx tsx --tsconfig cli/tsconfig.json
+// @ts-check
+import "../src/main.js";
