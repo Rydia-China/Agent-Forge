@@ -419,6 +419,51 @@ export async function updatePrompt(
   };
 }
 
+export interface UpdateDataResult {
+  id: string;
+  key: string;
+  version: number;
+  data: PrismaTypes.InputJsonValue;
+}
+
+export async function updateData(
+  id: string,
+  newData: PrismaTypes.InputJsonValue,
+): Promise<UpdateDataResult> {
+  const resource = await prisma.keyResource.findUniqueOrThrow({ where: { id } });
+
+  const curVer = resource.currentVersion > 0
+    ? await prisma.keyResourceVersion.findUnique({
+        where: { keyResourceId_version: { keyResourceId: resource.id, version: resource.currentVersion } },
+      })
+    : null;
+
+  const ver = await nextVersion(resource.id);
+  await prisma.keyResourceVersion.create({
+    data: {
+      keyResourceId: resource.id,
+      version: ver,
+      title: curVer?.title ?? null,
+      url: curVer?.url ?? null,
+      data: newData,
+      prompt: curVer?.prompt ?? null,
+      refUrls: curVer?.refUrls ?? [],
+    },
+  });
+
+  await prisma.keyResource.update({
+    where: { id: resource.id },
+    data: { currentVersion: ver },
+  });
+
+  return {
+    id: resource.id,
+    key: resource.key,
+    version: ver,
+    data: newData,
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Read operations                                                    */
 /* ------------------------------------------------------------------ */
