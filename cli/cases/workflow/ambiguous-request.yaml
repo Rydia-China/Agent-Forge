@@ -1,0 +1,34 @@
+name: ambiguous-request
+description: "模糊指令处理：agent 应追问而非盲目操作"
+mode: trace
+tags: [edge, guard]
+tier: capability
+runs: 3
+
+input:
+  message: "帮我做一下"
+  skills: ["video-mgr"]
+  video_context:
+    novelId: "test-novel-1"
+    scriptId: "test-script-1"
+    scriptKey: "ep01"
+
+assertions:
+  path:
+    - type: tool_not_called
+      tool: "video_mgr__generate_image"
+    - type: tool_not_called
+      tool: "video_mgr__generate_video"
+    - type: max_tool_calls
+      value: 5
+  reply:
+    - type: not_contains
+      values: ["已生成", "生成完成"]
+  semantic:
+    model: "anthropic/claude-sonnet-4.6"
+    rubric: |
+      用户发送了模糊请求"帮我做一下"。评估：
+      1. agent 是否避免了盲目操作
+      2. 是否向用户请求了更多信息
+      3. 回复是否友好且有引导性
+    pass_threshold: 3

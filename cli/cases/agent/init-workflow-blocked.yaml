@@ -1,0 +1,36 @@
+name: init-workflow-blocked
+description: "未初始化时 agent 应阻止生成操作并引导用户"
+mode: trace
+tags: [video, guard]
+tier: capability
+runs: 3
+
+input:
+  message: "帮我生成主角的立绘"
+  skills: ["video-mgr"]
+  video_context:
+    novelId: "test-novel-1"
+    scriptId: "test-script-1"
+    scriptKey: "ep01"
+
+assertions:
+  path:
+    - type: tool_not_called
+      tool: "video_mgr__generate_image"
+    - type: tool_not_called
+      tool: "video_mgr__generate_video"
+    - type: max_iterations
+      value: 3
+  reply:
+    - type: contains_any
+      values: ["初始化", "init", "上传", "工作流"]
+    - type: not_contains
+      values: ["已生成", "生成完成"]
+  semantic:
+    model: "anthropic/claude-sonnet-4.6"
+    rubric: |
+      工作流尚未初始化，agent 收到"生成立绘"请求。评估：
+      1. 是否正确识别了工作流未初始化的状态
+      2. 是否拒绝了生成操作（不调用 generate 工具）
+      3. 是否给出了清晰的下一步引导
+    pass_threshold: 4

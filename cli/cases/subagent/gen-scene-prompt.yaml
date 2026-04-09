@@ -1,0 +1,32 @@
+name: gen-scene-prompt
+description: "场景描述 → 图片 prompt 的质量测试"
+mode: unit
+tags: [video, quality]
+tier: capability
+runs: 3
+
+input:
+  prompt: |
+    你是一个专业的AI绘画提示词工程师。请根据以下场景描述，生成一个用于AI图片生成的英文 prompt。
+
+    场景描述：
+    夕阳西下的高中教室，窗户半开着，橙红色的光线斜射进来，桌上散落着几本书和一封信。黑板上残留着今天的课程笔记。教室里空无一人。
+
+    要求：
+    1. 输出英文 prompt
+    2. 包含光影、色调、构图描述
+    3. 包含画风指定（anime background style）
+    4. 纯文本输出
+
+  model: "google/gemini-3.1-pro-preview"
+
+assertions:
+  semantic:
+    model: "anthropic/claude-sonnet-4.6"
+    rubric: |
+      评估场景 prompt：
+      1. 英文语法通顺
+      2. 包含关键元素（教室、夕阳、光线、书、信）
+      3. 有光影和构图描述
+      4. 适合用于AI背景图生成
+    pass_threshold: 3

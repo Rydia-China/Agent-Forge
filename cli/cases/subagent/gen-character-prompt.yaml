@@ -1,0 +1,35 @@
+name: gen-character-prompt
+description: "角色描述 → 图片生成 prompt 的质量测试"
+mode: unit
+tags: [video, quality]
+tier: capability
+runs: 3
+
+input:
+  prompt: |
+    你是一个专业的AI绘画提示词工程师。请根据以下角色描述，生成一个用于AI图片生成的英文 prompt。
+
+    角色描述：
+    名字：小明
+    性别：男
+    年龄：17岁
+    特征：黑色短发，戴眼镜，穿校服，性格内向但眼神坚定
+
+    要求：
+    1. 输出一个完整的英文 prompt，适合用于图片生成模型
+    2. 包含人物外貌、服装、表情、姿态的描述
+    3. 包含画风指定（anime style）
+    4. 输出纯文本，不要 JSON
+
+  model: "google/gemini-3.1-pro-preview"
+
+assertions:
+  semantic:
+    model: "anthropic/claude-sonnet-4.6"
+    rubric: |
+      评估图片生成 prompt：
+      1. 是否是英文且语法通顺
+      2. 是否包含关键特征（黑发、眼镜、校服）
+      3. 是否适合用于AI图片生成（有画风、构图等指令）
+      4. 长度是否合适（不过短也不冗长）
+    pass_threshold: 3

@@ -1,0 +1,28 @@
+name: golden-character-gen
+description: "角色生成的标准工具调用序列回归测试"
+mode: regression
+tags: [video, guard]
+tier: regression
+runs: 2
+
+input:
+  message: "帮我生成主角Alice的角色立绘"
+  skills: ["video-mgr", "subagent"]
+  video_context:
+    novelId: "test-novel-1"
+    scriptId: "test-script-1"
+    scriptKey: "ep01"
+
+golden: "cases/regression/golden/golden-character-gen.trace.json"
+
+tolerance:
+  tool_count_delta: 3
+  allow_extra_tools: ["memory__recall"]
+  required_tools: ["skills__get"]
+
+assertions:
+  path:
+    - type: tool_called
+      tool: "skills__get"
+    - type: max_tool_calls
+      value: 15

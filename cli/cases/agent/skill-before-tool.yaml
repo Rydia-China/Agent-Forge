@@ -1,0 +1,24 @@
+name: skill-before-tool
+description: "agent 使用 MCP 工具前必须先读取对应 skill"
+mode: trace
+tags: [video, guard]
+tier: capability
+runs: 3
+
+input:
+  message: "帮我生成主角Alice的角色立绘"
+  skills: ["video-mgr"]
+  video_context:
+    novelId: "test-novel-1"
+    scriptId: "test-script-1"
+    scriptKey: "ep01"
+
+assertions:
+  path:
+    - type: tool_called
+      tool: "skills__get"
+    - type: sequence
+      tools: ["skills__get", "video_mgr__generate_image"]
+      reason: "系统纪律：必须先读 skill 理解工具语义再使用"
+    - type: max_tool_calls
+      value: 10

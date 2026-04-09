@@ -1,0 +1,58 @@
+name: gen-storyboard
+description: "分镜生成 prompt 的格式稳定性和内容质量"
+mode: unit
+tags: [video, quality, format]
+tier: capability
+runs: 3
+
+input:
+  prompt: |
+    你是一个专业的动画分镜师。请根据以下剧情生成分镜描述。
+
+    剧情内容：
+    小明走进教室，发现座位上放着一封信。他拿起信看了看，脸上露出复杂的表情。窗外的樱花正在飘落。
+
+    要求：
+    1. 每个分镜包含 shot_id、scene_desc（场景描述）、camera（镜头类型）
+    2. 至少3个分镜
+    3. 输出纯 JSON，不要包含其他文字
+
+    输出格式：
+    {"shots": [{"shot_id": "S1", "scene_desc": "...", "camera": "..."}]}
+  model: "google/gemini-3.1-pro-preview"
+  outputSchema:
+    type: object
+    properties:
+      shots:
+        type: array
+        items:
+          type: object
+          properties:
+            shot_id:
+              type: string
+            scene_desc:
+              type: string
+              minLength: 10
+            camera:
+              type: string
+          required: [shot_id, scene_desc]
+        minItems: 1
+    required: [shots]
+  maxRetries: 3
+
+assertions:
+  structural:
+    - path: "shots.length"
+      op: ">="
+      value: 3
+  semantic:
+    model: "anthropic/claude-sonnet-4.6"
+    rubric: |
+      评估分镜生成结果：
+      1. 是否覆盖关键情节（走进教室、发现信、看信、表情、樱花）
+      2. 镜头描述是否足够具体可用于画面生成
+      3. 镜头顺序是否符合叙事逻辑
+    pass_threshold: 3
+  consistency:
+    - path: "shots.length"
+      max_std_dev: 2
