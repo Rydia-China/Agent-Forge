@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { runCommand } from "./commands/run.js";
 import { reportCommand } from "./commands/report.js";
 import { promoteCommand } from "./commands/promote.js";
+import { diffCommand } from "./commands/diff.js";
 
 const program = new Command();
 
@@ -14,5 +15,6 @@ program
 program.addCommand(runCommand);
 program.addCommand(reportCommand);
 program.addCommand(promoteCommand);
+program.addCommand(diffCommand);
 
 program.parse();
