@@ -5,6 +5,19 @@ function mean(nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
+/** Wilson score interval for binomial proportion — works well for small n. */
+function wilsonCI(successes: number, total: number, z: number = 1.96): { lower: number; upper: number } {
+  if (total === 0) return { lower: 0, upper: 1 };
+  const p = successes / total;
+  const denominator = 1 + z * z / total;
+  const centre = p + z * z / (2 * total);
+  const spread = z * Math.sqrt((p * (1 - p) + z * z / (4 * total)) / total);
+  return {
+    lower: Math.max(0, (centre - spread) / denominator),
+    upper: Math.min(1, (centre + spread) / denominator),
+  };
+}
+
 function stdDev(nums: number[]): number {
   if (nums.length < 2) return 0;
   const m = mean(nums);
@@ -47,6 +60,8 @@ export interface RunResult {
   trace: Trace;
   assertions: AssertionResult[];
   judgeResult?: JudgeResult;
+  toolCorrectnessScore?: number;
+  toolCorrectnessDetail?: { selection: number; ordering: number; parameters: number };
 }
 
 export function computeStats(runs: RunResult[], consistencyAssertions?: ConsistencyAssertion[]): CaseStats {
@@ -97,5 +112,47 @@ export function computeStats(runs: RunResult[], consistencyAssertions?: Consiste
     max: durations.length > 0 ? Math.max(...durations) : 0,
   };
 
-  return { runs: n, passRate, passAtK, passExpK, semanticScores, consistency, timing };
+  // Tool execution statistics
+  const allToolCalls = runs.flatMap((r) => r.trace.toolCalls ?? []);
+  const totalTools = allToolCalls.length;
+  const failedTools = allToolCalls.filter((tc) => !!tc.error).length;
+  const toolStats = totalTools > 0
+    ? {
+        totalCalls: totalTools,
+        successCount: totalTools - failedTools,
+        failCount: failedTools,
+        successRate: (totalTools - failedTools) / totalTools,
+        avgDurationMs: mean(allToolCalls.map((tc) => tc.durationMs)),
+        byTool: Object.entries(
+          allToolCalls.reduce<Record<string, { total: number; errors: number }>>((acc, tc) => {
+            const key = tc.name;
+            if (!acc[key]) acc[key] = { total: 0, errors: 0 };
+            acc[key].total++;
+            if (tc.error) acc[key].errors++;
+            return acc;
+          }, {}),
+        ).reduce<Record<string, { total: number; errors: number; successRate: number }>>((acc, [k, v]) => {
+          acc[k] = { ...v, successRate: (v.total - v.errors) / v.total };
+          return acc;
+        }, {}),
+      }
+    : undefined;
+
+  const ci95 = wilsonCI(passCounts, n);
+
+  // Tool correctness aggregation
+  const tcScores = runs.map((r) => r.toolCorrectnessScore).filter((s): s is number => s != null);
+  const toolCorrectness = tcScores.length > 0
+    ? {
+        mean: mean(tcScores),
+        stdDev: stdDev(tcScores),
+        min: Math.min(...tcScores),
+        max: Math.max(...tcScores),
+        selection: { mean: mean(runs.map((r) => r.toolCorrectnessDetail?.selection).filter((s): s is number => s != null)) },
+        ordering: { mean: mean(runs.map((r) => r.toolCorrectnessDetail?.ordering).filter((s): s is number => s != null)) },
+        parameters: { mean: mean(runs.map((r) => r.toolCorrectnessDetail?.parameters).filter((s): s is number => s != null)) },
+      }
+    : undefined;
+
+  return { runs: n, passRate, passAtK, passExpK, ci95, semanticScores, consistency, timing, toolStats, toolCorrectness };
 }
