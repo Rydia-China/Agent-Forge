@@ -9,6 +9,7 @@ export interface TraceToolCall {
   result: string;
   durationMs: number;
   iteration: number;
+  error?: string;
 }
 
 export interface TraceUnitResult {
@@ -58,6 +59,7 @@ export interface ConsistencyAssertion {
 
 export interface SemanticConfig {
   model?: string;
+  mode?: "direct" | "g-eval";
   rubric: string;
   pass_threshold: number;
 }
@@ -79,6 +81,21 @@ export interface ReplyAssertion {
   values: string[];
 }
 
+export interface ToolCorrectnessConfig {
+  weights?: { selection?: number; ordering?: number; parameters?: number };
+  threshold?: number;  // minimum combined score to pass, default 0.7
+}
+
+export interface TaskCompletionConfig {
+  threshold?: number;  // 0.0-1.0, default 0.7
+  model?: string;
+}
+
+export interface ExpectedTool {
+  name: string;
+  args?: Record<string, unknown>;
+}
+
 export interface TraceAssertions {
   outcome?: PathAssertion[];
   path?: PathAssertion[];
@@ -86,6 +103,8 @@ export interface TraceAssertions {
   structural?: StructuralAssertion[];
   consistency?: ConsistencyAssertion[];
   semantic?: SemanticConfig;
+  tool_correctness?: ToolCorrectnessConfig;
+  task_completion?: TaskCompletionConfig;
 }
 
 export interface UnitInput {
@@ -125,6 +144,7 @@ export interface EvalCase {
   tier: CaseTier;
   runs: number;
   input?: UnitInput | TraceInput;
+  expected_tools?: ExpectedTool[];
   context?: { video_context?: Record<string, unknown>; skills?: string[] };
   steps?: WorkflowStep[];
   golden?: string;
@@ -137,7 +157,7 @@ export interface EvalCase {
 /* ------------------------------------------------------------------ */
 
 export interface AssertionResult {
-  category: "outcome" | "path" | "reply" | "structural" | "consistency" | "semantic";
+  category: "outcome" | "path" | "reply" | "structural" | "consistency" | "semantic" | "tool_correctness" | "task_completion";
   type: string;
   pass: boolean;
   detail: string;
@@ -159,6 +179,16 @@ export interface JudgeResult {
 /*  Stats                                                              */
 /* ------------------------------------------------------------------ */
 
+export interface ToolCorrectnessStats {
+  mean: number;
+  stdDev: number;
+  min: number;
+  max: number;
+  selection: { mean: number };
+  ordering: { mean: number };
+  parameters: { mean: number };
+}
+
 export interface CaseStats {
   runs: number;
   passRate: number;
@@ -171,8 +201,18 @@ export interface CaseStats {
     max: number;
     distribution: Record<number, number>;
   };
+  ci95: { lower: number; upper: number };
   consistency?: Record<string, { mean: number; stdDev: number; pass: boolean }>;
   timing: { mean: number; min: number; max: number };
+  toolStats?: {
+    totalCalls: number;
+    successCount: number;
+    failCount: number;
+    successRate: number;
+    avgDurationMs: number;
+    byTool: Record<string, { total: number; errors: number; successRate: number }>;
+  };
+  toolCorrectness?: ToolCorrectnessStats;
 }
 
 /* ------------------------------------------------------------------ */
@@ -187,10 +227,19 @@ export interface CaseSummary {
   passRate: number;
   passAtK: number;
   passExpK: number;
+  ci95: { lower: number; upper: number };
   avgScore?: number;
+  avgToolCorrectness?: number;
   avgDurationMs: number;
   status: "pass" | "fail";
   failureSummary?: string;
+  toolStats?: CaseStats["toolStats"];
+}
+
+export interface DimensionBreakdown {
+  cases: number;
+  passRate: number;
+  ci95: { lower: number; upper: number };
 }
 
 export interface TierSummary {
@@ -214,6 +263,8 @@ export interface EvalSummary {
   totalRuns: number;
   totalDurationMs: number;
   cases: CaseSummary[];
+  toolStats?: CaseStats["toolStats"];
+  dimensionBreakdown?: Record<string, DimensionBreakdown>;
 }
 
 /* ------------------------------------------------------------------ */

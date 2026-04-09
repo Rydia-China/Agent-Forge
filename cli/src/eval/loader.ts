@@ -20,6 +20,7 @@ export function loadCase(filePath: string): EvalCase {
     input: parsed.input as EvalCase["input"],
     context: parsed.context as EvalCase["context"],
     steps: parsed.steps as EvalCase["steps"],
+    expected_tools: parsed.expected_tools as EvalCase["expected_tools"],
     golden: parsed.golden as string | undefined,
     tolerance: parsed.tolerance as EvalCase["tolerance"],
     assertions: parsed.assertions as EvalCase["assertions"],
