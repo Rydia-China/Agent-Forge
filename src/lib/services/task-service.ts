@@ -195,6 +195,17 @@ async function executeTask(
       },
       onToolCall: (call) => {
         pushEvent(taskId, "tool", { summary: summarizeTool(call) }).catch(() => {/* logged in pushEvent */});
+        // Emit tool args for eval CLI tool correctness analysis (truncate to 10KB to avoid base64 blobs)
+        try {
+          const argsStr = call.function.arguments;
+          const truncated = argsStr.length > 10240 ? argsStr.slice(0, 10240) : argsStr;
+          const parsed: unknown = JSON.parse(truncated);
+          pushEvent(taskId, "tool_call_detail", {
+            callId: call.id,
+            name: call.function.name,
+            args: parsed,
+          } as unknown as Prisma.InputJsonValue).catch(() => {});
+        } catch { /* skip if args parsing fails */ }
       },
       onToolStart: (event) => {
         pushEvent(taskId, "tool_start", event as unknown as Prisma.InputJsonValue).catch(() => {/* logged in pushEvent */});
