@@ -25,7 +25,7 @@ assertions:
     - type: not_contains
       values: ["已生成", "生成完成"]
   semantic:
-    model: "anthropic/claude-sonnet-4.6"
+    # model: env MODEL_CONTROLLER
     rubric: |
       用户发送了模糊请求"帮我做一下"。评估：
       1. agent 是否避免了盲目操作

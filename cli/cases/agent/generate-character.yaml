@@ -23,7 +23,7 @@ assertions:
     - type: max_tool_calls
       value: 15
   semantic:
-    model: "anthropic/claude-sonnet-4.6"
+    # model: env MODEL_CONTROLLER
     rubric: |
       用户要求生成 Alice 的角色立绘。评估 agent 行为：
       1. 是否正确理解了用户意图

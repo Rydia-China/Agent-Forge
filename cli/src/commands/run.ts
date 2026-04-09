@@ -9,6 +9,7 @@ import { runUnitCase } from "../runner/subagent-runner.js";
 import { runTraceCase, runWorkflowCase } from "../runner/agent-runner.js";
 import { printCaseHeader, printRunProgress, printCaseResult, printSummary, printDryRun } from "../format/terminal.js";
 import type { CaseMode, EvalCase, EvalSummary, CaseSummary, Trace, AssertionResult, JudgeResult } from "../types.js";
+import { config } from "../config.js";
 
 const EVALS_DIR = join(import.meta.dirname, "../../evals");
 
@@ -19,7 +20,7 @@ export const runCommand = new Command("run")
   .option("--runs <n>", "Override run count per case", parseInt)
   .option("--tag <tag>", "Filter by tag (repeatable)", (val: string, prev: string[]) => [...prev, val], [] as string[])
   .option("--tier <tier>", "Filter by tier: capability or regression")
-  .option("--api <url>", "Agent-Forge API URL", "http://localhost:8001")
+  .option("--api <url>", "Agent-Forge API URL")
   .option("--dry-run", "Print execution plan without running")
   .option("--save-golden", "Save traces as golden baselines (regression mode)")
   .option("--concurrency <n>", "Max parallel cases", parseInt, 1)
@@ -79,10 +80,10 @@ export const runCommand = new Command("run")
           if (evalCase.mode === "unit") {
             trace = await runUnitCase(evalCase, ri);
           } else if (evalCase.mode === "workflow") {
-            stepTraces = await runWorkflowCase(evalCase, ri, opts.api as string);
+            stepTraces = await runWorkflowCase(evalCase, ri, (opts.api as string | undefined) ?? config.apiUrl);
             trace = stepTraces[stepTraces.length - 1]!;
           } else {
-            trace = await runTraceCase(evalCase, ri, opts.api as string);
+            trace = await runTraceCase(evalCase, ri, (opts.api as string | undefined) ?? config.apiUrl);
           }
 
           const assertions: AssertionResult[] = [];

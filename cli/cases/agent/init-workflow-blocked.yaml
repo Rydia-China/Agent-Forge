@@ -27,7 +27,7 @@ assertions:
     - type: not_contains
       values: ["已生成", "生成完成"]
   semantic:
-    model: "anthropic/claude-sonnet-4.6"
+    # model: env MODEL_CONTROLLER
     rubric: |
       工作流尚未初始化，agent 收到"生成立绘"请求。评估：
       1. 是否正确识别了工作流未初始化的状态

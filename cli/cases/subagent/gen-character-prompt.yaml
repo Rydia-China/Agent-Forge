@@ -21,11 +21,11 @@ input:
     3. 包含画风指定（anime style）
     4. 输出纯文本，不要 JSON
 
-  model: "x-ai/grok-4.1-fast-non-reasoning"
+  # model: env MODEL_TASK_EXECUTION
 
 assertions:
   semantic:
-    model: "anthropic/claude-sonnet-4.6"
+    # model: env MODEL_CONTROLLER
     rubric: |
       评估图片生成 prompt：
       1. 是否是英文且语法通顺

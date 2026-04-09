@@ -1,4 +1,5 @@
 import type { Trace, EvalCase, UnitInput } from "../types.js";
+import { config } from "../config.js";
 
 /**
  * Run a unit-mode eval case by calling subagent.callTool directly.
@@ -32,10 +33,11 @@ export async function runUnitCase(evalCase: EvalCase, runIndex: number): Promise
 
   if (!prompt) throw new Error(`Case ${evalCase.name}: no prompt resolved`);
 
-  // Build subagent task
+  // Build subagent task — model from case or env default
+  const model = input.model || config.modelTaskExecution;
   const task: Record<string, unknown> = {
     prompt,
-    model: input.model,
+    model,
   };
   if (input.outputSchema) task.outputSchema = input.outputSchema;
   if (input.maxRetries) task.maxRetries = input.maxRetries;
@@ -62,7 +64,7 @@ export async function runUnitCase(evalCase: EvalCase, runIndex: number): Promise
     mode: "unit",
     runIndex,
     timestamp: new Date().toISOString(),
-    input: { message: prompt, model: input.model },
+    input: { message: prompt, model },
     totalDurationMs: Date.now() - t0,
     unitResult: {
       raw: first.result ?? first.error ?? "",

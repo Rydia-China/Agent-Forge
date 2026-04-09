@@ -1,10 +1,11 @@
 import OpenAI from "openai";
 import type { Trace, SemanticConfig, JudgeResult, AssertionResult } from "../types.js";
+import { config as appConfig } from "../config.js";
 
 function getJudgeClient(): OpenAI {
   return new OpenAI({
-    apiKey: process.env.LLM_API_KEY ?? "",
-    baseURL: process.env.LLM_BASE_URL || undefined,
+    apiKey: appConfig.llmApiKey,
+    baseURL: appConfig.llmBaseUrl,
   });
 }
 
@@ -42,7 +43,7 @@ export async function runJudge(
   trace: Trace,
   config: SemanticConfig,
 ): Promise<{ result: JudgeResult; assertion: AssertionResult }> {
-  const model = config.model ?? "anthropic/claude-sonnet-4.6";
+  const model = config.model ?? appConfig.modelController;
   const client = getJudgeClient();
 
   const prompt = `你是一个 Agent 行为评估专家。请严格按评分标准打分。

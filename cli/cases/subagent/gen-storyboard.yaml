@@ -19,7 +19,7 @@ input:
 
     输出格式：
     {"shots": [{"shot_id": "S1", "scene_desc": "...", "camera": "..."}]}
-  model: "x-ai/grok-4.1-fast-non-reasoning"
+  # model: 留空则从 env MODEL_TASK_EXECUTION 取
   outputSchema:
     type: object
     properties:
@@ -46,7 +46,7 @@ assertions:
       op: ">="
       value: 3
   semantic:
-    model: "anthropic/claude-sonnet-4.6"
+    # model: 留空则从 env MODEL_CONTROLLER 取
     rubric: |
       评估分镜生成结果：
       1. 是否覆盖关键情节（走进教室、发现信、看信、表情、樱花）

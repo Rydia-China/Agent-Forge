@@ -18,11 +18,11 @@ input:
     3. 包含画风指定（anime background style）
     4. 纯文本输出
 
-  model: "x-ai/grok-4.1-fast-non-reasoning"
+  # model: env MODEL_TASK_EXECUTION
 
 assertions:
   semantic:
-    model: "anthropic/claude-sonnet-4.6"
+    # model: env MODEL_CONTROLLER
     rubric: |
       评估场景 prompt：
       1. 英文语法通顺
