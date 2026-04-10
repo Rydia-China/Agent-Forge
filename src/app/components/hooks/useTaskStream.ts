@@ -96,6 +96,17 @@ export interface TaskStreamCallbacks {
 
 /* ---- Subagent task progress types ---- */
 
+export interface ActiveToolInfo {
+  callId: string;
+  name: string;
+  index: number;
+  total: number;
+  status: "running" | "done" | "error";
+  startedAt: number;
+  durationMs?: number;
+  error?: string;
+}
+
 export interface SubagentTaskInfo {
   index: number;
   /** Display text: prompt preview (single-shot) or instruction (tool-loop). */
@@ -121,6 +132,7 @@ export interface TaskStreamReturn {
   isLoadingSession: boolean;
   streamingReply: string | null;
   streamingTools: string[];
+  activeTools: ActiveToolInfo[];
   subagentTasks: SubagentTaskInfo[];
   status: AgentStatus;
   keyResources: KeyResourceItem[];
@@ -164,6 +176,7 @@ export function useTaskStream(
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [streamingReply, setStreamingReply] = useState<string | null>(null);
   const [streamingTools, setStreamingTools] = useState<string[]>([]);
+  const [activeTools, setActiveTools] = useState<ActiveToolInfo[]>([]);
   const [subagentTasks, setSubagentTasks] = useState<SubagentTaskInfo[]>([]);
   const [status, setStatus] = useState<AgentStatus>("idle");
   const [keyResources, setKeyResources] = useState<KeyResourceItem[]>([]);
@@ -208,6 +221,7 @@ export function useTaskStream(
       if (!isReconnect) {
         setStreamingReply("");
         setStreamingTools([]);
+        setActiveTools([]);
         setSubagentTasks([]);
       }
       setIsStreaming(true);
@@ -274,8 +288,9 @@ export function useTaskStream(
                 setIsStreaming(false);
                 setIsSending(false);
                 activeSendRef.current = false;
-                setStreamingReply(null);
+          setStreamingReply(null);
                 setStreamingTools([]);
+                setActiveTools([]);
                 setSubagentTasks([]);
                 setStatus(finalStatus);
                 if (hbStatus !== "completed") {
@@ -479,8 +494,16 @@ export function useTaskStream(
         try {
           const data: unknown = JSON.parse(e.data as string);
           if (isRecord(data) && typeof data.name === "string") {
+            const callId = typeof data.callId === "string" ? data.callId : `call_${Date.now()}`;
+            const name = data.name as string;
+            const index = typeof data.index === "number" ? data.index : 0;
+            const total = typeof data.total === "number" ? data.total : 1;
+            setActiveTools((prev) => [
+              ...prev.filter((t) => t.callId !== callId),
+              { callId, name, index, total, status: "running", startedAt: Date.now() },
+            ]);
             setLlmStats((prev) => {
-              const isSubagent = (data.name as string).startsWith("subagent");
+              const isSubagent = name.startsWith("subagent");
               return {
                 ...prev,
                 toolCallCount: prev.toolCallCount + 1,
@@ -497,7 +520,18 @@ export function useTaskStream(
         try {
           const data: unknown = JSON.parse(e.data as string);
           if (isRecord(data)) {
+            const callId = typeof data.callId === "string" ? data.callId : undefined;
             const hasError = typeof data.error === "string";
+            const durationMs = typeof data.durationMs === "number" ? data.durationMs : undefined;
+            if (callId) {
+              setActiveTools((prev) =>
+                prev.map((t) =>
+                  t.callId === callId
+                    ? { ...t, status: hasError ? "error" : "done", durationMs, error: hasError ? data.error as string : undefined }
+                    : t,
+                ),
+              );
+            }
             const isSubagent = typeof data.name === "string" && (data.name as string).startsWith("subagent");
             setLlmStats((prev) => ({
               ...prev,
@@ -532,6 +566,7 @@ export function useTaskStream(
           activeSendRef.current = false;
           setStreamingReply(null);
           setStreamingTools([]);
+          setActiveTools([]);
           setSubagentTasks([]);
           setStatus("done");
           cbRef.current.onStreamEnd?.();
@@ -580,6 +615,7 @@ export function useTaskStream(
           activeSendRef.current = false;
           setStreamingReply(null);
           setStreamingTools([]);
+          setActiveTools([]);
           setSubagentTasks([]);
           setStatus("error");
           cbRef.current.onStreamEnd?.();
@@ -601,6 +637,7 @@ export function useTaskStream(
           activeSendRef.current = false;
           setStreamingReply(null);
           setStreamingTools([]);
+          setActiveTools([]);
           setSubagentTasks([]);
           setError("连接中断，请刷新页面重试");
           setStatus("error");
@@ -669,6 +706,7 @@ export function useTaskStream(
     const cleanupStreamingUI = () => {
       setStreamingReply(null);
       setStreamingTools([]);
+      setActiveTools([]);
       setSubagentTasks([]);
       setStatus("idle");
       cbRef.current.onStreamEnd?.();
@@ -717,6 +755,7 @@ export function useTaskStream(
     isLoadingSession,
     streamingReply,
     streamingTools,
+    activeTools,
     subagentTasks,
     status,
     keyResources,

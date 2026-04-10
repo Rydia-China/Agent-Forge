@@ -9,37 +9,21 @@
 
 ## 步骤
 
-### 1. 导出数据
+### 1. 提交变更
 
-从本地开发数据库导出 Skill、McpServer、StylePreset 到 `data/` 目录：
-
-```sh
-pnpm db:export
-```
-
-产出文件：
-- `data/skills.json`
-- `data/mcp-servers.json`
-- `data/style-presets.json`
-
-> 导出的是 production 版本快照，所有类型均使用 create-if-not-exists 策略导入（已存在的不覆盖）。
-> 如需强制同步远程修改，先通过 API 或 DB 手动更新，不要依赖发布流程覆盖。
-
-### 2. 提交变更
-
-确保 `data/` 目录下的 JSON 和本次所有代码变更已提交：
+确保本次所有代码变更已提交：
 
 ```sh
 git add -A && git commit -m "release: <简述>"
 ```
 
-### 3. 构建镜像
+### 2. 构建镜像
 
 ```sh
 docker buildx build --platform linux/amd64 -t agent-forge:latest -f Dockerfile . --load
 ```
 
-### 4. 部署到生产
+### 3. 部署到生产
 
 设置 SSH 密码（如当前 shell 未设置）：
 
@@ -82,7 +66,7 @@ sshpass -e ssh -o StrictHostKeyChecking=no root@agent.mob-ai.cn \
 
 > 生产 docker-compose 使用本地镜像名 `agent-forge:latest`。
 
-### 5. 验证
+### 4. 验证
 
 #### 检查容器状态
 
@@ -133,4 +117,23 @@ sshpass -e ssh root@agent.mob-ai.cn \
 3. `node scripts/db-import.js` 导入初始数据（幂等，失败不阻塞启动）
 4. 启动应用
 
-因此 **步骤 4 完成后数据会自动导入**，无需手动执行 import。
+因此 **步骤 3 完成后数据会自动导入**，无需手动执行 import。
+
+## 可选：导出本地数据
+
+> **⚠️ 危险操作** — 导出会覆盖 `data/` 下的 JSON 文件，部署后将作为初始数据导入生产。
+> 仅在你明确需要将本地开发数据库中的 Skill / McpServer / StylePreset 同步到生产时才执行此步骤。
+> 常规发布 **不需要** 执行此步骤。
+
+从本地开发数据库导出到 `data/` 目录：
+
+```sh
+pnpm db:export
+```
+
+产出文件：
+- `data/skills.json`
+- `data/mcp-servers.json`
+- `data/style-presets.json`
+
+导出后需重新提交并构建镜像，再执行部署。导入策略为 create-if-not-exists（已存在的不覆盖）。

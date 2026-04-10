@@ -7,7 +7,7 @@ import * as mcpService from "@/lib/services/mcp-service";
 import { getSkill } from "@/lib/services/skill-service";
 import { appendSchemaDirectiveIfNeeded } from "@/lib/skills/required-schemas";
 import {
-  chatCompletion,
+  chatCompletionCollect,
   mcpToolToOpenAI,
   type LlmMessage,
 } from "./llm-client";
@@ -486,12 +486,12 @@ export class SubAgent {
   /* ================================================================ */
 
   private async runSingleShot(t0: number): Promise<SubAgentResult> {
-    const completion = await chatCompletion(
+    const collected = await chatCompletionCollect(
       this.messages,
       undefined,
       this.model,
     );
-    const raw = completion.choices[0]?.message.content ?? "";
+    const raw = collected.content ?? "";
     this.iterations++;
 
     // Append assistant message to internal history
@@ -553,12 +553,12 @@ export class SubAgent {
         content: retryContent,
       } as unknown as LlmMessage);
 
-      const retryCompletion = await chatCompletion(
+      const retryCollected = await chatCompletionCollect(
         this.messages,
         undefined,
         this.model,
       );
-      const retryRaw = retryCompletion.choices[0]?.message.content ?? "";
+      const retryRaw = retryCollected.content ?? "";
       this.iterations++;
 
       this.messages.push({
@@ -619,44 +619,29 @@ export class SubAgent {
       iteration < this.iterations + maxIterations;
       iteration++
     ) {
-      const completion = await chatCompletion(
+      const collected = await chatCompletionCollect(
         this.messages,
         openaiTools,
         this.model,
       );
-      const choice = completion.choices[0];
-      if (!choice) {
-        this.totalDurationMs += Date.now() - t0;
-        return {
-          status: "failed",
-          output: "",
-          error: "No completion choice returned",
-          toolCallCount: this.totalToolCalls,
-          model: this.model,
-          durationMs: Date.now() - t0,
-          trace: this.getTrace(),
-        };
-      }
-
-      const { message: assistantMsg } = choice;
 
       // Append assistant message
       const assistantLlm: Record<string, unknown> = {
         role: "assistant",
-        content: assistantMsg.content ?? null,
+        content: collected.content,
       };
-      if (assistantMsg.tool_calls?.length) {
-        assistantLlm.tool_calls = assistantMsg.tool_calls;
+      if (collected.tool_calls.length > 0) {
+        assistantLlm.tool_calls = collected.tool_calls;
       }
       this.messages.push(assistantLlm as unknown as LlmMessage);
 
       // No tool calls → task complete
-      if (!assistantMsg.tool_calls?.length) {
+      if (collected.tool_calls.length === 0) {
         this.iterations = iteration + 1;
         this.totalDurationMs += Date.now() - t0;
         return {
           status: "completed",
-          output: assistantMsg.content ?? "",
+          output: collected.content ?? "",
           toolCallCount: this.totalToolCalls,
           model: this.model,
           durationMs: Date.now() - t0,
@@ -665,10 +650,7 @@ export class SubAgent {
       }
 
       // Execute tool calls
-      const fnCalls = assistantMsg.tool_calls.filter(
-        (tc): tc is Extract<typeof tc, { type: "function" }> =>
-          tc.type === "function",
-      );
+      const fnCalls = collected.tool_calls;
 
       for (const tc of fnCalls) {
         this.totalToolCalls++;

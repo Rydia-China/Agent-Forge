@@ -61,12 +61,9 @@ function TaskCard({ task }: { task: SubagentTaskInfo }) {
         }
       `}
     >
-      {/* Header: status + model + mode badge */}
+      {/* Header: status + mode badge */}
       <div className="flex items-center gap-1.5">
         <StatusIcon status={task.status} />
-        <span className="truncate font-medium text-slate-200">
-          {shortModel(task.model)}
-        </span>
         {isToolLoop && (
           <span className="rounded bg-violet-500/20 px-1 text-sm text-violet-300">
             {task.mode === "continue" ? "cont" : "loop"}

@@ -6,6 +6,8 @@ import {
   chatCompletionStream,
   isTransientStreamError,
   mcpToolToOpenAI,
+  FirstTokenTimeoutError,
+  FIRST_TOKEN_TIMEOUT_MS,
   type LlmMessage,
 } from "./llm-client";
 import { resolveModel, MODEL_OPTIONS } from "./models";
@@ -625,8 +627,21 @@ async function runAgentStreamInnerCore(
 
       for (let attempt = 0; ; attempt++) {
         const stream = await chatCompletionStream(llmMessages, openaiTools, signal, modelId);
+
+        // TTFT (Time To First Token) guard: abort if no chunk within deadline
+        let firstChunkReceived = false;
+        let ttftFired = false;
+        const ttftTimer = setTimeout(() => {
+          ttftFired = true;
+          stream.controller.abort();
+        }, FIRST_TOKEN_TIMEOUT_MS);
+
         try {
           for await (const chunk of stream) {
+            if (!firstChunkReceived) {
+              firstChunkReceived = true;
+              clearTimeout(ttftTimer);
+            }
             // Capture usage FIRST — the final chunk has usage but empty choices
             if (chunk.usage) {
               lastUsage = chunk.usage;
@@ -644,10 +659,16 @@ async function runAgentStreamInnerCore(
               }
             }
           }
+          clearTimeout(ttftTimer);
           break; // stream completed successfully
         } catch (streamErr: unknown) {
+          clearTimeout(ttftTimer);
           // Abort the stream to prevent dangling connection / unhandled rejections
           stream.controller.abort();
+          // TTFT timeout — fail immediately, no retry
+          if (ttftFired) {
+            throw new FirstTokenTimeoutError();
+          }
           if (
             !signal?.aborted &&
             isTransientStreamError(streamErr) &&

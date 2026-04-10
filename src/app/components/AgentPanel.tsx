@@ -106,6 +106,7 @@ export function AgentPanel({
             error={chat.error}
             streamingReply={chat.streamingReply}
             streamingTools={chat.streamingTools}
+            activeTools={chat.activeTools}
             subagentTasks={chat.subagentTasks}
           />
           <ChatInput

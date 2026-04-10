@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import { Button, Input, Select, Alert } from "antd";
-import { SendOutlined, StopOutlined, LoadingOutlined, PictureOutlined, CloseCircleFilled } from "@ant-design/icons";
+import { SendOutlined, StopOutlined, PictureOutlined, CloseCircleFilled } from "@ant-design/icons";
 import { StatusBadge } from "@/app/components/StatusBadge";
 import { MessageList } from "@/app/components/MessageList";
 import { useImageUpload } from "@/app/components/hooks/useImageUpload";
@@ -101,21 +101,12 @@ export function NovelChat({
             error={null}
             streamingReply={chat.streamingReply}
             streamingTools={chat.streamingTools}
+            activeTools={chat.activeTools}
             subagentTasks={chat.subagentTasks}
           />
         </div>
         )}
 
-        {/* Active tool indicator */}
-        {chat.activeTool && (
-          <div className="flex items-center gap-2 border-t border-slate-800 bg-slate-900/60 px-3 py-1.5 text-sm text-slate-300">
-            <LoadingOutlined className="text-blue-400" />
-            <span className="truncate">{chat.activeTool.name}</span>
-            <span className="shrink-0 text-slate-500">
-              {chat.activeTool.index + 1}/{chat.activeTool.total}
-            </span>
-          </div>
-        )}
 
         {/* Input — always visible */}
         <footer className="px-3 py-2.5">

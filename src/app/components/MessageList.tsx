@@ -4,9 +4,9 @@ import { useEffect, useRef } from "react";
 import { Alert, Empty, Spin, Tag, Typography } from "antd";
 import { RobotOutlined } from "@ant-design/icons";
 import type { ChatMessage } from "../types";
-import type { SubagentTaskInfo } from "./hooks/useTaskStream";
+import type { ActiveToolInfo, SubagentTaskInfo } from "./hooks/useTaskStream";
 import { MessageBubble } from "./MessageBubble";
-import { SubagentProgress } from "./SubagentProgress";
+import { ExecutionProgress } from "./ExecutionProgress";
 
 /* ---- Helpers ---- */
 
@@ -44,6 +44,7 @@ export interface MessageListProps {
   error: string | null;
   streamingReply: string | null;
   streamingTools: string[];
+  activeTools?: ActiveToolInfo[];
   subagentTasks?: SubagentTaskInfo[];
 }
 
@@ -53,13 +54,14 @@ export function MessageList({
   error,
   streamingReply,
   streamingTools,
+  activeTools,
   subagentTasks,
 }: MessageListProps) {
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingReply, streamingTools, subagentTasks]);
+  }, [messages, streamingReply, streamingTools, activeTools, subagentTasks]);
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -93,14 +95,12 @@ export function MessageList({
               ) : (
                 <Typography.Text type="secondary" style={{ fontSize: 16 }}>Streaming…</Typography.Text>
               )}
-              {/* Progress indicators: subagent → executor → tool summary */}
-              {subagentTasks && subagentTasks.length > 0 && (
-                <SubagentProgress tasks={subagentTasks} />
-              )}
-              {streamingTools.length > 0 && (
-                <div className="mt-2 rounded border border-slate-800 bg-slate-950/70 px-2 py-1.5 text-sm text-slate-200">
-                  {mergeStreamingSummaries(streamingTools)}
-                </div>
+              {/* Hierarchical execution progress */}
+              {((activeTools && activeTools.length > 0) || (subagentTasks && subagentTasks.length > 0)) && (
+                <ExecutionProgress
+                  tools={activeTools ?? []}
+                  subagentTasks={subagentTasks ?? []}
+                />
               )}
             </div>
           )}

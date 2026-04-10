@@ -87,7 +87,7 @@ const USAGE_TYPE_ENV: Record<ModelUsageType, string | undefined> = {
 
 /** Hard-coded defaults per usage type. */
 const MODEL_DEFAULTS: Record<ModelUsageType, string> = {
-  "task-execution": "x-ai/grok-4.1-fast-non-reasoning",
+  "task-execution": "anthropic/claude-sonnet-4.6",
   "prompt-execution": "z-ai/glm-5-turbo",
   controller: DEFAULT_MODEL,
   utility: DEFAULT_MODEL,

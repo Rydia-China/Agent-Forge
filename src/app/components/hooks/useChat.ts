@@ -24,6 +24,7 @@ export interface UseChatReturn {
   isLoadingSession: boolean;
   streamingReply: string | null;
   streamingTools: string[];
+  activeTools: import("./useTaskStream").ActiveToolInfo[];
   subagentTasks: import("./useTaskStream").SubagentTaskInfo[];
   status: AgentStatus;
   setStatus: (s: AgentStatus) => void;
@@ -170,6 +171,7 @@ export function useChat(
     isLoadingSession: stream.isLoadingSession,
     streamingReply: stream.streamingReply,
     streamingTools: stream.streamingTools,
+    activeTools: stream.activeTools,
     subagentTasks: stream.subagentTasks,
     status: stream.status,
     setStatus: stream.setStatus,

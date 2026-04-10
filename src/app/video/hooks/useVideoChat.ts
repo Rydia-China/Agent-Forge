@@ -49,6 +49,7 @@ export interface UseVideoChatReturn {
   isLoadingSession: boolean;
   streamingReply: string | null;
   streamingTools: string[];
+  activeTools: import("@/app/components/hooks/useTaskStream").ActiveToolInfo[];
   subagentTasks: import("@/app/components/hooks/useTaskStream").SubagentTaskInfo[];
   activeTool: ActiveToolInfo | null;
   status: AgentStatus;
@@ -238,6 +239,7 @@ export function useVideoChat(
     isLoadingSession: stream.isLoadingSession,
     streamingReply: stream.streamingReply,
     streamingTools: stream.streamingTools,
+    activeTools: stream.activeTools,
     subagentTasks: stream.subagentTasks,
     activeTool,
     status: stream.status,
