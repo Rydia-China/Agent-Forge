@@ -1,0 +1,32 @@
+name: mock-improved-intro-scene-image
+description: "Mock: intro__gen_scene__image 改进版 — 人物立绘约束增强"
+mode: unit
+tags: [mock, improved, geval, image, intro]
+tier: capability
+runs: 5
+
+input:
+  prompt: |
+    [CRITICAL] Character reference lock: strictly follow the character portrait for facial features, body proportions, and art style. The generated image must preserve character identity from the reference portrait exactly.
+
+    Style: cinematic anime, dramatic lighting, portrait 9:16
+
+    Scene: 教室窗边，夕阳余晖洒在课桌上，窗帘被风轻轻吹起
+
+    [IMPORTANT] The output must be a single image generation prompt that:
+    1. Preserves character identity from the reference portrait
+    2. Incorporates the scene description
+    3. Maintains the specified art style
+    4. Is suitable for AI image generation models
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估 intro 场景图模板编译质量：
+      1. 人物立绘参考指令：是否包含"严格遵循人物立绘"的要求
+      2. 变量替换：style 和 storyboardPrompt 是否正确嵌入
+      3. 场景描述：教室、夕阳、窗帘等元素是否保留
+      4. 风格统一：cinematic anime 风格是否贯穿
+      5. prompt 完整性：整体是否可用于图片生成
+    pass_threshold: 3

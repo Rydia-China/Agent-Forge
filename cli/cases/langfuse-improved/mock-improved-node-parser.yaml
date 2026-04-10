@@ -1,0 +1,56 @@
+name: mock-improved-node-parser
+description: "Mock: admin__node__parser 改进版 — 强化选项完整性"
+mode: unit
+tags: [mock, improved, geval, parser]
+tier: capability
+runs: 5
+
+input:
+  prompt: |
+    ## 角色定位
+
+    **语言自适应规则**: 输出语言必须严格遵循 `zh` 参数。
+    你是一个专业的游戏节点解析器，负责从节点原始内容中提取结构化的抉择信息。
+
+    ## 输入
+    节点内容：
+    # 第 5 集：暗流涌动
+
+    ## 描述
+    李明发现U盘中的数据指向了城市最大的房地产集团。
+
+    ## 玩家抉择时刻
+    ### 抉择一：处理证据
+    - 选项A：交给警方（INT检定 DC12，成功+2声望，失败-1HP）
+    - 选项B：发给媒体曝光（CHA检定 DC15，成功+3声望，失败-2HP）
+    - 选项C：私下找集团谈判（WIL检定 DC18，成功+5声望金币，失败-3HP）
+
+    ## 任务
+    从上述节点内容中提取以下信息：
+
+    **【重要约束】你必须提取原文中的每一个选项，一个都不能遗漏。如果原文有3个选项A/B/C，你的输出必须包含全部3个。遗漏任何选项将被视为严重错误。**
+
+    1. **nodeName**: 节点名称/标题
+    2. **description**: 节点描述（简要说明）
+    3. **decisions**: 抉择列表，每个抉择包含：
+       - **title**: 抉择时刻的标题（如"处理证据"）
+       - **options**: 选项数组，每个选项必须包含：
+         - **text**: 选项文本
+         - **checkType**: 检定类型（INT/CHA/WIL等）
+         - **dc**: 难度等级数值
+         - **successReward**: 成功奖励描述
+         - **failurePenalty**: 失败惩罚描述
+
+    以 JSON 格式输出。
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估节点解析器的输出质量：
+      1. nodeName 提取：是否正确提取"暗流涌动"或"第 5 集：暗流涌动"
+      2. description 生成：是否有简要的节点描述
+      3. 选项解析完整：3 个选项是否全部提取，包含 title 和 options
+      4. 选项结构：每个选项是否包含 text、checkType、DC 值等
+      5. JSON 格式：输出是否为合法 JSON，字段名正确
+    pass_threshold: 3

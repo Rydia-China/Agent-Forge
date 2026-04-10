@@ -1,0 +1,28 @@
+name: mock-improved-update-profile-image
+description: "Mock: common__update_profile__image 改进版 — 面部保持约束英文化"
+mode: unit
+tags: [mock, improved, geval, image, profile]
+tier: capability
+runs: 5
+
+input:
+  prompt: |
+    anime style, high quality, portrait 9:16
+
+    [FACE LOCK: preserve exact facial features, eye color, hairstyle, and face shape unchanged. Do NOT modify face, hair color, or body proportions under any circumstances.]
+
+    Only change the outfit to the following new costume description: 穿着深蓝色和服，腰间系着白色腰带，肩上搭着浅粉色披肩，脚穿木屐
+
+    [IMPORTANT] This is an outfit-change-only operation. The character's face and identity must remain exactly the same as the reference image.
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估换装模板编译质量：
+      1. 面部保持指令：是否包含"保持人物面部特征不变"的约束
+      2. 着装描述完整：和服、白色腰带、粉色披肩、木屐等是否完整
+      3. 风格指定：anime style、portrait 9:16 是否出现
+      4. 换装聚焦：是否明确只换着装，不改变面部/体型
+      5. prompt 可用性：整体是否适合送入图片生成模型
+    pass_threshold: 3
