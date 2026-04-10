@@ -465,6 +465,72 @@ export async function updateData(
 }
 
 /* ------------------------------------------------------------------ */
+/*  deleteVersion — remove a single version record                     */
+/* ------------------------------------------------------------------ */
+
+export interface DeleteVersionResult {
+  id: string;
+  key: string;
+  deletedVersion: number;
+  currentVersion: number;
+}
+
+/**
+ * Delete a specific version record from a key resource.
+ * - The last remaining version cannot be deleted.
+ * - If the deleted version is the current version, the pointer moves to the
+ *   highest remaining version.
+ * - Version numbers of other records are NOT changed.
+ */
+export async function deleteVersion(
+  id: string,
+  targetVersion: number,
+): Promise<DeleteVersionResult> {
+  const resource = await prisma.keyResource.findUniqueOrThrow({ where: { id } });
+
+  // Count existing versions
+  const count = await prisma.keyResourceVersion.count({
+    where: { keyResourceId: resource.id },
+  });
+  if (count <= 1) {
+    throw new Error("Cannot delete the last remaining version");
+  }
+
+  // Ensure the target version exists
+  const ver = await prisma.keyResourceVersion.findUnique({
+    where: { keyResourceId_version: { keyResourceId: resource.id, version: targetVersion } },
+  });
+  if (!ver) {
+    throw new Error(`Version ${targetVersion} not found for resource "${resource.key}"`);
+  }
+
+  // Delete the version row
+  await prisma.keyResourceVersion.delete({ where: { id: ver.id } });
+
+  // If we just deleted the current version, move pointer to highest remaining
+  let newCurrent = resource.currentVersion;
+  if (resource.currentVersion === targetVersion) {
+    const highest = await prisma.keyResourceVersion.findFirst({
+      where: { keyResourceId: resource.id },
+      orderBy: { version: "desc" },
+      select: { version: true },
+    });
+    newCurrent = highest?.version ?? 0;
+    await prisma.keyResource.update({
+      where: { id: resource.id },
+      data: { currentVersion: newCurrent },
+    });
+  }
+
+  return {
+    id: resource.id,
+    key: resource.key,
+    deletedVersion: targetVersion,
+    currentVersion: newCurrent,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Read operations                                                    */
 /* ------------------------------------------------------------------ */
 

@@ -7,6 +7,7 @@ import {
   RollbackOutlined,
   SaveOutlined,
   CopyOutlined,
+  CloseOutlined,
 } from "@ant-design/icons";
 import { fetchJson } from "@/app/components/client-utils";
 
@@ -61,6 +62,7 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh, sessionId }:
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [rollingBackVersion, setRollingBackVersion] = useState<number | null>(null);
+  const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
   const [viewedVersion, setViewedVersion] = useState(0);
 
   /* ---- Fetch detail ---- */
@@ -132,6 +134,22 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh, sessionId }:
       setIsRegenerating(false);
     }
   }, [detail, editPrompt, promptDirty, fetchDetail, message, onRefresh]);
+
+  /* ---- Delete version ---- */
+  const handleDeleteVersion = useCallback(async (version: number) => {
+    if (!detail || detail.versions.length <= 1) return;
+    setDeletingVersion(version);
+    try {
+      await fetchJson(`/api/key-resources/${detail.id}/versions/${version}`, { method: "DELETE" });
+      void message.success(`Deleted v${version}`);
+      void fetchDetail(detail.id, true);
+      onRefresh?.();
+    } catch {
+      void message.error("Failed to delete version");
+    } finally {
+      setDeletingVersion(null);
+    }
+  }, [detail, fetchDetail, message, onRefresh]);
 
   /* ---- Rollback ---- */
   const handleRollback = useCallback(async (version: number) => {
@@ -217,7 +235,7 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh, sessionId }:
                     return (
                       <div
                         key={ver.id}
-                        className={`relative shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 transition-colors ${
+                        className={`group relative shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 transition-colors ${
                           isViewed
                             ? "border-blue-500"
                             : "border-transparent hover:border-slate-600"
@@ -250,6 +268,16 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh, sessionId }:
                           <div className="flex h-full w-full items-center justify-center bg-slate-800 text-sm text-slate-500">
                             …
                           </div>
+                        )}
+                        {detail.versions.length > 1 && (
+                          <button
+                            type="button"
+                            className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100"
+                            style={{ fontSize: 8, lineHeight: 1 }}
+                            onClick={(e) => { e.stopPropagation(); void handleDeleteVersion(ver.version); }}
+                          >
+                            {deletingVersion === ver.version ? "…" : <CloseOutlined style={{ fontSize: 8 }} />}
+                          </button>
                         )}
                         <div className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 text-center text-sm font-medium text-white">
                           v{ver.version}{isCurrent ? " ✓" : ""}

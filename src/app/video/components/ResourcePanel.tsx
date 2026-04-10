@@ -196,7 +196,10 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
         </div>
       )}
       {r.title && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-5">
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 px-2 pb-1.5 pt-5"
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7), rgba(0,0,0,0))" }}
+        >
           <div className="truncate text-center text-[11px] font-medium text-white">{r.title}</div>
         </div>
       )}
@@ -255,7 +258,10 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
             })()
           : "No JSON data"}
       </pre>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-2 pb-1.5 pt-6">
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 px-2 pb-1.5 pt-6"
+        style={{ background: "linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.5), rgba(0,0,0,0))" }}
+      >
         <div className="truncate text-[11px] font-medium text-white">{r.title ?? r.key}</div>
       </div>
     </div>

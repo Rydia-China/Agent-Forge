@@ -92,7 +92,7 @@ function SubagentRow({ task }: { task: SubagentTaskInfo }) {
           </span>
         )}
         <span className="truncate text-slate-300" title={task.instruction}>
-          {task.instruction || "…"}
+          {task.instruction ? task.instruction.slice(0, 40) : "…"}
         </span>
         {/* Stats */}
         {task.toolCallCount > 0 && (

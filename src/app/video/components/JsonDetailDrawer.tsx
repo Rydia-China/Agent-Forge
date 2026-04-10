@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { App, Button, Drawer, Input, Spin, Tag, Tooltip, Typography } from "antd";
 import {
   CopyOutlined,
+  CloseOutlined,
   RollbackOutlined,
   SaveOutlined,
 } from "@ant-design/icons";
@@ -48,6 +49,7 @@ export function JsonDetailDrawer({ keyResourceId, onClose, onRefresh, sessionId 
   const [editText, setEditText] = useState("");
   const [isSavingData, setIsSavingData] = useState(false);
   const [rollingBackVersion, setRollingBackVersion] = useState<number | null>(null);
+  const [deletingVersion, setDeletingVersion] = useState<number | null>(null);
   const [viewedVersion, setViewedVersion] = useState(0);
 
   const fetchDetail = useCallback(async (id: string, silent = false) => {
@@ -107,6 +109,21 @@ export function JsonDetailDrawer({ keyResourceId, onClose, onRefresh, sessionId 
       setIsSavingData(false);
     }
   }, [dataDirty, detail, fetchDetail, message, onRefresh, parsedPreview]);
+
+  const handleDeleteVersion = useCallback(async (version: number) => {
+    if (!detail || detail.versions.length <= 1) return;
+    setDeletingVersion(version);
+    try {
+      await fetchJson(`/api/key-resources/${detail.id}/versions/${version}`, { method: "DELETE" });
+      void message.success(`Deleted v${version}`);
+      void fetchDetail(detail.id, true);
+      onRefresh?.();
+    } catch {
+      void message.error("Failed to delete version");
+    } finally {
+      setDeletingVersion(null);
+    }
+  }, [detail, fetchDetail, message, onRefresh]);
 
   const handleRollback = useCallback(async (version: number) => {
     if (!detail) return;
@@ -194,24 +211,35 @@ export function JsonDetailDrawer({ keyResourceId, onClose, onRefresh, sessionId 
                     const isViewed = ver.version === viewedVersion;
                     const isCurrent = ver.version === detail.currentVersion;
                     return (
-                      <button
-                        key={ver.id}
-                        type="button"
-                        className={`shrink-0 rounded-lg border px-3 py-2 text-left transition-colors ${
-                          isViewed
-                            ? "border-blue-500 bg-blue-500/10"
-                            : "border-slate-700 bg-slate-900/50 hover:border-slate-500"
-                        }`}
-                        onClick={() => {
-                          setViewedVersion(ver.version);
-                          setEditText(formatJson(ver.data));
-                        }}
-                      >
-                        <div className="text-sm font-medium text-white">
-                          v{ver.version}{isCurrent ? " ✓" : ""}
-                        </div>
-                        <div className="text-xs text-slate-400">JSON</div>
-                      </button>
+                      <div key={ver.id} className="group relative shrink-0">
+                        <button
+                          type="button"
+                          className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                            isViewed
+                              ? "border-blue-500 bg-blue-500/10"
+                              : "border-slate-700 bg-slate-900/50 hover:border-slate-500"
+                          }`}
+                          onClick={() => {
+                            setViewedVersion(ver.version);
+                            setEditText(formatJson(ver.data));
+                          }}
+                        >
+                          <div className="text-sm font-medium text-white">
+                            v{ver.version}{isCurrent ? " ✓" : ""}
+                          </div>
+                          <div className="text-xs text-slate-400">JSON</div>
+                        </button>
+                        {detail.versions.length > 1 && (
+                          <button
+                            type="button"
+                            className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-slate-700 text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100"
+                            style={{ fontSize: 8, lineHeight: 1 }}
+                            onClick={() => void handleDeleteVersion(ver.version)}
+                          >
+                            {deletingVersion === ver.version ? "…" : <CloseOutlined style={{ fontSize: 8 }} />}
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

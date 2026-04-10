@@ -31,14 +31,30 @@ export async function callFcGenerateImage(
     throw new Error("未配置 FC 图像生成服务 (FC_GENERATE_IMAGE_URL, FC_GENERATE_IMAGE_TOKEN)");
   }
 
-  const res = await fetch(fc.url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${fc.token}`,
-    },
-    body: JSON.stringify({ prompt, referenceImageUrls, ...(model && { model }) }),
-  });
+  let res: Response;
+  try {
+    const controller = new AbortController();
+    // Grid 等复杂任务可能需要较长时间，给 10 分钟
+    const timeout = setTimeout(() => controller.abort(), 10 * 60 * 1000);
+    res = await fetch(fc.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${fc.token}`,
+      },
+      body: JSON.stringify({ prompt, referenceImageUrls, ...(model && { model }) }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+  } catch (err) {
+    // Expose the real cause hidden inside "TypeError: fetch failed"
+    const cause = err instanceof Error && "cause" in err ? (err as Error & { cause: unknown }).cause : undefined;
+    console.error("[FC] fetch failed — cause:", cause ?? err);
+    throw new Error(
+      `FC fetch failed: ${cause instanceof Error ? cause.message : String(err)}`,
+      { cause },
+    );
+  }
 
   const data: unknown = await res.json();
   const parsed = FcResultSchema.parse(data);

@@ -50,16 +50,20 @@ const INDEXES = [
 /*  Ensure table exists                                                */
 /* ------------------------------------------------------------------ */
 
-let ensured = false;
+let ensurePromise: Promise<void> | null = null;
 
 /**
  * Ensure the domain_resources table exists in biz-db with a _global_ mapping.
- * Safe to call multiple times — only runs once.
+ * Safe to call multiple times — concurrent callers await the same Promise.
  */
-export async function ensureDomainResourcesTable(): Promise<void> {
-  if (ensured) return;
-  ensured = true;
+export function ensureDomainResourcesTable(): Promise<void> {
+  if (!ensurePromise) {
+    ensurePromise = doEnsureDomainResourcesTable();
+  }
+  return ensurePromise;
+}
 
+async function doEnsureDomainResourcesTable(): Promise<void> {
   await bizDbReady;
 
   let physicalName: string;

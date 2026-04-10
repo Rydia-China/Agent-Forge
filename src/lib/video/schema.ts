@@ -69,16 +69,20 @@ const NOVEL_SCRIPTS_MIGRATIONS = [
 /*  Ensure schema exists                                               */
 /* ------------------------------------------------------------------ */
 
-let ensured = false;
+let ensurePromise: Promise<void> | null = null;
 
 /**
  * Ensure video workflow tables exist in biz-db.
- * Safe to call multiple times — only runs once.
+ * Safe to call multiple times — concurrent callers await the same Promise.
  */
-export async function ensureVideoSchema(): Promise<void> {
-  if (ensured) return;
-  ensured = true;
+export function ensureVideoSchema(): Promise<void> {
+  if (!ensurePromise) {
+    ensurePromise = doEnsureVideoSchema();
+  }
+  return ensurePromise;
+}
 
+async function doEnsureVideoSchema(): Promise<void> {
   await bizDbReady;
 
   // 1. domain_resources (generic)

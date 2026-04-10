@@ -16,12 +16,13 @@ import * as ossService from "./oss-service";
 function getConfig() {
   const baseUrl = process.env.SEEDANCE_ARK_BASE_URL;
   const apiKey = process.env.SEEDANCE_ARK_API_KEY;
+  const model = process.env.SEEDANCE_ARK_MODEL ?? "dreamina-seedance-2-0-260128";
   if (!baseUrl || !apiKey) {
     throw new Error(
       "未配置 Seedance Ark 视频生成服务 (SEEDANCE_ARK_BASE_URL, SEEDANCE_ARK_API_KEY)",
     );
   }
-  return { baseUrl: baseUrl.replace(/\/+$/, ""), apiKey };
+  return { baseUrl: baseUrl.replace(/\/+$/, ""), apiKey, model };
 }
 
 /* ------------------------------------------------------------------ */
@@ -34,11 +35,8 @@ export type SeedanceGenerateType =
   | "first_last_frame"
   | "multimodal";
 
-export type SeedanceModel = "seedance_2_0" | "seedance_2_0_fast";
-
 export interface SeedanceVideoOptions {
   prompt: string;
-  model?: SeedanceModel;
   generateType?: SeedanceGenerateType;
   imageUrls?: string[];
   videoUrls?: string[];
@@ -55,15 +53,6 @@ export interface SeedanceVideoResult {
   saveUrl: string;
   timingMs: number;
 }
-
-/* ------------------------------------------------------------------ */
-/*  Ark model mapping                                                  */
-/* ------------------------------------------------------------------ */
-
-const ARK_MODEL_MAP: Record<SeedanceModel, string> = {
-  seedance_2_0: "dreamina-seedance-2-0-fast-260128",
-  seedance_2_0_fast: "dreamina-seedance-2-0-fast-260128",
-};
 
 /* ------------------------------------------------------------------ */
 /*  Build content array                                                */
@@ -142,13 +131,11 @@ function buildContentArray(opts: SeedanceVideoOptions): ContentItem[] {
 /* ------------------------------------------------------------------ */
 
 async function submitTask(opts: SeedanceVideoOptions): Promise<string> {
-  const { baseUrl, apiKey } = getConfig();
-
-  const arkModel = ARK_MODEL_MAP[opts.model ?? "seedance_2_0_fast"];
+  const { baseUrl, apiKey, model } = getConfig();
   const content = buildContentArray(opts);
 
   const body: Record<string, unknown> = {
-    model: arkModel,
+    model,
     content,
     duration: opts.duration ?? 5,
     ratio: opts.aspectRatio ?? "9:16",
