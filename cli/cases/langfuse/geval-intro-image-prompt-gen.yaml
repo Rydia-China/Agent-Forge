@@ -1,0 +1,34 @@
+name: geval-intro-image-prompt-gen
+description: "G-Eval: intro__gen_scene__image_prompt Seedance专家级分镜生成"
+mode: unit
+tags: [langfuse, geval, prompt-gen, intro, complex]
+tier: capability
+runs: 3
+
+input:
+  langfuse:
+    name: "intro__gen_scene__image_prompt"
+    variables:
+      nodeContent: |
+        第 1 集：觉醒
+        正文：
+        清晨的阳光透过窗帘缝隙，照在李明疲惫的脸上。闹钟响了第三遍，他终于挣扎着坐起身来。
+        手机上有三条未读消息，全部来自未知号码："你准备好了吗？"
+        李明揉了揉眼睛，以为自己还在做梦。直到第四条消息震动了手机："时间不多了。"
+        
+        玩家抉择：
+        选项A：回复消息询问对方身份
+        选项B：删除消息假装没看到
+        选项C：截图发给警察
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估 Seedance 2.0 专家级分镜生成器的输出质量：
+      1. JSON 格式合规：输出是否为严格 JSON 格式，包含场景空镜提示词和视频镜头语言提示词
+      2. 场景空镜质量：生成的场景图提示词是否具体、有氛围感、适合 AI 图片生成
+      3. 分镜连贯性：多个镜头之间是否具有画面连贯性和叙事逻辑
+      4. 运镜专业性：是否使用专业运镜术语（推、拉、摇、移、跟等）
+      5. 选项覆盖：是否为每个玩家选项生成了对应的视觉方案
+    pass_threshold: 3

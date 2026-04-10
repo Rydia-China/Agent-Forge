@@ -1,0 +1,37 @@
+name: geval-ccr-chat-agent
+description: "G-Eval: ccr__chat__agent 角色扮演对话"
+mode: unit
+tags: [langfuse, geval, chat, ccr, character]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "ccr__chat__agent"
+    variables:
+      characterName: "陈雪"
+      playerName: "李明"
+      mergedCardContent: |
+        姓名：陈雪
+        性格：善良但固执，有正义感，说话直接
+        背景：调查记者，追查地下赌场
+        口头禅：偶尔说"真的假的？"
+      currentAttitude: "信任但有戒备"
+      memories: "李明帮助过她逃脱追踪，对他有好感但不确定能否完全信任"
+      chatHistory: |
+        李明：今天的调查有什么进展？
+        陈雪：找到了新线索，但还需要确认。
+      scenario: "两人在咖啡馆讨论案情"
+      playerMessage: "你看起来很疲惫，要不要先休息一下？"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估角色扮演对话的输出质量：
+      1. 角色一致性：回复是否符合陈雪的性格（善良但固执、直接）
+      2. 自然度：对话是否自然不生硬，不是机械输出设定
+      3. 态度反映：信任但有戒备的态度是否在回复中体现
+      4. 记忆利用：之前的帮助经历是否影响了回复的亲近度
+      5. 克制表达：是否避免了在每句话中堆砌所有角色特点
+    pass_threshold: 3

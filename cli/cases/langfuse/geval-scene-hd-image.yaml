@@ -1,0 +1,25 @@
+name: geval-scene-hd-image
+description: "G-Eval: common__gen_scene_hd__image 高清场景图评估"
+mode: unit
+tags: [langfuse, geval, image, hd]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "common__gen_scene_hd__image"
+    variables:
+      style: "anime style, cinematic lighting, high detail"
+      sceneName: "夕阳下的教室"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估高清场景图模板编译质量：
+      1. 变量替换完整：style 和 sceneName 正确嵌入
+      2. 参考图指令：是否包含"参考图 1"的指令（用于图生图流程）
+      3. 细节增强：是否要求"电影级细节"
+      4. 无人物约束：是否明确"画面中没有任何文字和人物"
+      5. 场景名称：夕阳下的教室是否在 prompt 中出现
+    pass_threshold: 3

@@ -1,0 +1,29 @@
+name: geval-character-unlock
+description: "G-Eval: admin__character__unlock 角色解锁判断"
+mode: unit
+tags: [langfuse, geval, admin, character]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "admin__character__unlock"
+    variables:
+      language: "zh"
+      characterList: |
+        ["李明", "陈雪", "张伟", "王芳", "老陈"]
+      nodeContent: |
+        这一集中，李明第一次遇到了神秘的张伟——一个自称能看到未来的老人。
+        陈雪在上一集就已经出场了。王芳和老陈在这集中没有出现。
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估角色解锁判断的输出质量：
+      1. 正确解锁：张伟应该被解锁（首次出场）
+      2. 不误解锁：陈雪不应被解锁（已在之前出场）；王芳、老陈不应被解锁（未出场）
+      3. 李明处理：李明作为主角可能不需要解锁，或合理处理
+      4. JSON 格式：输出是否为 JSON 数组格式 ["张伟"]
+      5. 逻辑推理：判断依据是否合理（首次出场 vs 重要互动）
+    pass_threshold: 3

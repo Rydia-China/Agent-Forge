@@ -113,35 +113,32 @@ ${stepsFormatted}
 返回 JSON: { "scores": [{ "name": "...", "score": 1-5, "reasoning": "..." }] }
 每项 score >= ${config.pass_threshold} 为该维度通过。`;
 
-  const step2Res = await client.chat.completions.create({
-    model,
-    messages: [{ role: "user", content: step2Prompt }],
-    max_tokens: 1024,
-  });
+  let scores: { name: string; score: number; reasoning: string }[] | undefined;
+  let step2Raw = "";
 
-  const step2Raw = step2Res.choices[0]?.message.content ?? "";
-  let scores: { name: string; score: number; reasoning: string }[];
+  // Retry step 2 up to 2 times on parse failure
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const step2Res = await client.chat.completions.create({
+      model,
+      messages: [{ role: "user", content: step2Prompt }],
+      max_tokens: 1024,
+    });
 
-  try {
-    const parsed = JSON.parse(extractJSON(step2Raw)) as { scores: { name: string; score: number; reasoning: string }[] };
-    scores = parsed.scores;
-    if (!Array.isArray(scores) || scores.length === 0) throw new Error("empty scores");
-  } catch {
-    return {
-      result: {
-        score: 0,
-        pass: false,
-        issues: ["g_eval_step2_parse_error"],
-        reasoning: `Failed to parse G-Eval step 2 output: ${step2Raw.slice(0, 200)}`,
-      },
-      assertion: {
-        category: "semantic",
-        type: "judge",
-        pass: false,
-        detail: "G-Eval step 2 parse failure",
-        evidence: { raw: step2Raw.slice(0, 200) },
-      },
-    };
+    step2Raw = step2Res.choices[0]?.message.content ?? "";
+
+    try {
+      const parsed = JSON.parse(extractJSON(step2Raw)) as { scores: { name: string; score: number; reasoning: string }[] };
+      scores = parsed.scores;
+      if (!Array.isArray(scores) || scores.length === 0) throw new Error("empty scores");
+      break;
+    } catch {
+      if (attempt === 0) continue;
+    }
+  }
+
+  if (!scores) {
+    // All retries failed — fall back to direct mode
+    return runJudgeDirect(trace, config);
   }
 
   // Compute final score as mean of all step scores

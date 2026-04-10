@@ -1,0 +1,32 @@
+name: geval-bcard-item-name-gen
+description: "G-Eval: bcard__item_name__generator 道具命名"
+mode: unit
+tags: [langfuse, geval, bcard, creative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__item_name__generator"
+    variables:
+      currentNodeContent: |
+        第 3 集：命运的十字路口
+        夜幕降临，李明在雨中的街头。他手中握着父亲的遗书。
+      prevNodeContent: "第 2 集：陈雪提供了U盘中的关键数据。"
+      nextNodeContent: "第 4 集：深渊凝视，真相即将浮出水面。"
+      playerSummary: "等级3，偏好和平路线"
+      itemsJson: |
+        [{"type": "weapon", "rarity": "rare"}, {"type": "consumable", "rarity": "common"}]
+      language: "zh"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估道具命名的输出质量：
+      1. 世界观契合：名字是否符合都市悬疑的世界观
+      2. 简洁有画面感：是否 4-12 个汉字，有画面感
+      3. 独特性：是否避免了"XX之XX"等老套格式
+      4. 剧情关联：是否从剧情中提取了元素（如雨、遗书、十字路口）
+      5. 类型区分：weapon 和 consumable 的命名风格是否有差异
+    pass_threshold: 3

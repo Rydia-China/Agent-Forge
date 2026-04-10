@@ -1,0 +1,30 @@
+name: geval-ccr-persona-remix
+description: "G-Eval: ccr__persona__remix 人设覆写"
+mode: unit
+tags: [langfuse, geval, ccr, remix]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "ccr__persona__remix"
+    variables:
+      baseCardContent: |
+        姓名：陈雪
+        性格：善良直接
+        爱好：阅读、跑步
+        说话风格：简短有力
+      currentOverride: "{}"
+      userPrompt: "让她变得更加神秘和高冷"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估人设覆写的输出质量：
+      1. 意图具体化：是否将"神秘高冷"转化为具体的性格字段修改
+      2. 覆写精准：是否只修改了需要改的字段，保留了不需要改的
+      3. 一致性：修改后的各字段之间是否自洽（说话风格配合高冷性格）
+      4. JSON 格式：是否为合法的覆写 JSON
+      5. 合理性：修改是否自然，不是极端到不合理
+    pass_threshold: 3

@@ -1,0 +1,26 @@
+name: geval-chat-simple-response
+description: "G-Eval: chat__simple__response 简短角色回复"
+mode: unit
+tags: [langfuse, geval, chat]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "chat__simple__response"
+    variables:
+      characterName: "张伟"
+      language: "zh"
+      message: "教授，关于那个U盘的数据，您分析得怎么样了？"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估简短角色回复的输出质量：
+      1. 简短性：回复是否简短，不长篇大论
+      2. 角色身份：是否以张伟教授的身份回答
+      3. 语言匹配：是否使用中文（遵循 language 参数）
+      4. 信息量：虽然简短但是否有实质内容
+      5. 自然度：语言是否自然不做作
+    pass_threshold: 3

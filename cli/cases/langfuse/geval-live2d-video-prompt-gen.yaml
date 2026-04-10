@@ -1,0 +1,25 @@
+name: geval-live2d-video-prompt-gen
+description: "G-Eval: live2d__gen_scene__video_prompt 视频提示词生成器"
+mode: unit
+tags: [langfuse, geval, prompt-gen, video, live2d]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "live2d__gen_scene__video_prompt"
+    variables:
+      optionPrompt: "女主角轻轻推开门，走进昏暗的走廊"
+      imageDescription: "一位身穿校服的少女站在教室门口，手搭在门把手上，走廊尽头有微弱的光"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估 live2d 视频提示词生成器的输出质量：
+      1. 循环设计：视频提示词是否适合 5 秒无缝循环播放
+      2. 动作微调：是否聚焦于微小循环动作（如头发飘动、光影变化），而非大幅度动作
+      3. 运镜描述：是否包含摄影机运动指令
+      4. 长度控制：是否为 2-4 句中文，简练但信息完整
+      5. live2d 适配：动作幅度是否适合 live2d 即视感效果
+    pass_threshold: 3

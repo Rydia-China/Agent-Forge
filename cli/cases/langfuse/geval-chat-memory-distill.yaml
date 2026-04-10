@@ -1,0 +1,28 @@
+name: geval-chat-memory-distill
+description: "G-Eval: chat__memory__distill 记忆蒸馏"
+mode: unit
+tags: [langfuse, geval, chat, memory]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "chat__memory__distill"
+    variables:
+      language: "zh"
+      characterName: "陈雪"
+      personalitySummary: "善良固执的调查记者"
+      eventDescription: "李明在危急时刻帮助陈雪逃脱了追踪者，两人在暗巷中短暂避险"
+      previousMemories: "第一次见到李明时觉得他很普通"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估记忆蒸馏的输出质量：
+      1. 简洁性：是否在 50 字以内
+      2. 角色视角：是否从陈雪的性格出发理解这次事件
+      3. 情感蒸馏：是否提取了关键的情感变化（对李明印象的改变）
+      4. 纯文本：是否直接输出文本，不使用 JSON
+      5. 可存储性：是否适合作为长期记忆存储，信息密度高
+    pass_threshold: 3

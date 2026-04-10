@@ -1,0 +1,26 @@
+name: geval-intro-video-prompt-gen
+description: "G-Eval: intro__gen_scene__video_prompt 图生视频运镜导演"
+mode: unit
+tags: [langfuse, geval, prompt-gen, video, intro]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "intro__gen_scene__video_prompt"
+    variables:
+      image_prompt: "教室内景，夕阳光线从窗户倾泻而入，课桌上散落着纸张和笔"
+      video_prompt: "镜头从窗户缓缓推向课桌特写，阳光在纸面上移动"
+      reference_description: "画面参考：温暖的暖黄色调，安静的教室氛围"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估图生视频运镜导演 prompt 的输出质量：
+      1. 动静分离：是否聚焦于动态变化而非静态描述（谁动了、怎么动）
+      2. 运镜语法：是否使用标准运镜控制语法（[push in], [pan], [zoom] 等）
+      3. 物理氛围：是否描述了光影流转、粒子浮动等物理效果
+      4. 参考图利用：是否基于 reference_description 进行视觉延展
+      5. 时长适配：动作描述是否适合 5-10 秒短视频
+    pass_threshold: 3

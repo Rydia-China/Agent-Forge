@@ -1,0 +1,30 @@
+name: geval-ccr-memory-remix
+description: "G-Eval: ccr__memory__remix 记忆覆写"
+mode: unit
+tags: [langfuse, geval, ccr, remix]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "ccr__memory__remix"
+    variables:
+      baseCardContent: |
+        姓名：陈雪
+        性格：善良直接
+        与玩家关系：同事，初次认识
+        共同记忆：无
+      currentOverride: "{}"
+      userPrompt: "让她觉得我们是从小一起长大的青梅竹马"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估记忆覆写的输出质量：
+      1. 理解意图：是否正确理解"青梅竹马"意味着什么
+      2. 记忆生成：是否生成了合理的共同童年记忆
+      3. 关系改变：是否将关系从"初次认识"改为"青梅竹马"
+      4. JSON 格式：是否为合法的覆写 JSON
+      5. 自然合理：生成的记忆是否自然可信，不是生硬编造
+    pass_threshold: 3

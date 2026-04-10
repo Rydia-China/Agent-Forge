@@ -1,0 +1,37 @@
+name: geval-bcard-opening
+description: "G-Eval: bcard__opening__narrative 开场叙事引擎"
+mode: unit
+tags: [langfuse, geval, bcard, narrative, complex]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__opening__narrative"
+    variables:
+      language: "zh"
+      rawContent: |
+        第 3 集：命运的十字路口
+        正文：
+        夜幕降临，街灯在雨中模糊成光晕。李明站在公寓楼下，手中攥着那封信。
+        身后传来脚步声，是陈雪。"你还好吗？"
+        
+        抉择一：面对父亲的信
+        选项A：拆开信封（INT DC12）
+        选项B：先和陈雪谈谈（CHA DC10）
+      pastInfluences: "上一集帮助了陈雪逃脱危险，获得了她的信任"
+      playerLevel: "3"
+      hp: "8"
+      maxHp: "10"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估开场叙事引擎的输出质量：
+      1. 第一人称盲视：是否全部以"我"的视角叙述，无上帝视角或旁白
+      2. 电影级冲击力：是否具有画面感和沉浸感，能让玩家身临其境
+      3. 悬念卡点：是否在第一个抉择即将到来时戛然而止，不给出结果
+      4. 场景元素利用：雨夜、街灯、信封等元素是否被有效利用
+      5. 过往影响融入：上一集的信任关系是否在叙事中有所体现
+    pass_threshold: 3

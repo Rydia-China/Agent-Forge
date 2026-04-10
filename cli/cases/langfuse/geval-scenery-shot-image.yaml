@@ -1,0 +1,25 @@
+name: geval-scenery-shot-image
+description: "G-Eval: common__gen_scenery_shot__image 空镜模板评估"
+mode: unit
+tags: [langfuse, geval, image, scenery]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "common__gen_scenery_shot__image"
+    variables:
+      style: "anime background style, high quality, portrait orientation 9:16 vertical composition, atmospheric lighting"
+      scenePrompt: "深夜的城市天台，远处霓虹灯闪烁，近处有一张破旧的长椅和散落的啤酒罐，月光照亮整个场景"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估空镜模板编译后的 prompt 质量：
+      1. 场景元素完整性：天台、霓虹灯、长椅、啤酒罐、月光等关键元素是否保留
+      2. 竖屏构图：是否包含 portrait/vertical/9:16 描述
+      3. 氛围传达：深夜城市的氛围感是否通过用词传达
+      4. AI生成适用性：prompt 格式和用词是否适合直接送入图片生成模型
+      5. 风格一致性：anime background style 是否贯穿整体
+    pass_threshold: 3

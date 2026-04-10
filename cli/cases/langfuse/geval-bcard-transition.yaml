@@ -1,0 +1,28 @@
+name: geval-bcard-transition
+description: "G-Eval: bcard__transition__narrative 过渡叙事"
+mode: unit
+tags: [langfuse, geval, bcard, narrative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__transition__narrative"
+    variables:
+      language: "zh"
+      resultType: "失败"
+      hp: "5"
+      maxHp: "10"
+      recentMemory: "尝试说服守卫但被识破了身份"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估过渡叙事的输出质量：
+      1. 长度控制：是否在 50-100 字范围内
+      2. 失败基调：是否根据失败结果调整了叙述基调（挫败、紧张）
+      3. 状态影响：HP 50% 的状态是否在角色描述中有所体现
+      4. 悬念感：是否保持了悬念，让玩家想继续
+      5. 纯文本：是否直接输出纯文本，无 JSON 或其他格式
+    pass_threshold: 3

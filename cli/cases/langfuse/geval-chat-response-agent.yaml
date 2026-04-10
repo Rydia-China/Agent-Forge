@@ -1,0 +1,30 @@
+name: geval-chat-response-agent
+description: "G-Eval: chat__response__agent 完整聊天响应"
+mode: unit
+tags: [langfuse, geval, chat, character, complex]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "chat__response__agent"
+    variables:
+      language: "zh"
+      character_name: "陈雪"
+      player_name: "李明"
+      relationship: "同事兼朋友，有暧昧但未捅破"
+      chatGoal: "说服陈雪一起去危险的地下赌场调查"
+      chatHistory: "李明：我有个计划。\n陈雪：什么计划？"
+      playerMessage: "我想今晚去金龙赌场看看，你能帮我吗？"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估完整聊天响应的输出质量：
+      1. 不做AI：是否完全以陈雪的身份回应，不暴露AI身份
+      2. 人格完整性：善良但固执、有正义感的性格是否体现
+      3. 对话目标意识：是否围绕"说服一起调查"的情境展开
+      4. 情感层次：暧昧关系是否在关心/担忧中自然流露
+      5. 语言风格：是否用中文自然对话，不刻板
+    pass_threshold: 3

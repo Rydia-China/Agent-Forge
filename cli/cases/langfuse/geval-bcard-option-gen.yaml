@@ -1,0 +1,32 @@
+name: geval-bcard-option-gen
+description: "G-Eval: bcard__option__generator 选项数值平衡裁判"
+mode: unit
+tags: [langfuse, geval, bcard, mechanics]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__option__generator"
+    variables:
+      language: "zh"
+      nodeContent: |
+        抉择一：面对证据
+        选项A：交给警方（INT检定 DC12）
+        选项B：发给媒体（CHA检定 DC15）
+        选项C：私下谈判（WIL检定 DC18）
+      playerLevel: "5"
+      pastInfluences: "之前选择了和平路线，CHA+1"
+      currentRound: "2"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估选项数值生成的输出质量：
+      1. 数值计算正确：DC 值是否根据玩家等级和过往影响进行了合理调整
+      2. 属性适配：INT/CHA/WIL 属性是否与选项行为逻辑匹配
+      3. 过往影响应用：CHA+1 buff 是否在相关选项中体现
+      4. JSON 格式：输出是否为规范的选项面板 JSON
+      5. 纯数值不涉及剧情：是否只做数值计算，不包含剧情描写
+    pass_threshold: 3

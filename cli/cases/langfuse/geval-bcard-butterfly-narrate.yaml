@@ -1,0 +1,26 @@
+name: geval-bcard-butterfly-narrate
+description: "G-Eval: bcard__butterfly__narrate 蝴蝶效应箴言"
+mode: unit
+tags: [langfuse, geval, bcard, narrative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__butterfly__narrate"
+    variables:
+      description: "帮助了一个陌生人，后来发现他是关键证人"
+      type: "good"
+      nodeIndex: "3"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估蝴蝶效应箴言的输出质量：
+      1. narrativeText 简洁性：是否为 6-10 字的寓言箴言
+      2. 隐喻质量：是否使用隐喻而非直接复述原始描述
+      3. 正面基调：type 为 good 时箴言是否传达正面寓意
+      4. chapterLabel 格式：是否为"第3章的回响"格式
+      5. 文学性：箴言是否有古老谚语或寓言标题的质感
+    pass_threshold: 3

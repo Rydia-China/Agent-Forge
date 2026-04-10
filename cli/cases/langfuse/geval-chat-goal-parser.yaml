@@ -1,0 +1,31 @@
+name: geval-chat-goal-parser
+description: "G-Eval: chat__goal__parser 对话目标解析"
+mode: unit
+tags: [langfuse, geval, chat, parser]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "chat__goal__parser"
+    variables:
+      language: "zh"
+      nodeContent: |
+        第 3 集：命运的十字路口
+        出场人物：李明、陈雪、张伟
+        抉择一：
+        选项A：请求陈雪帮忙调查（CHA检定）
+        选项B：独自前往赌场
+      selectedOption: "请求陈雪帮忙调查"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估对话目标解析的输出质量：
+      1. 对话对象识别：是否正确判断对话对象是陈雪
+      2. 目标推断：是否推断出玩家想说服陈雪帮忙调查
+      3. 逻辑推理：推断过程是否基于选项文本和节点内容
+      4. 输出格式：是否包含对话对象和对话目标两个字段
+      5. 语言匹配：输出是否使用中文
+    pass_threshold: 3

@@ -1,0 +1,28 @@
+name: geval-bcard-tts-emotion
+description: "G-Eval: bcard__tts__emotion_parser TTS情感解析"
+mode: unit
+tags: [langfuse, geval, bcard, tts]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__tts__emotion_parser"
+    variables:
+      narrativeText: |
+        我推开门，走进昏暗的房间。
+        **陈雪："你终于来了。"**她的声音带着一丝颤抖。
+        我注意到她眼角的泪痕。"发生了什么？"
+        **陈雪："他们...他们找到我了。"**
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估 TTS 情感解析的输出质量：
+      1. 角色提取：是否正确识别了叙述者（我）和陈雪两个角色
+      2. 情感标注精准：颤抖的声音→恐惧/紧张，泪痕→悲伤/焦虑
+      3. Instruction 启发性：控制指令是否具体到语速、语调、停顿
+      4. JSON 格式：输出是否为合法 JSON 数组
+      5. 输入解析规则：**人物：内容** 标记是否被正确解析
+    pass_threshold: 3

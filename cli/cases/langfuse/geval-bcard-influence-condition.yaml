@@ -1,0 +1,28 @@
+name: geval-bcard-influence-condition
+description: "G-Eval: bcard__influence__condition 影响条件判断"
+mode: unit
+tags: [langfuse, geval, bcard, logic]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__influence__condition"
+    variables:
+      language: "zh"
+      conditionPrompt: "玩家曾经帮助过陈雪"
+      influencesList: |
+        [{"description": "在第2集帮助陈雪逃脱了追踪者", "type": "good"},
+         {"description": "在第3集拒绝了警方的合作邀请", "type": "bad"}]
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估影响条件判断的输出质量：
+      1. 匹配准确：是否正确判断"帮助陈雪逃脱"匹配"帮助过陈雪"条件
+      2. JSON 格式：是否输出 {"matched": true, "matchedInfluence": "..."} 格式
+      3. 匹配描述：matchedInfluence 是否准确引用了匹配的影响
+      4. 逻辑清晰：判断过程是否合理，不是随意匹配
+      5. 单一匹配：是否只返回一个最相关的匹配结果
+    pass_threshold: 3

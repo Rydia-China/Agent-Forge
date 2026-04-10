@@ -1,0 +1,34 @@
+name: geval-ep-video-clip-planner
+description: "G-Eval: ep__video_clip_planner 视频分镜规划师"
+mode: unit
+tags: [langfuse, geval, prompt-gen, video, planner]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "ep__video_clip_planner"
+    variables:
+      script_content: |
+        pre_choice:
+          李明走进昏暗的地下室，空气中弥漫着潮湿和铁锈的味道。
+          他打开手电筒，光束扫过满是灰尘的架子。
+          角落里传来金属碰撞的声音。
+        outcome_1:
+          reaction_id: "investigate"
+          text: 李明壮着胆子走向声源，发现是一只被困在铁笼里的猫。
+        outcome_2:
+          reaction_id: "flee"
+          text: 李明转身就跑，冲上楼梯，再也不敢回头。
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估视频分镜规划师的输出质量：
+      1. Clip 时长规范：每个 clip 是否为 15 秒（最后一个允许 5-15 秒）
+      2. Segment 结构：是否将 pre_choice 和每个 outcome 作为独立段
+      3. 视觉连续性：同一段内的 clips 之间是否有视觉衔接描述
+      4. 内容覆盖：剧本中的关键场景（地下室、手电筒、猫/逃跑）是否被覆盖
+      5. 信息密度：clip 数量是否合理，节奏是否紧凑不拖沓
+    pass_threshold: 3

@@ -1,0 +1,28 @@
+name: geval-bcard-item-name-reveal
+description: "G-Eval: bcard__item_name__reveal 单个道具命名"
+mode: unit
+tags: [langfuse, geval, bcard, creative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__item_name__reveal"
+    variables:
+      currentNodeContent: "夜幕降临，李明在雨中找到了一把旧钥匙。"
+      nextNodeContent: "钥匙打开了地下室的铁门。"
+      itemInfo: |
+        {"type": "key_item", "rarity": "epic", "description": "一把锈迹斑斑的老钥匙"}
+      language: "zh"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估单个道具命名的输出质量：
+      1. 独特性：名字是否独一无二，有创意
+      2. 画面感：4-12 字，是否有画面感
+      3. 剧情融合：是否从雨夜、钥匙、地下室等元素中取材
+      4. 稀有度匹配：epic 级别的名字是否有足够的分量感
+      5. 避免套路：是否避免了"神秘钥匙"这类平庸命名
+    pass_threshold: 3

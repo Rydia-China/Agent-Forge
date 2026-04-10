@@ -1,0 +1,28 @@
+name: geval-remix-dc-checker
+description: "G-Eval: remix__dc__checker D20检定裁判"
+mode: unit
+tags: [langfuse, geval, remix, mechanics]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "remix__dc__checker"
+    variables:
+      originalOptions: |
+        A: 拆开信封阅读（INT DC12）
+        B: 和陈雪谈谈（CHA DC10）
+      sceneExcerpt: "雨夜，公寓楼下，李明手持遗书"
+      userText: "把信塞进陈雪的包里然后假装什么都没发生"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估 D20 检定裁判的输出质量：
+      1. needsCheck 判断：偷偷塞信是否需要检定（应该需要）
+      2. 属性选择：是否选择了合理的属性（可能是 CHA 或 INT）
+      3. DC 合理性：相比原选项 DC10-12，骚操作的 DC 是否适当提高
+      4. 非法行为识别：如果行为超出世界观，是否标记 dc=999
+      5. JSON 格式：输出是否包含 needsCheck、attribute、dc 字段
+    pass_threshold: 3

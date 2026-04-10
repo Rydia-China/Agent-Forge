@@ -1,0 +1,37 @@
+name: geval-node-full-parser
+description: "G-Eval: admin__node__full_parser 完整节点解析器"
+mode: unit
+tags: [langfuse, geval, parser, admin]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "admin__node__full_parser"
+    variables:
+      nodeMarkdown: |
+        # 第 1 集：觉醒
+
+        ## 📖 正文
+        清晨的阳光透过窗帘缝隙照在李明脸上。闹钟响了第三遍。
+        手机上有三条未读消息，全部来自未知号码："你准备好了吗？"
+
+        ## 🎭 出场人物
+        - 李明：25岁程序员
+
+        ## 🎯 玩家抉择时刻
+        ### 抉择一：回应消息
+        - 选项A：回复询问身份（INT DC12）
+        - 选项B：删除消息（无检定）
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估完整节点解析器的输出质量：
+      1. title 提取：是否正确提取节点标题
+      2. preChoiceContent 完整性：正文内容是否完整保留，不截断不缩略
+      3. decisions 结构：抉择信息是否结构化提取，包含选项文本和检定信息
+      4. 人物信息：出场人物是否被正确识别
+      5. JSON 合法性：输出 JSON 是否可解析，字段完整
+    pass_threshold: 3

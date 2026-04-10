@@ -1,0 +1,35 @@
+name: geval-bcard-push
+description: "G-Eval: bcard__push__narrative 剧情推进引擎"
+mode: unit
+tags: [langfuse, geval, bcard, narrative, complex]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__push__narrative"
+    variables:
+      language: "zh"
+      lastChoice: "拆开信封"
+      lastResult: "成功"
+      nodeContent: |
+        第 4 集：深渊凝视
+        信中揭示了父亲曾是地下赌场的合伙人，最终因想退出而被灭口。
+        现在，同样的人盯上了李明。
+      historyMemory: "李明知道了U盘的来源，获得了陈雪的信任"
+      currentProgress: "第4集，共8集"
+      playerLevel: "4"
+      hp: "7"
+      maxHp: "10"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估剧情推进引擎的输出质量：
+      1. 强制推进：剧情是否在情节/时间/认知层面产生了不可逆进展，无循环复述
+      2. 第一人称盲视：是否基于"我"的即时感官，无上帝视角
+      3. 逻辑刚性：是否遵循了节点设定（父亲是赌场合伙人、被灭口）
+      4. 冲突推向高点：是否在新的抉择前戛然而止
+      5. 历史记忆整合：之前的信任关系和U盘线索是否自然融入
+    pass_threshold: 3

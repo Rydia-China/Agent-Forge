@@ -1,0 +1,28 @@
+name: geval-remix-branch-decision
+description: "G-Eval: remix__branch__decision 支线类型判定"
+mode: unit
+tags: [langfuse, geval, remix, logic]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "remix__branch__decision"
+    variables:
+      language: "zh"
+      remixContent: "李明偷偷把遗书塞进了陈雪的包里"
+      futureOutline: "陈雪发现遗书后震惊，开始独自调查李明父亲的死因"
+      playerPrompt: "把信塞进陈雪的包里"
+      originalNodeIndex: "3"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估支线类型判定的输出质量：
+      1. 类型判定合理：是选择"收束回主线"还是"平行世界"，判断是否合理
+      2. 判定逻辑：是否提供了充分的理由说明为何选择该类型
+      3. 兼容性分析：是否分析了支线与主线的兼容路径
+      4. JSON 格式：输出是否为规范格式
+      5. 语言匹配：是否使用中文
+    pass_threshold: 3

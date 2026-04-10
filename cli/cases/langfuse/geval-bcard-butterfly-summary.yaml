@@ -1,0 +1,31 @@
+name: geval-bcard-butterfly-summary
+description: "G-Eval: bcard__butterfly__summary 蝴蝶效应日记"
+mode: unit
+tags: [langfuse, geval, bcard, narrative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__butterfly__summary"
+    variables:
+      characterName: "李明"
+      characterProfile: "25岁程序员，性格内向但有正义感，遇事犹豫但最终会做正确的选择"
+      influences: |
+        1. 帮助陈雪逃脱（正面）
+        2. 被守卫发现身份（负面）
+        3. 找到了父亲的日记（正面）
+      goodCount: "2"
+      badCount: "1"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估蝴蝶效应日记的输出质量：
+      1. 第一人称日记：是否以李明的视角写日记
+      2. 具体事件：是否提到了具体经历（帮助陈雪、被发现、找到日记）
+      3. 性格一致：是否符合内向但有正义感的性格特点
+      4. 长度合理：是否为 3-5 句话
+      5. 情感真实：是否有真实的感受表达，不是干巴巴的总结
+    pass_threshold: 3

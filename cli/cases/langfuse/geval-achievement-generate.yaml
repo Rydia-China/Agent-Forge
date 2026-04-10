@@ -1,0 +1,35 @@
+name: geval-achievement-generate
+description: "G-Eval: admin__achievement__generate 成就设计"
+mode: unit
+tags: [langfuse, geval, admin, creative]
+tier: capability
+runs: 3
+
+input:
+  langfuse:
+    name: "admin__achievement__generate"
+    variables:
+      novelTitle: "暗夜追踪"
+      totalEpisodes: "8"
+      episodeStructure: |
+        第1集：初遇（捡到U盘）
+        第2集：线索（找到陈雪）
+        第3集：十字路口（父亲遗书）
+        第4集：深渊（真相浮出）
+        第5集-8集：追查与对决
+      novelContent: |
+        李明是程序员，在地铁捡到U盘。U盘指向地下赌场。
+        他找到记者陈雪联手调查。父亲原是赌场合伙人被灭口。
+        最终对决中，玩家的选择决定结局。
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估成就设计的输出质量：
+      1. 成就类型正确：是否为 Type 2 预置故事成就
+      2. 覆盖叙事弧：是否覆盖了故事的关键转折点
+      3. 解锁条件明确：每个成就的解锁条件是否清晰可判断
+      4. 名称创意：成就名称是否有趣且有叙事感
+      5. 数量合理：成就数量是否适中（不太多不太少）
+    pass_threshold: 3

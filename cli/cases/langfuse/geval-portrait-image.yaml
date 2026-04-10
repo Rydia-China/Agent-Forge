@@ -1,0 +1,25 @@
+name: geval-portrait-image
+description: "G-Eval: common__portrait__image 模板编译质量评估"
+mode: unit
+tags: [langfuse, geval, image, portrait]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "common__portrait__image"
+    variables:
+      stylePrompt: "anime style, high quality, detailed illustration, portrait orientation 9:16 aspect ratio, studio lighting, vivid colors"
+      demographics: "a young woman in her early 20s with long black hair and blue eyes, wearing a red traditional Chinese dress (qipao), elegant standing pose, confident smile"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估 common__portrait__image 模板编译后作为图片生成 prompt 的质量：
+      1. 变量替换完整性：stylePrompt 和 demographics 内容是否完整出现在输出中，无残留 {{}} 标记
+      2. Prompt 连贯性：编译结果是否自然连贯，适合直接送入图片生成模型（如 Flux/SDXL）
+      3. 竖屏构图：是否包含 portrait/vertical/9:16 相关描述，确保竖屏输出
+      4. 角色特征保留：原始角色描述（黑长发、蓝眼、旗袍）是否完整保留
+      5. 风格指定明确性：anime style、quality、lighting 等风格关键词是否清晰
+    pass_threshold: 3

@@ -1,0 +1,28 @@
+name: geval-remix-broadcast-outline
+description: "G-Eval: remix__broadcast__outline 支线广播预告"
+mode: unit
+tags: [langfuse, geval, remix, narrative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "remix__broadcast__outline"
+    variables:
+      language: "zh"
+      nodeName: "命运的十字路口"
+      playerPrompt: "把信塞进陈雪的包里"
+      remixContent: "李明偷偷把遗书塞进陈雪包里，她毫无察觉地离开"
+      branchTypeDescription: "收束型支线，预计3个节点后回归主线"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估支线广播预告的输出质量：
+      1. 长度控制：是否在 150-200 字范围
+      2. 悬疑吸引力：是否使用悬疑感的语气吸引其他玩家
+      3. 关键转折点：是否点出了 2-3 个引人好奇的转折
+      4. 不剧透但有暗示：是否避免了过多剧透
+      5. 语言风格：是否适合作为群组广播消息
+    pass_threshold: 3

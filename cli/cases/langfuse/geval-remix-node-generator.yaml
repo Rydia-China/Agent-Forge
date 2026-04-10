@@ -1,0 +1,36 @@
+name: geval-remix-node-generator
+description: "G-Eval: remix__node__generator Remix节点生成"
+mode: unit
+tags: [langfuse, geval, remix, generator]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "remix__node__generator"
+    variables:
+      language: "zh"
+      playerPrompt: "把信塞进陈雪的包里"
+      nodeName: "命运的十字路口"
+      nodeTypeLabel: "抉择节点"
+      narrativeHistory: "李明找到了U盘，联手陈雪调查"
+      combat: "3"
+      intelligence: "5"
+      charisma: "4"
+      will: "3"
+      hp: "8"
+      maxHp: "10"
+      pastInfluences: "帮助过陈雪，获得信任"
+      originalNodeType: "decision"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估 Remix 节点生成的输出质量：
+      1. 骚操作融入：玩家的"塞信"行为是否成为剧情转折点
+      2. JSON 完整性：输出是否为完整的游戏节点 JSON
+      3. 世界观一致：新剧情是否与现有设定一致
+      4. 数值合理：检定 DC 是否根据角色属性合理设置
+      5. 叙事质量：节点描述是否有画面感和紧张感
+    pass_threshold: 3

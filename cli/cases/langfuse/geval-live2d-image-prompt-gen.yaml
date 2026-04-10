@@ -1,0 +1,28 @@
+name: geval-live2d-image-prompt-gen
+description: "G-Eval: live2d__gen_scene__image_prompt 图片提示词生成器"
+mode: unit
+tags: [langfuse, geval, prompt-gen, live2d]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "live2d__gen_scene__image_prompt"
+    variables:
+      sceneInfo: "场景：大学宿舍房间，暖黄色灯光，书桌上堆满书本和零食，窗外是夜晚的校园"
+      nodeContent: |
+        选项一：偷偷打开室友的日记本
+        选项二：关灯准备睡觉
+        选项三：给暗恋的人发消息
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估 live2d 图片提示词生成器的输出质量：
+      1. 3D 视锥逻辑：是否根据景别过滤了画面元素，遵循物理透视规则
+      2. 选项覆盖：是否为每个选项（日记本、关灯、发消息）生成了独立的底图提示词
+      3. 场景锚定：是否以场景空镜（宿舍房间）为绝对坐标系
+      4. 提示词质量：生成的提示词是否具体、有画面感、适合 AI 图片生成
+      5. 格式规范：输出是否结构清晰，每个选项的提示词独立可用
+    pass_threshold: 3

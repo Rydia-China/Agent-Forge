@@ -1,0 +1,41 @@
+name: geval-md2json
+description: "G-Eval: common__md2json 剧情文档解析器"
+mode: unit
+tags: [langfuse, geval, parser, admin]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "common__md2json"
+    variables:
+      nodeContent: |
+        # 第 3 集：命运的十字路口
+
+        ## 二、前情提要
+        李明在地铁上捡到了一个U盘，里面是关于地下赌场的调查报告。
+
+        ## 三、出场人物
+        - **李明**：25岁程序员。发型发色：黑色短发。瞳色：深棕色。服装：深灰色风衣，黑色运动鞋。特殊特征：左手腕有一道旧伤疤。
+        - **陈雪**：23岁调查记者。发型发色：黑色长发扎马尾。瞳色：黑色。服装：浅蓝色外套，牛仔裤。特殊特征：右耳有两个耳洞。
+
+        ## 九、玩家抉择时刻
+        ### 抉择一：面对父亲的信
+        - 选项A：立刻拆开信封阅读
+        - 选项B：把信收起来，先和陈雪谈谈
+        - 选项C：将信撕碎扔进雨中
+
+assertions:
+  reply:
+    - type: not_contains
+      values: ["无法", "cannot", "sorry"]
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估 Markdown 文档解析器的输出质量：
+      1. 人物提取准确性：是否只从「三、出场人物」提取了李明和陈雪，不多不少
+      2. 人物名格式：人物名是否简洁（"李明"而非"李明（主角）"）
+      3. 外貌描述拼接：发型发色、瞳色、服装、特殊特征是否拼接成完整描述
+      4. 选项提取：是否从「九、玩家抉择时刻」提取了 3 个选项
+      5. JSON 格式：输出是否为合法 JSON，结构清晰
+    pass_threshold: 3

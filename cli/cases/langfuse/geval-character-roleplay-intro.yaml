@@ -1,0 +1,30 @@
+name: geval-character-roleplay-intro
+description: "G-Eval: admin__character__roleplay_intro 入戏引导词"
+mode: unit
+tags: [langfuse, geval, admin, character, narrative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "admin__character__roleplay_intro"
+    variables:
+      novelTitle: "暗夜追踪"
+      scriptText: |
+        第一集：初遇
+        李明在地铁上捡到一个U盘。U盘里是关于地下赌场的调查报告。
+        第二集：线索
+        李明找到了作者陈雪，两人决定联手调查。
+      characterHint: "李明，一名普通程序员"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估入戏引导词的输出质量：
+      1. 主角识别：是否正确识别李明为玩家扮演的主角
+      2. 引导词质量：2-4 句话是否简洁有力，包含身份、处境、暗示
+      3. 不剧透：是否避免了具体剧情的剧透
+      4. 选择暗示：是否暗示玩家的选择将影响故事走向
+      5. 文风匹配：引导词的文风是否匹配剧本基调（现代悬疑）
+    pass_threshold: 3

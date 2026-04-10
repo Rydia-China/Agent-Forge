@@ -1,0 +1,28 @@
+name: geval-remix-transition
+description: "G-Eval: remix__transition__narrative Remix过渡叙事"
+mode: unit
+tags: [langfuse, geval, remix, narrative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "remix__transition__narrative"
+    variables:
+      language: "zh"
+      playerPrompt: "把信塞进陈雪的包里"
+      resultType: "成功"
+      hp: "8"
+      nextNodeName: "发现遗书"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估 Remix 过渡叙事的输出质量：
+      1. 长度控制：是否在 100-150 字范围
+      2. 第一人称：是否以"我"的视角叙述
+      3. 结果基调：成功时是否有轻松/得意的基调
+      4. 自然过渡：是否能自然衔接到下一节点"发现遗书"
+      5. 悬念保持：是否保持悬念不剧透
+    pass_threshold: 3

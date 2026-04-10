@@ -1,0 +1,27 @@
+name: geval-remix-branch-nodes
+description: "G-Eval: remix__branch__nodes 支线节点规划"
+mode: unit
+tags: [langfuse, geval, remix, planner]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "remix__branch__nodes"
+    variables:
+      language: "zh"
+      remixContent: "李明偷偷把遗书塞进了陈雪的包里"
+      futureOutline: "陈雪发现遗书→独自调查→发现真相→与李明对质"
+      startNodeIndex: "4"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估支线节点规划的输出质量：
+      1. 节点数量合理：是否在 3-8 个节点范围内
+      2. 逻辑连贯：节点之间是否有清晰的因果关系
+      3. 节奏紧凑：节点安排是否紧凑不拖沓
+      4. JSON 格式：是否为 JSON 数组，每个节点包含 nodeIndex 和描述
+      5. 覆盖大纲：大纲中的关键转折是否被节点覆盖
+    pass_threshold: 3

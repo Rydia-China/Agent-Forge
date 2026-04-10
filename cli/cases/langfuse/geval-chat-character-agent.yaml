@@ -1,0 +1,31 @@
+name: geval-chat-character-agent
+description: "G-Eval: chat__character__agent 聊天角色代理"
+mode: unit
+tags: [langfuse, geval, chat, character]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "chat__character__agent"
+    variables:
+      characterName: "陈雪"
+      playerName: "玩家"
+      characterCard: "善良直接的调查记者，喜欢追查真相"
+      memoriesText: "与玩家有过一次危险的逃亡经历"
+      chatHistoryText: "玩家：嗨\n陈雪：嗨，怎么了？"
+      favorabilityLevel: "友好"
+      currentAttitude: "轻松愉快"
+      playerMessage: "最近有什么好玩的事吗？"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估聊天角色代理的输出质量：
+      1. 角色身份：是否以陈雪的身份回复，保持性格一致
+      2. 好感度匹配：友好态度是否在用词和语气中体现
+      3. 对话自然：是否像真实对话，不是AI式生硬回答
+      4. 长度合适：回复是否简短自然（聊天而非长篇大论）
+      5. 记忆关联：共同经历是否自然融入（不强行提及）
+    pass_threshold: 3

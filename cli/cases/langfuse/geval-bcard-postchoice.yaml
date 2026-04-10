@@ -1,0 +1,33 @@
+name: geval-bcard-postchoice
+description: "G-Eval: bcard__postchoice__narrative 选择后果叙事"
+mode: unit
+tags: [langfuse, geval, bcard, narrative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__postchoice__narrative"
+    variables:
+      language: "zh"
+      nodeName: "命运的十字路口"
+      optionText: "拆开信封阅读父亲的遗书"
+      checkLabel: "INT"
+      resultLabel: "成功"
+      hp: "8"
+      maxHp: "10"
+      taskInstruction: "生成选择后果叙事"
+      sourceTitle: ""
+      sourceContent: ""
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估选择后果叙事的输出质量：
+      1. 因果显性化：玩家选择（拆信）的后果是否清晰可感
+      2. 第一人称：是否保持"我"的视角，无上帝视角
+      3. 检定结果反映：INT检定成功是否在叙事中体现（如理解了信的含义）
+      4. 情感冲击：成功时是否有胜利感或情感满足
+      5. 叙事质量：文字是否有画面感，不干巴巴
+    pass_threshold: 3

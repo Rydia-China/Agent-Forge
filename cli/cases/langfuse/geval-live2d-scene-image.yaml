@@ -1,0 +1,26 @@
+name: geval-live2d-scene-image
+description: "G-Eval: live2d__gen_scene__image 场景插图模板评估"
+mode: unit
+tags: [langfuse, geval, image, live2d]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "live2d__gen_scene__image"
+    variables:
+      style: "anime style, soft lighting, live2d aesthetic"
+      optionPrompt: "女主角站在雨中的十字路口，犹豫不决"
+      imageDescription: "背景是模糊的城市夜景，路灯光晕映照在湿润的地面上"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估 live2d 场景插图模板编译质量：
+      1. 三要素完整：style、optionPrompt、imageDescription 三个变量是否都正确替换
+      2. 画风指定：live2d aesthetic 是否清晰
+      3. 人物描述：女主角的动作和位置是否清楚
+      4. 背景融合：城市夜景和路灯光晕等环境元素是否自然融入
+      5. 整体可用性：编译后 prompt 是否可直接用于图片生成
+    pass_threshold: 3

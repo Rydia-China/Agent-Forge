@@ -1,0 +1,32 @@
+name: geval-bcard-summary
+description: "G-Eval: bcard__summary__narrative 结局裁决叙事"
+mode: unit
+tags: [langfuse, geval, bcard, narrative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__summary__narrative"
+    variables:
+      language: "zh"
+      lastChoice: "选择了独自面对威胁"
+      lastResult: "失败"
+      nodeContent: |
+        第 8 集（最终集）：黎明之前
+        冲突即将收束，所有线索指向最终对决。
+      historyPerformance: "总共8次抉择，5次成功3次失败，偏向和平路线"
+      hp: "3"
+      maxHp: "10"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估结局裁决叙事的输出质量：
+      1. 结局收束：是否完成了对核心冲突的解决，有尘埃落定感
+      2. 综合评价：是否基于整体表现（5胜3败）给出合理的结局走向
+      3. 第一人称：是否保持"我"的视角，结局感悟源自主角身心状态
+      4. HP 反映：低 HP（3/10）是否在叙事中体现角色的疲惫/受伤
+      5. 悬念留白：是否引出未来的可能性或悬念
+    pass_threshold: 3

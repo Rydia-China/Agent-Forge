@@ -1,0 +1,37 @@
+name: geval-bcard-decision
+description: "G-Eval: bcard__decision__narrative 抉择叙事引擎"
+mode: unit
+tags: [langfuse, geval, bcard, narrative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "bcard__decision__narrative"
+    variables:
+      language: "zh"
+      lastRoundResult: "上一轮选择了调查线索，检定成功"
+      decisionTitle: "面对威胁"
+      decisionIndex: "1"
+      options: |
+        A: 报警求助（CHA DC12）
+        B: 独自面对（WIL DC16）
+        C: 寻求陈雪帮助（INT DC10）
+      previousChoices: "选择了和平路线"
+      pastInfluences: "获得了陈雪信任+1"
+      playerLevel: "4"
+      hp: "7"
+      maxHp: "10"
+      memoryContext: "李明已经知道父亲被灭口的真相"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估抉择叙事引擎的输出质量：
+      1. 剧情推进：是否将剧情推向冲突最高点
+      2. 抉择前戛然而止：是否在新的抉择时刻前停下
+      3. 因果推演：是否利用了历史记忆（父亲真相）进行因果推演
+      4. 第一人称：是否保持"我"的视角
+      5. 悬念与张力：是否营造了足够的紧张感让玩家做出选择
+    pass_threshold: 3

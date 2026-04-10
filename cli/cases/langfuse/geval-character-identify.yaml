@@ -1,0 +1,31 @@
+name: geval-character-identify
+description: "G-Eval: admin__character__identify 角色识别"
+mode: unit
+tags: [langfuse, geval, admin, character]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "admin__character__identify"
+    variables:
+      novelTitle: "暗夜追踪"
+      novelContent: |
+        我睁开眼，头痛欲裂。手机屏幕上显示着来自陈雪的消息。
+        "李明，我找到了新线索。张伟教授答应帮我们分析U盘里的数据。"
+        我坐起身，窗外的城市在雨中模糊不清。三天了，自从捡到那个U盘。
+        
+        下午，我在咖啡馆见到了陈雪和张伟。张伟是计算机系的退休教授，满头白发。
+        "这些数据指向了王家集团，"张伟推了推眼镜，"王芳是他们的CEO。"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估角色识别的输出质量：
+      1. 主角识别：李明是否被正确识别为主角（第一人称叙述者）
+      2. NPC 数量：是否识别出 3-5 名重要 NPC（陈雪、张伟、王芳）
+      3. 角色信息：每个角色是否包含 name、aliases、role 字段
+      4. 关系描述：是否准确描述角色与主角的关系
+      5. JSON 格式：输出是否为合法 JSON，结构完整
+    pass_threshold: 3

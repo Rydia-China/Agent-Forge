@@ -1,0 +1,32 @@
+name: geval-remix-fill-node
+description: "G-Eval: remix__fill__node 支线节点内容填充"
+mode: unit
+tags: [langfuse, geval, remix, generator]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "remix__fill__node"
+    variables:
+      language: "zh"
+      branchOutline: "陈雪发现遗书→调查真相→与李明对质"
+      nodeIndex: "1"
+      nodeTitle: "发现遗书"
+      nodeTypeDescription: "剧情推进节点"
+      playerPrompt: "把信塞进陈雪的包里"
+      previousNodeContent: "李明偷偷把遗书塞进了陈雪的包里"
+      decisionRule: "标准抉择模式，2-3个选项"
+      exampleNode: ""
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估支线节点内容填充的输出质量：
+      1. B-Card 格式：是否生成了完整的游戏节点内容
+      2. 剧情连贯：是否与前置节点（塞信）自然衔接
+      3. 抉择设计：是否包含 2-3 个有意义的玩家选项
+      4. 叙事质量：节点描述是否有画面感
+      5. 大纲对齐：内容是否符合支线大纲的"发现遗书"节点
+    pass_threshold: 3

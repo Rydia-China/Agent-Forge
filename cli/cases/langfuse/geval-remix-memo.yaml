@@ -1,0 +1,29 @@
+name: geval-remix-memo
+description: "G-Eval: remix_pipeline__memo 剧情预览"
+mode: unit
+tags: [langfuse, geval, remix, narrative]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "remix_pipeline__memo"
+    variables:
+      episodeTitle: "命运的十字路口"
+      storyRecapBlock: |
+        ## 故事回顾
+        李明在地铁上捡到了U盘，找到了记者陈雪，两人决定联手调查。
+      preChoiceScriptExcerpt: "李明站在公寓楼下，手中攥着父亲的遗书。雨越下越大。"
+      userText: "把信塞进陈雪的包里然后假装什么都没发生"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估剧情预览的输出质量：
+      1. 长度控制：是否在 120 字以内
+      2. 小说叙事语气：是否有画面感和代入感，非干巴巴的摘要
+      3. 场景烘托：是否有场景氛围描写（雨夜、紧张感）
+      4. 骚操作融合：是否具体描述了玩家的骚操作（塞信到包里）
+      5. 悬念收尾：是否以悬念句或反问句收尾制造期待
+    pass_threshold: 3

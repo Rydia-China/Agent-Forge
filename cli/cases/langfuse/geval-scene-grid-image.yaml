@@ -1,0 +1,26 @@
+name: geval-scene-grid-image
+description: "G-Eval: common__gen_scene_grid__image 宫格场景图评估"
+mode: unit
+tags: [langfuse, geval, image, grid]
+tier: capability
+runs: 5
+
+input:
+  langfuse:
+    name: "common__gen_scene_grid__image"
+    variables:
+      style: "anime style, detailed backgrounds, atmospheric"
+      gridSize: "4"
+      gridSlots: "教室/夕阳走廊/图书馆/屋顶天台"
+
+assertions:
+  semantic:
+    mode: "g-eval"
+    rubric: |
+      评估宫格场景图模板编译质量：
+      1. 变量替换：style、gridSize、gridSlots 是否正确替换
+      2. 宫格格式：是否明确要求 4 宫格布局
+      3. 场景标注：4 个场景名称（教室、走廊、图书馆、天台）是否清晰标注
+      4. 风格统一性：是否要求所有格子风格统一
+      5. 比例规格：每格是否标注为 16:9（这是宫格内部比例，不是整体）
+    pass_threshold: 3
