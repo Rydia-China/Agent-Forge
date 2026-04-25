@@ -57,3 +57,5 @@ agent-forge.tar.gz
 
 # database backups
 /backups/
+logs/
+.agent-worktrees/
