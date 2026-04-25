@@ -1,7 +1,6 @@
 import { registry } from "@/lib/mcp/registry";
 import { initMcp } from "@/lib/mcp/init";
 import { type ToolContext, parseToolName } from "@/lib/mcp/types";
-import { ensureMcpLoaded } from "@/lib/mcp/catalog";
 import { getBuiltinSkill } from "@/lib/skills/builtins";
 import { getSkill } from "@/lib/services/skill-service";
 import { extractRequiredSchemas } from "@/lib/skills/required-schemas";
@@ -165,17 +164,6 @@ async function resolveImplicitMcps(skillNames: string[]): Promise<string[]> {
     }
   }
   return mcps;
-}
-
-/** Ensure the listed MCPs are loaded in the registry (catalog or dynamic). */
-function ensureMcpsLoaded(names: string[]): void {
-  for (const name of names) {
-    try {
-      ensureMcpLoaded(name);
-    } catch (err) {
-      console.warn(`[agent] Failed to load MCP "${name}":`, err);
-    }
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -354,7 +342,6 @@ async function runAgentInnerCore(
     const skillMcps = resolveSkillMcps(config.skills);
     const implicitMcps = await resolveImplicitMcps(config.skills);
     const allMcps = [...skillMcps, ...implicitMcps];
-    await ensureMcpsLoaded(allMcps);
     for (const m of allMcps) activeScope.add(m);
   }
 
@@ -539,7 +526,6 @@ async function runAgentStreamInnerCore(
     const skillMcps = resolveSkillMcps(config.skills);
     const implicitMcps = await resolveImplicitMcps(config.skills);
     const allMcps = [...skillMcps, ...implicitMcps];
-    await ensureMcpsLoaded(allMcps);
     for (const m of allMcps) activeScope.add(m);
   }
 

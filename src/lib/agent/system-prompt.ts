@@ -1,6 +1,5 @@
 import { listSkills } from "@/lib/services/skill-service";
 import { getSkill } from "@/lib/services/skill-service";
-import { listMcpServers } from "@/lib/services/mcp-service";
 import { registry } from "@/lib/mcp/registry";
 import { getCatalogEntries } from "@/lib/mcp/catalog";
 import { appendSchemaDirectiveIfNeeded } from "@/lib/skills/required-schemas";
@@ -105,17 +104,6 @@ async function appendAvailableCatalog(
       name: entry.name,
       tools: tools.map((t) => t.name),
     });
-  }
-
-  // Dynamic MCPs from DB (name + description only, no tool names)
-  try {
-    const dbServers = await listMcpServers();
-    for (const s of dbServers) {
-      if (!s.enabled || activeNames.has(s.name)) continue;
-      available.push({ name: s.name, tools: [] });
-    }
-  } catch {
-    // DB may be unavailable during initial prompt build
   }
 
   if (available.length === 0) return;
