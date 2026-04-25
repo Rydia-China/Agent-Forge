@@ -63,7 +63,7 @@ function asRecord(v: unknown): Record<string, unknown> | null {
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   const remaining = s.length - max;
-  return s.slice(0, max) + `… (+${remaining} chars, use recall for full data)`;
+  return s.slice(0, max) + `… (+${remaining} chars)`;
 }
 
 function generateSummary(
@@ -275,7 +275,7 @@ export function compressMessages(
       if (allEvicted) {
         // Collapse: assistant + all tool results → single summary message
         const summaries = msg.tool_calls.map(
-          (tc) => `${tracker.getSummary(tc.id)} (recall:${tc.id})`,
+          (tc) => tracker.getSummary(tc.id),
         );
         let content = "[memory] " + summaries.join(" | ");
         if (msg.content) content = msg.content + "\n" + content;
@@ -306,7 +306,7 @@ export function compressMessages(
 
       if (evictedTcs.length > 0) {
         const memoryLines = evictedTcs.map(
-          (tc) => `${tracker.getSummary(tc.id)} (recall:${tc.id})`,
+          (tc) => tracker.getSummary(tc.id),
         );
         const memory = "[memory] " + memoryLines.join(" | ");
         let content = msg.content ?? "";
