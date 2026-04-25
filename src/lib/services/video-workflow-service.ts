@@ -22,7 +22,6 @@ import type {
 } from "@/lib/domain/resource-service";
 import "@/lib/domain/resource-cleanup"; // register biz-table cleanup hook
 import { initMcp } from "@/lib/mcp/init";
-import { ensureMcpLoaded } from "@/lib/mcp/catalog";
 import { registry } from "@/lib/mcp/registry";
 
 export type { DomainResource, CategoryGroup, DomainResources };
@@ -209,10 +208,6 @@ export async function runInitWorkflow(
   scriptContent: string,
 ): Promise<InitWorkflowResult> {
   await initMcp();
-  ensureMcpLoaded("biz_db");
-  ensureMcpLoaded("subagent");
-  ensureMcpLoaded("langfuse");
-  ensureMcpLoaded("novel-video-workflow");
 
   const result = await registry.callTool(
     "novel-video-workflow__init_workflow",

@@ -1,12 +1,6 @@
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import { type McpProvider, type ToolContext, qualifyToolName } from "../types";
 import { registry } from "../registry";
-<<<<<<< HEAD
-import { isCatalogEntry, loadFromCatalog } from "../catalog";
-=======
-import { ensureMcpLoaded } from "../catalog";
-import * as svc from "@/lib/services/mcp-service";
->>>>>>> agent/cleanup-mcp-loading
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -23,12 +17,12 @@ export const mcpManagerMcp: McpProvider = {
     return [
       {
         name: "list",
-        description: "List all active MCP servers (core, catalog, and dynamic).",
+        description: "List all active MCP servers.",
         inputSchema: { type: "object" as const, properties: { _noargs: { description: "unused placeholder (tool takes no arguments)", type: "string" } }, additionalProperties: false },
       },
       {
         name: "use",
-        description: "Call a tool from an MCP that is not in your current tool list. Auto-loads the MCP on first use; subsequent calls within this session can use the tool directly. Use this for any tool whose prefix is not in your active tool list.",
+        description: "Call a tool from an MCP provider. All providers are already loaded at init.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -58,29 +52,10 @@ export const mcpManagerMcp: McpProvider = {
         const toolArgs = (args.args ?? {}) as Record<string, unknown>;
         if (!provider || !tool) return text("Missing required parameters: provider, tool");
 
-        // Auto-load the MCP if not already registered
-<<<<<<< HEAD
         if (!registry.getProvider(provider)) {
-          try {
-            if (isCatalogEntry(provider)) {
-              loadFromCatalog(provider);
-            } else {
-              return text(`MCP "${provider}" not found in catalog`);
-            }
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return { content: [{ type: "text", text: `Failed to load MCP "${provider}": ${msg}` }], isError: true };
-          }
-=======
-        try {
-          await ensureMcpLoaded(provider);
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return { content: [{ type: "text", text: `Failed to load MCP "${provider}": ${msg}` }], isError: true };
->>>>>>> agent/cleanup-mcp-loading
+          return text(`MCP "${provider}" not found. Use mcp_manager__list to see available providers.`);
         }
 
-        // Dispatch the actual tool call
         return registry.callTool(qualifyToolName(provider, tool), toolArgs, context);
       }
       case "list": {
