@@ -112,24 +112,10 @@ export function loadFromCatalog(name: string): string {
 }
 
 /**
- * Ensure an MCP is loaded (catalog or dynamic).
- * No-op if already registered. Throws on failure.
+ * Ensure a catalog MCP is loaded.
+ * No-op if already registered. Throws if not a catalog entry.
  */
-export async function ensureMcpLoaded(name: string): Promise<void> {
+export function ensureMcpLoaded(name: string): void {
   if (registry.getProvider(name)) return;
-  
-  if (isCatalogEntry(name)) {
-    loadFromCatalog(name);
-    return;
-  }
-  
-  // Dynamic MCP - load from database
-  const { getMcpCode } = await import("@/lib/services/mcp-service");
-  const { sandboxManager } = await import("./sandbox");
-  
-  const code = await getMcpCode(name);
-  if (!code) throw new Error(`MCP "${name}" not found in catalog or database`);
-  
-  const provider = await sandboxManager.load(name, code);
-  registry.replace(provider);
+  loadFromCatalog(name);
 }
