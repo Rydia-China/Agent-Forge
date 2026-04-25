@@ -8,8 +8,7 @@ import {
 
 /**
  * MCP Registry — global singleton.
- * Aggregates tools from all registered McpProviders (static + dynamic)
- * and dispatches tool calls.
+ * Aggregates tools from all registered McpProviders and dispatches tool calls.
  */
 class McpRegistry {
   private providers = new Map<string, McpProvider>();
@@ -40,13 +39,7 @@ class McpRegistry {
     this.providers.delete(name);
   }
 
-  /** Replace (or register) a provider by name. Cannot replace protected providers. */
-  replace(provider: McpProvider): void {
-    if (this.protectedNames.has(provider.name)) {
-      throw new Error(`Cannot replace protected MCP provider "${provider.name}"`);
-    }
-    this.providers.set(provider.name, provider);
-  }
+
 
   getProvider(name: string): McpProvider | undefined {
     return this.providers.get(name);

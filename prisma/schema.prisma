@@ -138,32 +138,7 @@ model ImageGenerationVersion {
   @@index([imageGenId])
 }
 
-/// McpServer — 动态 MCP，JS 代码存储于 DB，运行于 QuickJS WebAssembly 沙盒
-/// 实体表保留身份 + 运行时字段，代码存在 McpServerVersion
-model McpServer {
-  id                String             @id @default(cuid())
-  name              String             @unique
-  enabled           Boolean            @default(true)
-  config            Json?
-  productionVersion Int                @default(1)
-  versions          McpServerVersion[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-}
 
-/// McpServerVersion — 不可变的版本快照
-model McpServerVersion {
-  id          String    @id @default(cuid())
-  mcpServerId String
-  mcpServer   McpServer @relation(fields: [mcpServerId], references: [id], onDelete: Cascade)
-  version     Int
-  description String?
-  code        String
-  createdAt   DateTime  @default(now())
-
-  @@unique([mcpServerId, version])
-  @@index([mcpServerId])
-}
 
 /// BizTableMapping — 逻辑表名到物理表名(UUID)的映射，实现 biz-db 用户隔离
 /// userName="_global_" 表示全局表，其他值为用户私有表
