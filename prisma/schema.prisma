@@ -138,7 +138,16 @@ model ImageGenerationVersion {
   @@index([imageGenId])
 }
 
-
+/// StylePreset — 本地风格提示词预设，替代 Langfuse 风格词获取
+/// 存储纯风格词 + 可选参考图，通过 MCP tools 暴露给 agent
+model StylePreset {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  prompt            String
+  referenceImageUrl String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
 
 /// BizTableMapping — 逻辑表名到物理表名(UUID)的映射，实现 biz-db 用户隔离
 /// userName="_global_" 表示全局表，其他值为用户私有表

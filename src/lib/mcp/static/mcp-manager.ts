@@ -1,7 +1,12 @@
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import { type McpProvider, type ToolContext, qualifyToolName } from "../types";
 import { registry } from "../registry";
+<<<<<<< HEAD
 import { isCatalogEntry, loadFromCatalog } from "../catalog";
+=======
+import { ensureMcpLoaded } from "../catalog";
+import * as svc from "@/lib/services/mcp-service";
+>>>>>>> agent/cleanup-mcp-loading
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -54,6 +59,7 @@ export const mcpManagerMcp: McpProvider = {
         if (!provider || !tool) return text("Missing required parameters: provider, tool");
 
         // Auto-load the MCP if not already registered
+<<<<<<< HEAD
         if (!registry.getProvider(provider)) {
           try {
             if (isCatalogEntry(provider)) {
@@ -65,6 +71,13 @@ export const mcpManagerMcp: McpProvider = {
             const msg = err instanceof Error ? err.message : String(err);
             return { content: [{ type: "text", text: `Failed to load MCP "${provider}": ${msg}` }], isError: true };
           }
+=======
+        try {
+          await ensureMcpLoaded(provider);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { content: [{ type: "text", text: `Failed to load MCP "${provider}": ${msg}` }], isError: true };
+>>>>>>> agent/cleanup-mcp-loading
         }
 
         // Dispatch the actual tool call

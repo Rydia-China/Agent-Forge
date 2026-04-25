@@ -22,10 +22,8 @@ import type {
 } from "@/lib/domain/resource-service";
 import "@/lib/domain/resource-cleanup"; // register biz-table cleanup hook
 import { initMcp } from "@/lib/mcp/init";
-import { loadFromCatalog, isCatalogEntry } from "@/lib/mcp/catalog";
+import { ensureMcpLoaded } from "@/lib/mcp/catalog";
 import { registry } from "@/lib/mcp/registry";
-import { sandboxManager } from "@/lib/mcp/sandbox";
-import * as mcpService from "@/lib/services/mcp-service";
 
 export type { DomainResource, CategoryGroup, DomainResources };
 
@@ -205,40 +203,16 @@ export interface InitWorkflowResult {
   nextStep: string;
 }
 
-/**
- * Load a dynamic MCP by name (from DB → QuickJS sandbox).
- * No-op if already loaded.
- */
-async function ensureDynamicMcp(name: string): Promise<void> {
-  if (registry.getProvider(name)) return;
-  if (isCatalogEntry(name)) {
-    loadFromCatalog(name);
-    return;
-  }
-  const code = await mcpService.getMcpCode(name);
-  if (!code) throw new Error(`MCP "${name}" not found in DB`);
-  const provider = await sandboxManager.load(name, code);
-  registry.replace(provider);
-}
-
-/**
- * Run the novel-video-workflow MCP's init_workflow tool.
- *
- * Loads MCP infrastructure on demand, executes the tool, and stores
- * the result in novel_scripts.init_result.
- *
- * Throws on failure — init is a prerequisite for all downstream steps.
- */
 export async function runInitWorkflow(
   novelId: string,
   scriptDbId: string,
   scriptContent: string,
 ): Promise<InitWorkflowResult> {
   await initMcp();
-  await ensureDynamicMcp("biz_db");
-  await ensureDynamicMcp("subagent");
-  await ensureDynamicMcp("langfuse");
-  await ensureDynamicMcp("novel-video-workflow");
+  await ensureMcpLoaded("biz_db");
+  await ensureMcpLoaded("subagent");
+  await ensureMcpLoaded("langfuse");
+  await ensureMcpLoaded("novel-video-workflow");
 
   const result = await registry.callTool(
     "novel-video-workflow__init_workflow",

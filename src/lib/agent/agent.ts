@@ -1,8 +1,7 @@
 import { registry } from "@/lib/mcp/registry";
 import { initMcp } from "@/lib/mcp/init";
 import { type ToolContext, parseToolName } from "@/lib/mcp/types";
-import { isCatalogEntry, loadFromCatalog } from "@/lib/mcp/catalog";
-import { sandboxManager } from "@/lib/mcp/sandbox";
+import { ensureMcpLoaded } from "@/lib/mcp/catalog";
 import * as mcpService from "@/lib/services/mcp-service";
 import { getBuiltinSkill } from "@/lib/skills/builtins";
 import { getSkill } from "@/lib/services/skill-service";
@@ -132,7 +131,7 @@ export interface AgentConfig {
 /*  Core MCP names — always in scope                                   */
 /* ------------------------------------------------------------------ */
 
-const CORE_MCPS = new Set(["skills", "mcp_manager", "ui", "memory", "sync"]);
+const CORE_MCPS = new Set(["skills", "mcp_manager", "ui", "sync"]);
 
 /* ------------------------------------------------------------------ */
 /*  Skill → MCP resolution + on-demand loading                         */
@@ -172,19 +171,8 @@ async function resolveImplicitMcps(skillNames: string[]): Promise<string[]> {
 /** Ensure the listed MCPs are loaded in the registry (catalog or dynamic). */
 async function ensureMcpsLoaded(names: string[]): Promise<void> {
   for (const name of names) {
-    if (registry.getProvider(name)) continue;
     try {
-      if (isCatalogEntry(name)) {
-        loadFromCatalog(name);
-      } else {
-        const code = await mcpService.getMcpCode(name);
-        if (!code) {
-          console.warn(`[agent] MCP "${name}" has no production code, skipping`);
-          continue;
-        }
-        const provider = await sandboxManager.load(name, code);
-        registry.replace(provider);
-      }
+      await ensureMcpLoaded(name);
     } catch (err) {
       console.warn(`[agent] Failed to load MCP "${name}":`, err);
     }
