@@ -20,6 +20,9 @@ const server = http.createServer((req, res) => {
   });
 
   req.on('end', () => {
+    console.log(`[MCP Proxy] ${req.method} ${req.url}`);
+    console.log(`[MCP Proxy] Headers:`, JSON.stringify(req.headers, null, 2));
+    
     const headers = { ...req.headers };
     delete headers['host'];
     delete headers['connection'];
