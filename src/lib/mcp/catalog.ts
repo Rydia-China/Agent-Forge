@@ -84,38 +84,3 @@ export function getCatalogEntries(): readonly McpCatalogEntry[] {
 export function isCatalogEntry(name: string): boolean {
   return byName.has(name);
 }
-
-/**
- * List catalog entries that are available (env ok) but NOT currently
- * registered in the registry.
- */
-export function listAvailableCatalog(): McpCatalogEntry[] {
-  return CATALOG.filter(
-    (e) => e.available && !registry.getProvider(e.name),
-  );
-}
-
-/**
- * Load a catalog provider into the registry.
- * Returns the provider name, or throws if not found / not available.
- */
-export function loadFromCatalog(name: string): string {
-  const entry = byName.get(name);
-  if (!entry) throw new Error(`"${name}" is not a catalog MCP`);
-  if (!entry.available) {
-    throw new Error(`MCP "${name}" is not available (missing env configuration)`);
-  }
-  if (registry.getProvider(name)) return name; // already loaded
-  registry.register(entry.provider);
-  registry.protect(name); // catalog providers are protected from custom override
-  return name;
-}
-
-/**
- * Ensure a catalog MCP is loaded.
- * No-op if already registered. Throws if not a catalog entry.
- */
-export function ensureMcpLoaded(name: string): void {
-  if (registry.getProvider(name)) return;
-  loadFromCatalog(name);
-}
