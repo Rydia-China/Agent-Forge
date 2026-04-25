@@ -57,3 +57,9 @@ agent-forge.tar.gz
 
 # database backups
 /backups/
+
+# runtime logs
+logs/
+
+# git worktrees (managed by `git worktree`)
+.agent-worktrees/

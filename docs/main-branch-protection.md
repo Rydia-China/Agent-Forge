@@ -2,7 +2,9 @@
 
 ## Overview
 
-The main branch is protected by an automated daemon that runs every minute to detect and revert any unauthorized changes. This ensures all code changes go through the worktree workflow and CI validation.
+The main branch is protected by an automated daemon that runs every minute to revert any **uncommitted (dirty) changes** on main. This forces all development to happen in worktree branches.
+
+> **Strict scope**: the daemon ONLY cleans the working directory on main. It will **never** touch commit history (no `git reset --hard origin/main`, no rewriting commits). A previous version of this script destroyed legitimate merge commits when it tried to "revert unpushed commits" — that behavior has been permanently removed. See the comment block at the top of `scripts/protect-main-branch.sh` for the full post-mortem.
 
 ## Quick Start
 
@@ -39,17 +41,22 @@ You can also control the protection daemon independently:
 
 ### What Gets Reverted
 
-1. **Uncommitted changes** - Any modified, added, or deleted files
-2. **Unpushed commits** - Any commits made directly on main that haven't been pushed to origin
+**Only uncommitted changes** — any modified, added, or deleted files (tracked or untracked, except gitignored paths) in the main workspace are reverted.
+
+### What Is NEVER Touched
+
+- Commit history on main (committed work, including unpushed merge commits)
+- Any worktree branch (`agent/*`) or its working directory
+- Anything when HEAD is not on `main`
+- Files matched by `.gitignore` (e.g. `logs/`, `.env`, build artifacts)
 
 ### How It Works
 
 The protection script (`scripts/protect-main-branch.sh`) performs these checks:
 
-1. Verifies current branch is `main`
-2. Checks for uncommitted changes via `git diff-index`
-3. Checks for unpushed commits by comparing with `origin/main`
-4. If violations found, performs `git reset --hard` to revert
+1. Verifies current branch is `main` (otherwise exits cleanly)
+2. Detects dirty workdir via `git diff-index` and `git ls-files --others --exclude-standard`
+3. If dirty: runs `git reset --hard HEAD` and `git clean -fd` (workdir only, HEAD never moves)
 
 All actions are logged to `.git/main-protection.log`.
 
@@ -120,13 +127,14 @@ git branch -d agent/my-feature
 ### ❌ Wrong: Direct Edit on Main
 
 ```bash
-# This will be reverted within 1 minute
+# Editing files directly on main — the dirty workdir will be wiped within 1 minute
 cd /Users/rydia/Project/mob.ai/git/Agent-Forge
 git checkout main
 # ... edit files ...
-git add -A && git commit -m "feat: my feature"
-# ⚠️ REVERTED BY CRON
+# ⚠️ WORKDIR REVERTED BY DAEMON before you get to commit
 ```
+
+> Note: if you do manage to commit on main before the daemon runs, the **commit will not be reverted** (the daemon never touches history). But that still violates the worktree-only rule — use `git reset --soft HEAD~1` and move the change into a worktree branch.
 
 ## Emergency Override
 
@@ -197,30 +205,28 @@ bash -n scripts/protect-main-branch.sh
 ### Detection Logic
 
 ```bash
-# Uncommitted changes
+# Tracked changes
 git diff-index --quiet HEAD --
 
-# Unpushed commits
-git rev-list origin/main..HEAD
+# Untracked (non-ignored) files
+git ls-files --others --exclude-standard
 ```
 
 ### Revert Actions
 
 ```bash
-# Revert uncommitted changes
+# Revert uncommitted changes (workdir only — HEAD never moves; gitignored paths are preserved)
 git reset --hard HEAD
 git clean -fd
-
-# Revert unpushed commits
-git reset --hard origin/main
 ```
+
+There is **no** code path that resets HEAD to `origin/main` or otherwise rewrites commit history. This is intentional and load-bearing.
 
 ### Logging
 
 All protection actions are logged with timestamps to `.git/main-protection.log`:
 
 ```
-[2026-04-25 20:45:01] ⚠️  UNAUTHORIZED CHANGES DETECTED on main branch
-[2026-04-25 20:45:01] Uncommitted changes found - reverting all modifications
-[2026-04-25 20:45:01] ✅ Main branch restored to last commit
+[2026-04-25 20:45:01] ⚠️  Dirty workdir on main branch — reverting workdir to force worktree workflow
+[2026-04-25 20:45:01] ✅ Main branch workdir restored to HEAD
 ```

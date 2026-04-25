@@ -2,7 +2,29 @@
 set -euo pipefail
 
 # Main Branch Protection Script
-# Runs every minute via cron to detect and revert unauthorized changes to main branch
+#
+# PURPOSE
+#   Force all development to happen in worktree branches by clearing the
+#   working directory of main as soon as someone tries to edit files there.
+#
+# SCOPE — STRICTLY LIMITED
+#   This script ONLY reverts uncommitted (dirty) workdir state on main.
+#   It MUST NEVER touch commit history.
+#
+# WHY (history of past incident, do not regress)
+#   A previous version of this script also did `git reset --hard origin/main`
+#   when it detected "unpushed commits" on main. That logic destroyed legitimate
+#   merge commits (worktree branches merged into local main but not yet pushed),
+#   wiping out an entire night of work in 36 seconds. See commit history around
+#   2026-04-25 and `.git/main-protection.log` for the post-mortem.
+#
+# RULE
+#   - Dirty workdir on main      → revert workdir (this is the goal).
+#   - HEAD ahead of origin/main  → DO NOTHING. Pushing is the user's decision.
+#
+# NOTE
+#   `git clean -fd` skips paths matched by .gitignore, so log files and other
+#   ignored artifacts (e.g. logs/) are preserved across cleanups.
 
 REPO_DIR="/Users/rydia/Project/mob.ai/git/Agent-Forge"
 MAIN_BRANCH="main"
@@ -14,55 +36,38 @@ log() {
 
 cd "$REPO_DIR" || exit 1
 
-# Check if we're on main branch
+# Only act when checked out on main; worktrees are unaffected.
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$CURRENT_BRANCH" != "$MAIN_BRANCH" ]; then
     log "Not on main branch (current: $CURRENT_BRANCH), skipping protection check"
     exit 0
 fi
 
-# Check for uncommitted changes
+# Detect dirty workdir (tracked changes OR untracked, non-ignored files).
+DIRTY=0
 if ! git diff-index --quiet HEAD --; then
-    log "⚠️  UNAUTHORIZED CHANGES DETECTED on main branch"
-    log "Uncommitted changes found - reverting all modifications"
-    
-    # Show what's being reverted
+    DIRTY=1
+fi
+if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+    DIRTY=1
+fi
+
+if [ "$DIRTY" -eq 1 ]; then
+    log "⚠️  Dirty workdir on main branch — reverting workdir to force worktree workflow"
     git status --short | tee -a "$LOG_FILE"
-    
-    # Revert all changes
+
+    # Revert tracked changes and clean untracked (non-ignored) files.
+    # NOTE: this only resets the working tree to HEAD; it never moves HEAD itself.
     git reset --hard HEAD
     git clean -fd
-    
-    log "✅ Main branch restored to last commit"
+
+    log "✅ Main branch workdir restored to HEAD"
     exit 0
 fi
 
-# Check if HEAD is ahead of origin/main (unpushed commits)
-git fetch origin "$MAIN_BRANCH" --quiet
+# IMPORTANT: We intentionally do NOT compare HEAD with origin/main here.
+# Local main being ahead of origin/main is legitimate (e.g. just merged a
+# worktree branch and pending push). Resetting to origin/main here would
+# destroy committed history. See header comment for the incident this avoids.
 
-LOCAL_COMMIT=$(git rev-parse HEAD)
-REMOTE_COMMIT=$(git rev-parse origin/"$MAIN_BRANCH")
-
-if [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
-    # Check if local is ahead
-    if git merge-base --is-ancestor "$REMOTE_COMMIT" "$LOCAL_COMMIT"; then
-        # Local is ahead - check if these commits passed CI
-        UNPUSHED_COMMITS=$(git rev-list origin/"$MAIN_BRANCH"..HEAD)
-        
-        log "⚠️  UNAUTHORIZED COMMITS DETECTED on main branch"
-        log "Found unpushed commits:"
-        git log origin/"$MAIN_BRANCH"..HEAD --oneline | tee -a "$LOG_FILE"
-        
-        # Check if the latest commit has a CI pass marker
-        # (In real implementation, this would check GitHub Actions status)
-        # For now, we assume any unpushed commit on main is unauthorized
-        
-        log "Resetting main branch to origin/main"
-        git reset --hard origin/"$MAIN_BRANCH"
-        
-        log "✅ Main branch restored to last CI-verified commit"
-        exit 0
-    fi
-fi
-
-log "✓ Main branch is clean and synchronized"
+log "✓ Main branch workdir clean"

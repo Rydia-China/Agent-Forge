@@ -152,15 +152,12 @@ git branch -d agent/<task-name>
 ```
 
 #### 自动保护机制（60秒检测周期）
-- **保护守护进程** — `scripts/protection-daemon.sh` 每 60 秒检测一次主分支违规操作
-- **自动回退触发条件**：
-  1. 主分支存在未提交的修改（`git diff-index` 检测到变更）
-  2. 主分支存在未推送的提交（本地 HEAD 领先 `origin/main`）
-- **回退操作**：
-  - 未提交修改：`git reset --hard HEAD && git clean -fd`
-  - 未推送提交：`git reset --hard origin/main`
+- **保护守护进程** — `scripts/protection-daemon.sh` 每 60 秒检测一次 main 工作区状态
+- **自动回退触发条件**：仅限主分支存在未提交的修改（`git diff-index` / `git ls-files --others --exclude-standard` 检测到 dirty workdir，gitignore 匹配的路径不计入）
+- **回退操作**：仅 `git reset --hard HEAD && git clean -fd`（只清工作区，HEAD 不动，.gitignore 匹配的文件会被保留）
+- **绝不触变提交历史** — 本地 main 领先 `origin/main` 是合法状态（如刚合并 worktree 分支待 push），daemon 不会也不得对 commit 执行 reset/revert/rebase。因历史原因参见 `scripts/protect-main-branch.sh` 顶部注释
 - **审计日志** — 所有回退操作记录在 `.git/main-protection.log`，包含时间戳和回退内容
-- **零例外** — 不存在任何允许直接修改主分支的情况，所有违规操作都会在 60 秒内被自动回退
+- **零例外（针对工作区）** — 任何在 main 上直接编辑文件的动作，60 秒内都会被 dirty workdir 清理干净
 
 #### 保护机制启动
 ```bash
