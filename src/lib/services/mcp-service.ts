@@ -118,7 +118,7 @@ export interface StaticMcpSummary {
 }
 
 /** Core MCPs — always registered, cannot be unloaded. */
-const CORE_MCPS: readonly string[] = ["skills", "mcp_manager", "ui", "memory", "sync"];
+const CORE_MCPS: readonly string[] = ["skills", "mcp_manager", "ui", "sync"];
 
 /**
  * Return all built-in MCPs (core + catalog) with availability and

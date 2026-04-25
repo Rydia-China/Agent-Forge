@@ -1,8 +1,7 @@
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import { type McpProvider, type ToolContext, qualifyToolName } from "../types";
 import { registry } from "../registry";
-import { isCatalogEntry, loadFromCatalog } from "../catalog";
-import { sandboxManager } from "../sandbox";
+import { ensureMcpLoaded } from "../catalog";
 import * as svc from "@/lib/services/mcp-service";
 
 function text(t: string): CallToolResult {
@@ -166,20 +165,11 @@ export const mcpManagerMcp: McpProvider = {
         if (!provider || !tool) return text("Missing required parameters: provider, tool");
 
         // Auto-load the MCP if not already registered
-        if (!registry.getProvider(provider)) {
-          try {
-            if (isCatalogEntry(provider)) {
-              loadFromCatalog(provider);
-            } else {
-              const code = await svc.getMcpCode(provider);
-              if (!code) return text(`MCP "${provider}" not found in catalog or database`);
-              const p = await sandboxManager.load(provider, code);
-              registry.replace(p);
-            }
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return { content: [{ type: "text", text: `Failed to load MCP "${provider}": ${msg}` }], isError: true };
-          }
+        try {
+          await ensureMcpLoaded(provider);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { content: [{ type: "text", text: `Failed to load MCP "${provider}": ${msg}` }], isError: true };
         }
 
         // Dispatch the actual tool call
