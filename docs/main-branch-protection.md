@@ -2,7 +2,38 @@
 
 ## Overview
 
-The main branch is protected by an automated cron job that runs every minute to detect and revert any unauthorized changes. This ensures all code changes go through the worktree workflow and CI validation.
+The main branch is protected by an automated daemon that runs every minute to detect and revert any unauthorized changes. This ensures all code changes go through the worktree workflow and CI validation.
+
+## Quick Start
+
+The easiest way to enable protection is to use the `dev-full.sh` script, which automatically starts the protection daemon alongside the Next.js dev server:
+
+```bash
+./scripts/dev-full.sh
+```
+
+This will:
+1. Start the main branch protection daemon (checks every 60 seconds)
+2. Start the Next.js development server
+3. Automatically stop the daemon when you exit (Ctrl+C)
+
+### Manual Daemon Control
+
+You can also control the protection daemon independently:
+
+```bash
+# Start daemon
+./scripts/protection-daemon.sh start
+
+# Stop daemon
+./scripts/protection-daemon.sh stop
+
+# Restart daemon
+./scripts/protection-daemon.sh restart
+
+# Check status
+./scripts/protection-daemon.sh status
+```
 
 ## Protection Mechanism
 
@@ -22,7 +53,9 @@ The protection script (`scripts/protect-main-branch.sh`) performs these checks:
 
 All actions are logged to `.git/main-protection.log`.
 
-## Setting Up Cron Job
+## Alternative: System Cron Job (Optional)
+
+If you prefer to run protection independently of the dev server, you can set up a system cron job:
 
 ### macOS
 
@@ -56,6 +89,8 @@ tail -f .git/main-protection.log
 # Check cron execution log
 tail -f .git/cron.log
 ```
+
+**Note**: Using `dev-full.sh` is recommended as it automatically manages the daemon lifecycle.
 
 ## Correct Workflow
 
@@ -98,13 +133,16 @@ git add -A && git commit -m "feat: my feature"
 If you need to temporarily disable protection:
 
 ```bash
-# Remove cron job
+# Stop the daemon
+./scripts/protection-daemon.sh stop
+
+# Or if using cron, remove the cron job
 crontab -e
 # Comment out or delete the protection line
 
 # Re-enable later
-crontab -e
-# Uncomment the line
+./scripts/protection-daemon.sh start
+# Or uncomment the cron line
 ```
 
 **Warning**: Only disable for critical emergencies. Re-enable immediately after.
@@ -114,7 +152,19 @@ crontab -e
 ### Protection Not Running
 
 ```bash
-# Check if cron job exists
+# Check daemon status
+./scripts/protection-daemon.sh status
+
+# Check if daemon process exists
+ps aux | grep protect-main-branch
+
+# Check daemon log
+tail -f .git/protection-daemon.log
+
+# Check protection log
+tail -f .git/main-protection.log
+
+# If using cron, check if cron job exists
 crontab -l | grep protect-main-branch
 
 # Check cron service status (macOS)
