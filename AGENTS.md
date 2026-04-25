@@ -98,6 +98,26 @@
 
 ## Git 协作
 
+### Git 纪律（零容忍）
+
+#### 提交纪律（强制执行）
+1. **原子化提交（Atomic Commits）** — 每个提交只做一件事，功能完整可独立回滚
+2. **立即提交（Commit Immediately）** — 完成一个逻辑单元后立即提交，不积累多个变更
+3. **删除前先提交** — 删除任何代码前必须先提交当前状态，保留完整历史可恢复
+4. **禁止强制操作不留记录** — 任何 revert/reset 操作必须通过 `git revert` 留下记录，禁止 `git reset --hard` 抹除历史（自动保护机制除外）
+
+#### Revert 规范（必须留记录）
+- **使用 `git revert`** — 回退错误提交时使用 `git revert <commit>`，生成新的 revert commit
+- **禁止 `git reset --hard`** — 除自动保护机制外，人工操作禁止使用 `reset --hard` 抹除提交历史
+- **Revert 必须说明原因** — Revert commit message 格式：`revert: <original-message> - <reason>`
+- **示例**：`revert: feat: add user auth - breaks existing API contract`
+
+#### 提交信息规范
+- **格式**：`<type>: <description>`
+- **类型**：`feat`（新功能）、`fix`（修复）、`docs`（文档）、`refactor`（重构）、`test`（测试）、`chore`（构建/工具）
+- **描述**：简洁明确，说明做了什么（不是为什么）
+- **示例**：`feat: add JWT authentication middleware`、`fix: prevent null pointer in user service`
+
 ### Worktree 开发流程（强制）
 **主分支（main）禁止直接编写任何代码。所有开发必须在 worktree 中进行。**
 
@@ -106,16 +126,20 @@
 2. **所有代码变更必须在 worktree 中完成** — 包括新功能、bugfix、文档、配置变更
 3. **Worktree 不推送到远程** — 每个 worktree 的生命周期仅限单一功能，完成后本地合并并删除
 4. **合并后立即清理 worktree** — 避免 worktree 堆积
+5. **Worktree 中严格执行原子化提交** — 每完成一个逻辑单元立即提交，不积累变更
 
 #### 标准流程
 ```bash
 # 1. 创建 worktree（手动创建分支）
 git worktree add -b agent/<task-name> .agent-worktrees/<task-name>
 
-# 2. 在 worktree 中开发
+# 2. 在 worktree 中开发（原子化提交）
 cd .agent-worktrees/<task-name>
-# ... 编写代码 ...
-git add -A && git commit -m "feat: ..."
+# ... 编写代码（完成一个逻辑单元）...
+git add -A && git commit -m "feat: add user model"
+# ... 继续开发（完成下一个逻辑单元）...
+git add -A && git commit -m "feat: add user service"
+# ... 多次原子化提交，每次提交功能完整可独立回滚 ...
 
 # 3. 验证无误后，在主工作区合并
 cd /path/to/main
@@ -127,15 +151,46 @@ git worktree remove .agent-worktrees/<task-name>
 git branch -d agent/<task-name>
 ```
 
-#### 自动保护机制
-- **Cron 自动回退** — 主分支的任何直接修改都会被 cron 任务自动回退
-- **零例外** — 不存在任何允许直接修改主分支的情况
-- **违规必回退** — 即使是文档、配置、hotfix，只要不在 worktree 中完成，都会被自动回退
+#### 自动保护机制（60秒检测周期）
+- **保护守护进程** — `scripts/protection-daemon.sh` 每 60 秒检测一次主分支违规操作
+- **自动回退触发条件**：
+  1. 主分支存在未提交的修改（`git diff-index` 检测到变更）
+  2. 主分支存在未推送的提交（本地 HEAD 领先 `origin/main`）
+- **回退操作**：
+  - 未提交修改：`git reset --hard HEAD && git clean -fd`
+  - 未推送提交：`git reset --hard origin/main`
+- **审计日志** — 所有回退操作记录在 `.git/main-protection.log`，包含时间戳和回退内容
+- **零例外** — 不存在任何允许直接修改主分支的情况，所有违规操作都会在 60 秒内被自动回退
+
+#### 保护机制启动
+```bash
+# 开发时自动启动（推荐）
+./scripts/dev-full.sh  # 同时启动保护守护进程和开发服务器
+
+# 手动控制守护进程
+./scripts/protection-daemon.sh start   # 启动
+./scripts/protection-daemon.sh stop    # 停止
+./scripts/protection-daemon.sh status  # 检查状态
+```
+
+#### 违规操作排查
+如果提交消失或被回退：
+```bash
+# 1. 检查保护日志
+tail -f .git/main-protection.log
+
+# 2. 确认当前分支
+git branch --show-current  # 必须在 worktree 分支，不能是 main
+
+# 3. 检查守护进程状态
+./scripts/protection-daemon.sh status
+
+# 4. 如果在 main 分支，立即切换到 worktree
+git worktree add -b agent/<task-name> .agent-worktrees/<task-name>
+cd .agent-worktrees/<task-name>
+```
 
 **任何代码变更都必须在 worktree 中完成，无例外。**
-
-### 提交规范
-- 功能完成后提交，删除代码前也先提交，保留完整历史可恢复
 
 ## 参照项目
 - `/Users/rydia/Project/mob.ai/git/noval.demo.2` — 后端参照
