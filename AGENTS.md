@@ -104,42 +104,40 @@
 #### 强制规则
 1. **禁止在主工作区编写代码** — 主工作区只用于：查看代码、运行服务、合并分支
 2. **所有代码变更必须在 worktree 中完成** — 包括新功能、bugfix、文档、配置变更
-3. **必须经过 CI 检测** — worktree 分支 push 到远程，CI 通过后才能合并到 main
+3. **Worktree 不推送到远程** — 每个 worktree 的生命周期仅限单一功能，完成后本地合并并删除
 4. **合并后立即清理 worktree** — 避免 worktree 堆积
 
 #### 标准流程
 ```bash
-# 1. 创建 worktree（自动创建分支、安装依赖、生成 Prisma client）
-./scripts/worktree-dev.sh create <task-name>
+# 1. 创建 worktree（手动创建分支）
+git worktree add -b agent/<task-name> .agent-worktrees/<task-name>
 
 # 2. 在 worktree 中开发
 cd .agent-worktrees/<task-name>
 # ... 编写代码 ...
 git add -A && git commit -m "feat: ..."
 
-# 3. Push 到远程触发 CI
-git push -u origin agent/<task-name>
-
-# 4. CI 通过后，在主工作区合并
+# 3. 验证无误后，在主工作区合并
 cd /path/to/main
 git checkout main
 git merge --no-ff agent/<task-name>
 
-# 5. 清理 worktree
-./scripts/worktree-dev.sh cleanup .agent-worktrees/<task-name>
+# 4. 清理 worktree
+git worktree remove .agent-worktrees/<task-name>
+git branch -d agent/<task-name>
 ```
 
 #### 违规检测
 - 主分支有未提交的代码变更 → **立即停止，转移到 worktree**
 - 直接在主分支提交代码 → **立即回滚，重新在 worktree 中操作**
-- 未经 CI 检测就合并 → **回滚合并，push 到远程触发 CI**
+- Worktree 推送到远程 → **非必要操作，应在本地完成验证和合并**
 
 #### 例外情况（仅限以下场景）
-- 紧急 hotfix 且 CI 不可用
+- 紧急 hotfix 且无法创建 worktree
 - 纯文档变更（README、注释）且不涉及代码逻辑
 - 配置文件微调（.env.example、.gitignore）且已充分测试
 
-**除上述例外，任何代码变更都必须在 worktree 中完成并经过 CI 检测。**
+**除上述例外，任何代码变更都必须在 worktree 中完成。**
 
 ### 提交规范
 - 功能完成后提交，删除代码前也先提交，保留完整历史可恢复
