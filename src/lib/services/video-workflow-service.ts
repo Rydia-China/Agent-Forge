@@ -209,10 +209,10 @@ export async function runInitWorkflow(
   scriptContent: string,
 ): Promise<InitWorkflowResult> {
   await initMcp();
-  await ensureMcpLoaded("biz_db");
-  await ensureMcpLoaded("subagent");
-  await ensureMcpLoaded("langfuse");
-  await ensureMcpLoaded("novel-video-workflow");
+  ensureMcpLoaded("biz_db");
+  ensureMcpLoaded("subagent");
+  ensureMcpLoaded("langfuse");
+  ensureMcpLoaded("novel-video-workflow");
 
   const result = await registry.callTool(
     "novel-video-workflow__init_workflow",

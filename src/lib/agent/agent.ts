@@ -2,7 +2,6 @@ import { registry } from "@/lib/mcp/registry";
 import { initMcp } from "@/lib/mcp/init";
 import { type ToolContext, parseToolName } from "@/lib/mcp/types";
 import { ensureMcpLoaded } from "@/lib/mcp/catalog";
-import * as mcpService from "@/lib/services/mcp-service";
 import { getBuiltinSkill } from "@/lib/skills/builtins";
 import { getSkill } from "@/lib/services/skill-service";
 import { extractRequiredSchemas } from "@/lib/skills/required-schemas";
@@ -169,10 +168,10 @@ async function resolveImplicitMcps(skillNames: string[]): Promise<string[]> {
 }
 
 /** Ensure the listed MCPs are loaded in the registry (catalog or dynamic). */
-async function ensureMcpsLoaded(names: string[]): Promise<void> {
+function ensureMcpsLoaded(names: string[]): void {
   for (const name of names) {
     try {
-      await ensureMcpLoaded(name);
+      ensureMcpLoaded(name);
     } catch (err) {
       console.warn(`[agent] Failed to load MCP "${name}":`, err);
     }
