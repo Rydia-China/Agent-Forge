@@ -8,7 +8,7 @@ const TARGET_PORT = process.env.PORT || 8001;
 const TARGET_HOST = 'localhost';
 
 const server = http.createServer((req, res) => {
-  if (req.method !== 'POST' || req.url !== '/mcp') {
+  if (req.url !== '/mcp') {
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
     return;
@@ -20,15 +20,20 @@ const server = http.createServer((req, res) => {
   });
 
   req.on('end', () => {
+    const headers = { ...req.headers };
+    delete headers['host'];
+    delete headers['connection'];
+    
+    if (body) {
+      headers['content-length'] = Buffer.byteLength(body);
+    }
+
     const options = {
       hostname: TARGET_HOST,
       port: TARGET_PORT,
       path: '/mcp',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body)
-      }
+      method: req.method,
+      headers: headers
     };
 
     const proxyReq = http.request(options, (proxyRes) => {
@@ -48,7 +53,9 @@ const server = http.createServer((req, res) => {
       }
     });
 
-    proxyReq.write(body);
+    if (body) {
+      proxyReq.write(body);
+    }
     proxyReq.end();
   });
 });
