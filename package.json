@@ -12,7 +12,11 @@
     "release": "docker buildx build --platform linux/amd64 -t ghcr.io/rydia-china/agent-forge:latest -f Dockerfile . --load && docker push ghcr.io/rydia-china/agent-forge:latest && echo '✅ 已推送到 ghcr.io/rydia-china/agent-forge:latest'",
     "db:backup": "bash scripts/db-backup.sh",
     "db:restore": "echo 'Usage: docker exec -i agent-forge-db-dev psql -U postgres -d agent_forge < backups/YOUR_FILE.sql'",
-    "deploy:prod": "ssh root@47.97.112.115 'cd /war/www/soft/agent-forge && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d'"
+    "deploy:prod": "ssh root@47.97.112.115 'cd /war/www/soft/agent-forge && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d'",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
@@ -38,10 +42,14 @@
     "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/ui": "^4.1.5",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "happy-dom": "^20.9.0",
     "prisma": "^6.6.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.5"
   }
 }
