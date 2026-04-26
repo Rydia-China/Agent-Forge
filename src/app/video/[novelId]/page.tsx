@@ -5,16 +5,21 @@ import { useParams, useSearchParams } from "next/navigation";
 import { ConfigProvider, theme as antTheme } from "antd";
 import { useSessions } from "@/app/components/hooks/useSessions";
 import { useVideoData } from "../hooks/useVideoData";
+import { useNovelResources } from "../hooks/useNovelResources";
 import { EpisodeList } from "../components/EpisodeList";
 import { ResourcePanel } from "../components/ResourcePanel";
 import { VideoChat } from "../components/VideoChat";
+import { NovelChat } from "../components/NovelChat";
 import type { VideoContext } from "../types";
 
 /* ------------------------------------------------------------------ */
-/*  Default skills & MCPs for video workflow                           */
+/*  Video-specific agent split                                         */
 /* ------------------------------------------------------------------ */
 
-const DEFAULT_SKILLS = ["novel-video-workflow", "novel-character-card"];
+const NOVEL_SKILLS = ["novel-resource-mgr"];
+const EP_SKILLS = ["ep-video-workflow"];
+
+type PageMode = "novel" | "episode";
 
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
@@ -26,18 +31,23 @@ export default function VideoWorkflowPage() {
   const novelId = params.novelId;
   const novelName = searchParams.get("name") ?? novelId;
 
+  const [pageMode, setPageMode] = useState<PageMode>("novel");
+  const isNovelMode = pageMode === "novel";
+
   /* ---- Data ---- */
-  const data = useVideoData(novelId);
+  const epData = useVideoData(novelId);
+  const novelData = useNovelResources(novelId);
 
   /* ---- Session management ---- */
-  const userName = data.selectedEpisode
-    ? `video:${novelId}:${data.selectedEpisode.scriptKey}`
-    : `video:${novelId}:_`;
+  const userName = useMemo(() => {
+    if (isNovelMode) return `video:${novelId}`;
+    if (epData.selectedEpisode) return `video:${novelId}:${epData.selectedEpisode.scriptKey}`;
+    return `video:${novelId}:_`;
+  }, [isNovelMode, novelId, epData.selectedEpisode]);
 
   const sessionsHook = useSessions(userName, () => {}, () => {});
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
   const [chatKey, setChatKey] = useState(() => crypto.randomUUID());
-  const [autoMessage, setAutoMessage] = useState<string | undefined>();
 
   const switchSession = useCallback((sessionId?: string) => {
     setCurrentSessionId(sessionId);
@@ -56,56 +66,49 @@ export default function VideoWorkflowPage() {
     [sessionsHook, currentSessionId, switchSession],
   );
 
-  /* ---- Video context for chat ---- */
+  /* ---- Video context for EP-level chat ---- */
   const videoContext: VideoContext | null = useMemo(() => {
-    if (!data.selectedEpisode) return null;
+    if (isNovelMode || !epData.selectedEpisode) return null;
     return {
       novelId,
-      scriptId: data.selectedEpisode.id,
-      scriptKey: data.selectedEpisode.scriptKey,
+      scriptId: epData.selectedEpisode.id,
+      scriptKey: epData.selectedEpisode.scriptKey,
     };
-  }, [novelId, data.selectedEpisode]);
+  }, [isNovelMode, novelId, epData.selectedEpisode]);
 
   /* ---- Handlers ---- */
+  const handleSelectNovelLevel = useCallback(() => {
+    setPageMode("novel");
+    setCurrentSessionId(undefined);
+    setChatKey(crypto.randomUUID());
+  }, []);
+
   const handleSelectEpisode = useCallback(
-    (ep: typeof data.episodes[number]) => {
-      data.selectEpisode(ep);
+    (ep: typeof epData.episodes[number]) => {
+      setPageMode("episode");
+      epData.selectEpisode(ep);
       setCurrentSessionId(undefined);
-      setAutoMessage(undefined);
       setChatKey(crypto.randomUUID());
     },
-    [data],
-  );
-
-  const handleUpload = useCallback(
-    async (scriptKey: string, scriptName: string | null, content: string | null) => {
-      await data.uploadEpisode(scriptKey, scriptName, content);
-      // Auto-select the newly uploaded EP and trigger first chat
-      const refreshed = await data.refreshEpisodes();
-      const newEp = refreshed.find((ep) => ep.scriptKey === scriptKey);
-      if (newEp) {
-        data.selectEpisode(newEp);
-        setCurrentSessionId(undefined);
-setAutoMessage("EP已上传，请开始小说可视化工作流：人物卡 → 分镜 → 图片 → 视频，逐步推进");
-        setChatKey(crypto.randomUUID());
-      }
-    },
-    [data],
+    [epData],
   );
 
   const handleSessionCreated = useCallback(
     (sessionId: string) => {
       setCurrentSessionId(sessionId);
-      setAutoMessage(undefined);
       void sessionsHook.refreshSessions();
     },
     [sessionsHook],
   );
 
   const handleRefreshNeeded = useCallback(() => {
-    void data.refreshAll();
+    if (isNovelMode) {
+      void novelData.refresh();
+    } else {
+      void epData.refreshAll();
+    }
     void sessionsHook.refreshSessions();
-  }, [data, sessionsHook]);
+  }, [isNovelMode, epData, novelData, sessionsHook]);
 
   return (
     <ConfigProvider
@@ -115,44 +118,51 @@ setAutoMessage("EP已上传，请开始小说可视化工作流：人物卡 → 
       }}
     >
       <main className="flex h-screen w-full bg-slate-950 text-slate-100">
-        {/* Left panel — Episode list + sessions */}
         <EpisodeList
           novelName={novelName}
-          episodes={data.episodes}
-          isLoading={data.isLoadingEpisodes}
-          isUploading={data.isUploading}
-          selectedEpisode={data.selectedEpisode}
+          episodes={epData.episodes}
+          isLoading={epData.isLoadingEpisodes}
+          selectedEpisode={epData.selectedEpisode}
           onSelectEpisode={handleSelectEpisode}
-          onDeleteEpisode={(ep) => { if (confirm(`Delete ${ep.scriptKey}?`)) void data.deleteEpisode(ep.id); }}
-          onRefresh={() => void data.refreshEpisodes()}
-          onUpload={(key, name, content) => void handleUpload(key, name, content)}
+          onDeleteEpisode={(ep) => { if (confirm(`Delete ${ep.scriptKey}?`)) void epData.deleteEpisode(ep.id); }}
+          onRefresh={() => void epData.refreshEpisodes()}
           sessions={sessionsHook.sessions}
           currentSessionId={currentSessionId}
           onSelectSession={switchSession}
           onNewSession={handleNewSession}
           onDeleteSession={(id) => void handleDeleteSession(id)}
+          isNovelLevelSelected={isNovelMode}
+          onSelectNovelLevel={handleSelectNovelLevel}
         />
 
-        {/* Center — Chat */}
         <section className="min-w-0 flex-1">
-          <VideoChat
-            key={chatKey}
-            initialSessionId={currentSessionId}
-            videoContext={videoContext}
-            skills={DEFAULT_SKILLS}
-            onSessionCreated={handleSessionCreated}
-            onRefreshNeeded={handleRefreshNeeded}
-            autoMessage={autoMessage}
-          />
+          {isNovelMode ? (
+            <NovelChat
+              key={chatKey}
+              novelId={novelId}
+              initialSessionId={currentSessionId}
+              skills={NOVEL_SKILLS}
+              onSessionCreated={handleSessionCreated}
+              onRefreshNeeded={handleRefreshNeeded}
+            />
+          ) : (
+            <VideoChat
+              key={chatKey}
+              initialSessionId={currentSessionId}
+              videoContext={videoContext}
+              skills={EP_SKILLS}
+              onSessionCreated={handleSessionCreated}
+              onRefreshNeeded={handleRefreshNeeded}
+            />
+          )}
         </section>
 
-        {/* Right panel — Resources */}
         <ResourcePanel
-          resources={data.resources}
-          isLoading={data.isLoadingResources}
-          scriptId={data.selectedEpisode?.id ?? null}
+          resources={isNovelMode ? novelData.resources : epData.resources}
+          isLoading={isNovelMode ? novelData.isLoading : epData.isLoadingResources}
+          scriptId={isNovelMode ? null : epData.selectedEpisode?.id ?? null}
           sessionId={currentSessionId}
-          onRefresh={() => void data.refreshResources()}
+          onRefresh={() => isNovelMode ? void novelData.refresh() : void epData.refreshResources()}
         />
       </main>
     </ConfigProvider>

@@ -115,6 +115,25 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 
 验证重点：`GET /api/video/novels` 不依赖远程小说服务配置；上传后刷新列表能看到新 novel，进入 novel 后能看到从本地脚本表生成的 episode。
 
+### Video 双 agent 个性化入口（2026-04-26 恢复）
+`/video/{novelId}` 是领域专用工作台，使用两个不同 agent 入口，而不是修改全局 agent runtime。
+
+小说级资源 agent：
+1. 前端选择左侧“小说资源”
+2. 会话 user scope 为 `video:{novelId}`
+3. `POST /api/video/novel/{novelId}/chat` 创建 SubAgent
+4. 服务端注入 `NovelContextProvider`，只暴露小说级上下文和已有 novel scope 资源统计
+5. 默认 skill 为 `novel-resource-mgr`，用于生成/管理 `scopeType="novel"` 的角色立绘和场景资源
+
+EP 级资源 agent：
+1. 前端选择具体 episode
+2. 会话 user scope 为 `video:{novelId}:{scriptKey}`
+3. `POST /api/video/tasks` 创建 SubAgent
+4. 服务端注入 `VideoContextProvider`，提供 `novel_id`、`script_id`、`script_key` 与 `init_result`
+5. 默认 skill 为 `ep-video-workflow`，用于生成/管理 `scopeType="script"` 的分镜、镜头和视频资源
+
+前端兼容性：`/api/video/tasks` 与 `/api/video/novel/{novelId}/chat` 都返回 `subagent_id`，并同时保留 `task_id` 作为旧字段别名；前端以 `subagent_id` 连接 `/api/subagents/{id}/events`。
+
 ## 双入口等价性
 
 REST API (`/api/*`) 和 MCP tools（agent 内部 / `/mcp` 外部）**共享同一 service layer**。
