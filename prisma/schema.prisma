@@ -49,6 +49,7 @@ model ChatSession {
   userId       String
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages         ChatMessage[]
+  subagents        SubAgent[]
   tasks            Task[]
   imageGenerations ImageGeneration[]
   createdAt    DateTime       @default(now())
@@ -162,7 +163,43 @@ model BizTableMapping {
   @@index([userName])
 }
 
+/// SubAgent — 统一的执行单元，支持单次执行和多轮工具调用，可嵌套
+/// 替代原 Task 模型，提供完整的 trace 和嵌套能力
+model SubAgent {
+  id            String          @id @default(cuid())
+  sessionId     String
+  session       ChatSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  parentAgentId String?         // 父 agent ID（嵌套时）
+  parent        SubAgent?       @relation("SubAgentHierarchy", fields: [parentAgentId], references: [id], onDelete: Cascade)
+  children      SubAgent[]      @relation("SubAgentHierarchy")
+  depth         Int             @default(0) // 嵌套深度（0 = 顶层）
+  status        String          @default("pending") // pending | running | completed | failed | cancelled | max_iterations
+  config        Json            // SubAgentConfig（instruction, mcpScope, model, etc.）
+  output        String?         // 最终输出
+  error         String?         // 错误信息
+  trace         Json?           // SubAgentTrace（完整执行轨迹）
+  events        SubAgentEvent[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([sessionId, status])
+  @@index([parentAgentId])
+}
+
+/// SubAgentEvent — 可重放的事件流，autoincrement id 用于 Last-Event-ID 排序
+model SubAgentEvent {
+  id         Int      @id @default(autoincrement())
+  subagentId String
+  subagent   SubAgent @relation(fields: [subagentId], references: [id], onDelete: Cascade)
+  type       String   // delta | tool_start | tool_end | child_spawn | done | error | session | upload_request | key_resource
+  data       Json
+  createdAt  DateTime @default(now())
+
+  @@index([subagentId, id])
+}
+
 /// Task — 一次 agent 调用的生命周期，后端驱动，不依赖前端连接
+/// DEPRECATED: 保留用于向后兼容，新代码使用 SubAgent
 model Task {
   id        String      @id @default(cuid())
   sessionId String
@@ -179,6 +216,7 @@ model Task {
 }
 
 /// TaskEvent — 可重放的事件流，autoincrement id 用于 Last-Event-ID 排序
+/// DEPRECATED: 保留用于向后兼容，新代码使用 SubAgentEvent
 model TaskEvent {
   id        Int      @id @default(autoincrement())
   taskId    String
