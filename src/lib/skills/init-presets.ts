@@ -1,5 +1,5 @@
 /**
- * 内置 Skill 初始化模块
+ * 预置 Skill 初始化模块
  * 
  * 系统启动时自动检查并初始化预置 skill：
  * 1. 从代码中读取预置 skill 定义
@@ -14,7 +14,7 @@ import { listPresetSkills } from "@/lib/skills/presets";
 import { toSkillMd } from "@/lib/services/skill-service";
 import type { Prisma } from "@/generated/prisma";
 
-export async function initializeBuiltinSkills(): Promise<void> {
+export async function initializePresetSkills(): Promise<void> {
   console.log("[Skill Init] Starting preset skills initialization...");
 
   const presets = listPresetSkills();

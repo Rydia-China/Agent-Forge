@@ -9,14 +9,14 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient();
 
 globalForPrisma.prisma = prisma;
 
-// Initialize builtin skills on first connection
+// Initialize preset skills on first connection
 if (!globalForPrisma.skillsInitialized) {
   globalForPrisma.skillsInitialized = true;
   
   // Run initialization asynchronously (don't block module load)
-  import("@/lib/skills/init-builtins")
-    .then((mod) => mod.initializeBuiltinSkills())
+  import("@/lib/skills/init-presets")
+    .then((mod) => mod.initializePresetSkills())
     .catch((error) => {
-      console.error("[DB] Failed to initialize builtin skills:", error);
+      console.error("[DB] Failed to initialize preset skills:", error);
     });
 }
