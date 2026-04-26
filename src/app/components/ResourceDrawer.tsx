@@ -11,8 +11,7 @@ import type {
 
 export interface ResourceDrawerProps {
   open: boolean;
-  builtinSkills: SkillSummary[];
-  dbSkills: SkillSummary[];
+  skills: SkillSummary[];
   builtinMcps: BuiltinMcpSummary[];
   isLoadingResources: boolean;
   error: string | null;
@@ -24,8 +23,7 @@ export interface ResourceDrawerProps {
 
 export function ResourceDrawer({
   open,
-  builtinSkills,
-  dbSkills,
+  skills,
   builtinMcps,
   isLoadingResources,
   error,
@@ -57,10 +55,10 @@ export function ResourceDrawer({
       <div className="space-y-4">
         <section>
           <Typography.Text type="secondary" style={{ fontSize: 10, textTransform: "uppercase" }}>
-            内置 Skills
+            Skills
           </Typography.Text>
           <div className="mt-1 flex flex-wrap gap-1">
-            {builtinSkills.map((s) => (
+            {skills.map((s) => (
               <Tag
                 key={s.name}
                 color="green"
@@ -95,34 +93,6 @@ export function ResourceDrawer({
                   color="blue"
                 >
                   {m.name}
-                </Tag>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <Divider style={{ margin: "8px 0" }} />
-
-        <section>
-          <Typography.Text strong style={{ fontSize: 11 }}>Skills</Typography.Text>
-          {dbSkills.length === 0 ? (
-            <div className="mt-1">
-              <Typography.Text type="secondary" style={{ fontSize: 10 }}>No database skills.</Typography.Text>
-            </div>
-          ) : (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {dbSkills.map((s) => (
-                <Tag
-                  key={s.name}
-                  color="green"
-                  style={{ cursor: "pointer" }}
-                  title={s.description}
-                  onClick={() => {
-                    onSelectResource({ type: "skill", name: s.name });
-                    onClose();
-                  }}
-                >
-                  {s.name}
                 </Tag>
               ))}
             </div>
