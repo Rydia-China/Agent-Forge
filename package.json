@@ -4,9 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port ${PORT:-8001}",
-    "dev:full": "bash scripts/dev-full.sh",
-    "dev:all": "bash bin/dev-all.sh",
-    "dev:stop": "bash bin/dev-stop.sh",
+    "dev:all": "bash scripts/dev-all.sh",
+    "dev:stop": "bash scripts/dev-stop.sh",
     "build": "next build",
     "start": "next start --port ${PORT:-8001}",
     "lint": "eslint",
