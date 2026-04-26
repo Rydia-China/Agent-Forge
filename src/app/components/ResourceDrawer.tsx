@@ -92,8 +92,7 @@ export function ResourceDrawer({
               {builtinMcps.map((m) => (
                 <Tag
                   key={m.name}
-                  color={m.available ? "blue" : "default"}
-                  title={m.available ? `${m.name} (available)` : `${m.name} (unavailable)`}
+                  color="blue"
                 >
                   {m.name}
                 </Tag>
