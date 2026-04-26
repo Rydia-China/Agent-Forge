@@ -178,7 +178,9 @@ export async function createResource(input: CreateResourceInput): Promise<string
       input.sortOrder ?? 0,
     ],
   );
-  return (rows[0] as { id: string }).id;
+  const row = rows[0] as { id: string } | undefined;
+  if (!row) throw new Error("Failed to create resource");
+  return row.id;
 }
 
 /**
@@ -193,8 +195,9 @@ export async function upsertByKeyResource(input: CreateResourceInput & { keyReso
      LIMIT 1`,
     [input.scopeType, input.scopeId, input.keyResourceId],
   );
-  if ((existing as Array<{ id: string }>).length > 0) {
-    const id = (existing[0] as { id: string }).id;
+  const existingRow = (existing as Array<{ id: string }>)[0];
+  if (existingRow) {
+    const id = existingRow.id;
     await bizPool.query(
       `UPDATE "${t}"
        SET category = $1, title = $2, url = $3, data = $4, sort_order = $5
