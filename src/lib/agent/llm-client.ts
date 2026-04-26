@@ -117,5 +117,17 @@ export async function generateTitle(userMessage: string): Promise<string> {
       },
     ],
   });
-  return res.choices[0]?.message.content?.trim() || "New Chat";
+  
+  if (!res.choices || res.choices.length === 0) {
+    console.error("[generateTitle] No choices returned from LLM", { model, res });
+    return "New Chat";
+  }
+  
+  const content = res.choices[0]?.message?.content;
+  if (!content) {
+    console.error("[generateTitle] No content in first choice", { model, choice: res.choices[0] });
+    return "New Chat";
+  }
+  
+  return content.trim() || "New Chat";
 }
