@@ -38,7 +38,7 @@ export async function initializeBuiltinSkills(): Promise<void> {
 
       // Initialize new builtin skill
       const version = 1;
-      const ossKey = `skills/${builtin.name}/v${version}.md`;
+      const ossKey = `public/skills/${builtin.name}/v${version}.md`;
 
       // Generate SKILL.md content
       const skillMd = toSkillMd({
@@ -51,8 +51,8 @@ export async function initializeBuiltinSkills(): Promise<void> {
       // Upload to OSS
       await ossService.uploadBuffer(
         Buffer.from(skillMd, "utf-8"),
-        ossKey,
-        ""
+        `${builtin.name}/v${version}.md`,
+        "skills"
       );
 
       // Write to DB
