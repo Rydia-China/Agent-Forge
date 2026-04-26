@@ -137,6 +137,12 @@
 4. **不存在"临时修改"或"快速修复"的例外** — 所有变更必须经过 worktree → commit → merge 流程
 5. **AI Agent 必须在每次操作前检查当前分支** — 如果在 main 分支，必须立即停止并创建 worktree
 
+**例外：gitignore 文件的直接修改**
+- `.gitignore` 匹配的文件（如 `.env`、`node_modules/`、构建产物等）**允许在 main 分支直接修改**
+- 原因：这些文件不受 Git 版本控制，无法通过 worktree 分支合并覆盖主工作区
+- 保护机制会自动忽略这些文件的变更（`git diff-index` 和 `git clean -fd` 均不会触及 gitignore 匹配的路径）
+- 典型场景：配置 `.env` 环境变量、调整本地开发配置等
+
 **惩罚机制：**
 - 第一次违规：工作成果被自动清除，需重新开始
 - 持续违规：表明 AI Agent 未遵循指令，需要人工介入修正 Agent 行为
