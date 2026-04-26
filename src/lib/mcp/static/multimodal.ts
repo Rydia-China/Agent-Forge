@@ -47,27 +47,36 @@ async function callFcEndpoint(
   url: string,
   token: string,
   body: Record<string, unknown>,
+  timeoutMs = 120000, // Default 2 minutes
 ): Promise<string> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  const data: unknown = await res.json();
-  const parsed = FcResultSchema.parse(data);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
 
-  if (!res.ok || parsed.error) {
-    throw new Error(parsed.error ?? res.statusText);
+    const data: unknown = await res.json();
+    const parsed = FcResultSchema.parse(data);
+
+    if (!res.ok || parsed.error) {
+      throw new Error(parsed.error ?? res.statusText);
+    }
+    if (!parsed.result) {
+      throw new Error("FC returned no result");
+    }
+
+    return parsed.result;
+  } finally {
+    clearTimeout(timeoutId);
   }
-  if (!parsed.result) {
-    throw new Error("FC returned no result");
-  }
-
-  return parsed.result;
 }
 
 export const multimodalMcp: McpProvider = {
@@ -234,10 +243,15 @@ export const multimodalMcp: McpProvider = {
         const results = await Promise.allSettled(
           items.map(async (item, i) => {
             try {
-              const imageUrl = await callFcEndpoint(url, token, {
-                prompt: item.prompt,
-                referenceImageUrls: item.referenceImageUrls,
-              });
+              const imageUrl = await callFcEndpoint(
+                url,
+                token,
+                {
+                  prompt: item.prompt,
+                  referenceImageUrls: item.referenceImageUrls,
+                },
+                180000, // 3 minutes for GPT image generation
+              );
               return { index: i, status: "ok" as const, imageUrl };
             } catch (e) {
               return {
