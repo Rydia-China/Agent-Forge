@@ -3,7 +3,7 @@
 /**
  * Video-specific chat hook.
  *
- * Composes useTaskStream for SSE infrastructure, adds video-domain features:
+ * Composes useSubAgentStream for SSE infrastructure, adds video-domain features:
  * - POST to /api/video/tasks with video_context, preload_mcps, skills
  * - activeTool tracking (tool_start / tool_end events)
  * - sendDirect (bypass input state)
@@ -24,7 +24,7 @@ import type {
   KeyResourceItem,
   UploadRequestPayload,
 } from "@/app/types";
-import { useTaskStream } from "@/app/components/hooks/useTaskStream";
+import { useSubAgentStream } from "@/app/components/hooks/useSubAgentStream";
 import type { VideoContext } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -81,7 +81,7 @@ export function useVideoChat(
   onRefreshNeededRef.current = onRefreshNeeded;
 
   /* ---- Shared SSE infrastructure ---- */
-  const stream = useTaskStream(initialSessionId, {
+  const stream = useSubAgentStream(initialSessionId, {
     onSessionCreated,
     onRefreshNeeded,
     onExtraEvent: (type, data) => {
@@ -170,7 +170,7 @@ export function useVideoChat(
         stream.sessionIdRef.current = result.session_id;
       }
 
-      stream.connectToTask(result.task_id);
+      stream.connectToSubAgent(result.task_id);
 
       if (wasNewSession) {
         void generateTitle(result.session_id, text || "Image upload");
