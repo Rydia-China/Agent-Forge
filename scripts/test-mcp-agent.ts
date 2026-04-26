@@ -57,14 +57,37 @@ class McpTestAgent {
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${response.statusText}\n${errorText}`);
     }
 
-    const result = await response.json() as McpResponse;
+    // Parse SSE format response
+    const text = await response.text();
+    const result = this.parseSseResponse(text);
+    
     console.log(`\n📥 收到响应:`);
     console.log(JSON.stringify(result, null, 2));
 
     return result;
+  }
+
+  private parseSseResponse(text: string): McpResponse {
+    // SSE format: "event: message\ndata: {...}\n\n"
+    const lines = text.split('\n');
+    let dataLine = '';
+    
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        dataLine = line.substring(6); // Remove "data: " prefix
+        break;
+      }
+    }
+
+    if (!dataLine) {
+      throw new Error('No data line found in SSE response');
+    }
+
+    return JSON.parse(dataLine) as McpResponse;
   }
 
   async testConnection(): Promise<boolean> {
@@ -92,11 +115,15 @@ class McpTestAgent {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
         console.error(`❌ 连接失败: HTTP ${response.status}`);
+        console.error(errorText);
         return false;
       }
 
-      const result = await response.json();
+      // Parse SSE format response
+      const text = await response.text();
+      const result = this.parseSseResponse(text);
       console.log("✅ 连接成功");
       console.log(JSON.stringify(result, null, 2));
       return true;
