@@ -149,9 +149,9 @@ export const skillsMcp: McpProvider = {
       }
       case "update": {
         const params = svc.SkillUpdateParams.parse(args);
-        const { skill, version } = await svc.updateSkill(params);
+        const { skill } = await svc.updateSkill(params);
         const promoted = params.promote ? " (promoted to production)" : "";
-        return text(`Pushed skill "${skill.name}" v${version.version}${promoted}`);
+        return text(`Pushed skill "${skill.name}" v${skill.version}${promoted}`);
       }
       case "delete": {
         const { name: n } = svc.SkillDeleteParams.parse(args);
@@ -161,7 +161,7 @@ export const skillsMcp: McpProvider = {
       case "import": {
         const params = svc.SkillImportParams.parse(args);
         const result = await svc.importSkill(params);
-        return text(`Imported skill "${result.skill.name}" v${result.version.version}`);
+        return text(`Imported skill "${result.skill.name}" v${result.skill.version}`);
       }
       case "export": {
         const { name: n } = svc.SkillExportParams.parse(args);
@@ -177,7 +177,7 @@ export const skillsMcp: McpProvider = {
       case "set_production": {
         const { name: n, version } = svc.SkillSetProductionParams.parse(args);
         const skill = await svc.setSkillProduction(n, version);
-        return text(`Skill "${skill.name}" production set to v${skill.productionVersion}`);
+        return text(`Skill "${skill.name}" production set to v${skill.version}`);
       }
       default:
         return text(`Unknown tool: ${name}`);
