@@ -36,7 +36,7 @@ export function ResourceDrawer({
 }: ResourceDrawerProps) {
   return (
     <Drawer
-      title="Resources"
+      title="MCPS"
       placement="right"
       styles={{ wrapper: { width: 288 } }}
       open={open}

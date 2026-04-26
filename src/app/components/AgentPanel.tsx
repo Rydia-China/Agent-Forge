@@ -90,7 +90,7 @@ export function AgentPanel({
             onClick={onToggleResources}
             title="切换资源面板"
           >
-            Resources
+            MCPS
           </Button>
         </div>
       </header>
