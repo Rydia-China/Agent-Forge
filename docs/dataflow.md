@@ -6,3 +6,8 @@
 - LLM API: 出站 HTTPS (OpenAI-compatible)，密钥通过 `LLM_API_KEY` 环境变量
 - asMCP: 入站 HTTP `POST /mcp`，当前无鉴权
 - CORS 全开放（所有 origin）
+
+## 2026-04-26 /video 本地剧本导入
+`/video` 小说数据源切回本地上传，不再通过远程 novel service 拉取列表。
+外部边界是用户上传的 JSON 剧本文件；服务端校验后写入 biz-db 的 `novels`、`novel_scripts`、`domain_resources` 逻辑表。
+恢复来源是本地 `feat/hierarchical-agent` 分支的业务提交，迁移时明确排除该分支里的 agent/subagent/runtime 优化。

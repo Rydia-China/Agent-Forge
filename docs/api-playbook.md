@@ -101,6 +101,20 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 
 **因果**：SubAgent 状态和事件持久化到 DB，客户端断开不影响执行，重连后从断点继续。
 
+### Video 本地剧本导入（2026-04-26 恢复）
+`/video` 不应依赖远程 novel service 获取小说列表。业务流来自本地 `feat/hierarchical-agent` 的 `/video` 业务提交，迁移时只恢复上传、落库、读取逻辑，不同步 agent/subagent/runtime 优化。
+
+时序：
+1. 前端读取用户上传的 JSON 剧本文件
+2. `POST /api/video/novels` 校验 `{ name, script }`
+3. service 写入 `novels`，再批量写入 `novel_scripts`
+4. service 按 JSON 内容初始化 `domain_resources` / key resources 占位
+5. `GET /api/video/novels` 从本地 biz-db 返回小说列表
+6. `GET /api/video/novels/{novelId}/episodes` 从本地 `novel_scripts` 返回 episode 列表
+7. episode 资源读取合并 novel scope 与 script scope 的 `domain_resources`
+
+验证重点：`GET /api/video/novels` 不读取 `NOVEL_SERVICE_URL`；上传后刷新列表能看到新 novel，进入 novel 后能看到从本地脚本表生成的 episode。
+
 ## 双入口等价性
 
 REST API (`/api/*`) 和 MCP tools（agent 内部 / `/mcp` 外部）**共享同一 service layer**。
