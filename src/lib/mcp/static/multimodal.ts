@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider, ToolContext } from "../types";
+import * as videoProcessing from "@/lib/services/video-processing-service";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -356,26 +357,15 @@ export const multimodalMcp: McpProvider = {
       }
 
       case "crop_video": {
-        const url = process.env.FC_CROP_VIDEO_URL;
-        const token = process.env.FC_CROP_VIDEO_TOKEN;
-        if (!url || !token) {
-          return json([
-            {
-              status: "error",
-              error: "FC_CROP_VIDEO_URL and FC_CROP_VIDEO_TOKEN must be configured in .env",
-            },
-          ]);
-        }
-
         const { items } = CropVideoParams.parse(args);
         const results = await Promise.allSettled(
           items.map(async (item, i) => {
             try {
-              const videoUrl = await callFcEndpoint(url, token, {
-                videoUrl: item.videoUrl,
-                startTime: item.startTime,
-                endTime: item.endTime,
-              });
+              const videoUrl = await videoProcessing.cropVideo(
+                item.videoUrl,
+                item.startTime,
+                item.endTime,
+              );
               return { index: i, status: "ok" as const, videoUrl };
             } catch (e) {
               return {
@@ -390,29 +380,11 @@ export const multimodalMcp: McpProvider = {
       }
 
       case "concat_clips": {
-        const url = process.env.FC_CONCAT_CLIPS_URL;
-        const token = process.env.FC_CONCAT_CLIPS_TOKEN;
-        if (!url || !token) {
-          return json([
-            {
-              status: "error",
-              error: "FC_CONCAT_CLIPS_URL and FC_CONCAT_CLIPS_TOKEN must be configured in .env",
-            },
-          ]);
-        }
-
         const { items } = ConcatClipsParams.parse(args);
         const results = await Promise.allSettled(
           items.map(async (item, i) => {
             try {
-              const videoUrl = await callFcEndpoint(
-                url,
-                token,
-                {
-                  clipUrls: item.clipUrls,
-                },
-                300000, // 5 minutes for concatenation
-              );
+              const videoUrl = await videoProcessing.concatClips(item.clipUrls);
               return { index: i, status: "ok" as const, videoUrl };
             } catch (e) {
               return {
