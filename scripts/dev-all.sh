@@ -4,6 +4,20 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
+# 禁止在 worktree 中运行开发服务器
+CURRENT_BRANCH=$(git branch --show-current)
+if [[ "$CURRENT_BRANCH" == agent/* ]]; then
+    echo "❌ ERROR: Cannot run dev server in worktree branch!"
+    echo ""
+    echo "Worktree branches are for code editing only."
+    echo "Please run the dev server from the main worktree:"
+    echo ""
+    echo "  cd $REPO_DIR"
+    echo "  pnpm run dev"
+    echo ""
+    exit 1
+fi
+
 MCP_PROXY_PORT="${MCP_PROXY_PORT:-8002}"
 NEXT_PORT="${PORT:-8001}"
 MCP_PROXY_PID_FILE="$REPO_DIR/.git/mcp-proxy.pid"
@@ -80,9 +94,14 @@ echo "📊 Service Status:"
 echo "  • Next.js Dev:  http://localhost:$NEXT_PORT"
 echo "  • MCP Proxy:    http://localhost:$MCP_PROXY_PORT"
 echo ""
-echo "📝 Logs:"
-echo "  • MCP Proxy:    tail -f ./logs/mcp-proxy.log"
-echo "  • Next.js:      tail -f ./logs/nextjs.log"
+echo "📝 Logs (fixed locations, no redirection):"
+echo "  • MCP Proxy:    $LOG_DIR/mcp-proxy.log"
+echo "  • Next.js:      $LOG_DIR/nextjs.log"
+echo "  • Protection:   .git/main-protection.log"
+echo ""
+echo "  View logs:"
+echo "    tail -f $LOG_DIR/mcp-proxy.log"
+echo "    tail -f $LOG_DIR/nextjs.log"
 echo ""
 echo "🛑 Stop services:"
 echo "  • Press Ctrl+C or run: pnpm run dev:stop"
