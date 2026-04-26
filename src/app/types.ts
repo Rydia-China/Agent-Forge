@@ -17,7 +17,8 @@ export type SkillSummary = {
   name: string;
   description: string;
   tags: string[];
-  productionVersion: number;
+  version: number;
+  isProduction: boolean;
 };
 
 export type SkillDetail = {
@@ -27,7 +28,7 @@ export type SkillDetail = {
   tags: string[];
   metadata: unknown;
   version: number;
-  productionVersion: number;
+  isProduction: boolean;
 };
 
 export type SkillVersionSummary = {

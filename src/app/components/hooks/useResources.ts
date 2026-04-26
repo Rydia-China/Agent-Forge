@@ -27,11 +27,11 @@ export function useResources(
   onErrorRef.current = onError;
 
   const builtinSkills = useMemo(
-    () => skills.filter((s) => s.productionVersion === 0),
+    () => [], // No longer distinguish builtin vs user skills
     [skills],
   );
   const dbSkills = useMemo(
-    () => skills.filter((s) => s.productionVersion > 0),
+    () => skills, // All skills are treated equally
     [skills],
   );
 
