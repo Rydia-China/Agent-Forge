@@ -6,6 +6,7 @@ import { langfuseMcp } from "./static/langfuse";
 import { langfuseAdminMcp } from "./static/langfuse-admin";
 import { subagentMcp } from "./static/subagent";
 import { ossMcp } from "./static/oss";
+import { multimodalMcp } from "./static/multimodal";
 
 /* ------------------------------------------------------------------ */
 /*  Catalog entry                                                      */
@@ -23,6 +24,7 @@ export interface McpCatalogEntry {
 const CATALOG: readonly McpCatalogEntry[] = [
   { name: "biz_db", provider: bizDbMcp },
   { name: "video_mgr", provider: videoMgrMcp },
+  { name: "multimodal", provider: multimodalMcp },
   { name: "langfuse", provider: langfuseMcp },
   { name: "langfuse_admin", provider: langfuseAdminMcp },
   { name: "subagent", provider: subagentMcp },
