@@ -35,7 +35,7 @@ export function SkillEditor({
         <Card size="small">
           <Typography.Text strong>{detail.name}</Typography.Text>
           {!isBuiltin && (
-            <div><Typography.Text type="secondary" style={{ fontSize: 12 }}>Production v{detail.productionVersion}</Typography.Text></div>
+            <div><Typography.Text type="secondary" style={{ fontSize: 12 }}>v{detail.version}{detail.isProduction ? ' (Production)' : ''}</Typography.Text></div>
           )}
           {detail.tags.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
