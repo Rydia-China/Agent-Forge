@@ -147,20 +147,23 @@
 # 1. 创建 worktree（手动创建分支）
 git worktree add -b agent/<task-name> .agent-worktrees/<task-name>
 
-# 2. 在 worktree 中开发（原子化提交）
+# 2. 设置 worktree 环境（复制 .env + 安装依赖）
 cd .agent-worktrees/<task-name>
+./scripts/setup-worktree.sh
+
+# 3. 在 worktree 中开发（原子化提交）
 # ... 编写代码（完成一个逻辑单元）...
 git add -A && git commit -m "feat: add user model"
 # ... 继续开发（完成下一个逻辑单元）...
 git add -A && git commit -m "feat: add user service"
 # ... 多次原子化提交，每次提交功能完整可独立回滚 ...
 
-# 3. 验证无误后，在主工作区合并
+# 4. 验证无误后，在主工作区合并
 cd /path/to/main
 git checkout main
 git merge --no-ff agent/<task-name>
 
-# 4. 清理 worktree
+# 5. 清理 worktree
 git worktree remove .agent-worktrees/<task-name>
 git branch -d agent/<task-name>
 ```
