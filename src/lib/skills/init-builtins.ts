@@ -51,8 +51,8 @@ export async function initializeBuiltinSkills(): Promise<void> {
       // Upload to OSS
       await ossService.uploadBuffer(
         Buffer.from(skillMd, "utf-8"),
-        `${builtin.name}/v${version}.md`,
-        "skills"
+        ossKey,
+        ""
       );
 
       // Write to DB
