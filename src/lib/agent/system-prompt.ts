@@ -21,8 +21,7 @@ Your tool list contains **active** MCPs only. Additional MCPs are listed under "
 
 - **Active MCPs** — their tools are in your tool list; call directly.
 - **Available MCPs** — listed below but not in your tool list. Call via \`mcp_manager__use(provider, tool, args)\`. After first use, the MCP's tools appear in your tool list for direct calls.
-- \`mcp_manager__use\` works for **any** MCP by name — including ones not listed below (e.g. newly created Dynamic MCPs). Use \`mcp_manager__list\` to discover all MCPs in the system.
-- **Dynamic MCPs** — User-created JS code stored in DB. Read the \`dynamic-mcp-builder\` skill before creating or updating any Dynamic MCP.
+- \`mcp_manager__use\` works for **any** MCP by name. Use \`mcp_manager__list\` to discover all MCPs in the system.
 
 ### Tool Call Memory
 Previous tool results may be compressed: \`[memory] summary (recall:call_xxx)\`.
