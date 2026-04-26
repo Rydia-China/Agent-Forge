@@ -1,7 +1,7 @@
 import matter from "gray-matter";
 
 /* ------------------------------------------------------------------ */
-/*  Import raw SKILL.md strings — 新增 builtin 只需加一行 import       */
+/*  Import raw SKILL.md strings — 新增预置 skill 只需加一行 import    */
 /* ------------------------------------------------------------------ */
 
 import { raw as skillCreator } from "./skill-creator";
@@ -32,7 +32,7 @@ const RAW_SKILLS: readonly string[] = [
 /*  Types                                                             */
 /* ------------------------------------------------------------------ */
 
-export interface BuiltinSkill {
+export interface PresetSkill {
   readonly name: string;
   readonly description: string;
   readonly content: string;
@@ -44,10 +44,10 @@ export interface BuiltinSkill {
 /*  Parse once at module load                                         */
 /* ------------------------------------------------------------------ */
 
-function parse(raw: string): BuiltinSkill {
+function parse(raw: string): PresetSkill {
   const { data, content } = matter(raw);
   const name = String(data.name ?? "");
-  if (!name) throw new Error("Built-in skill missing 'name' in frontmatter");
+  if (!name) throw new Error("Preset skill missing 'name' in frontmatter");
   return {
     name,
     description: String(data.description ?? ""),
@@ -57,18 +57,9 @@ function parse(raw: string): BuiltinSkill {
   };
 }
 
-/** All built-in skills, parsed and frozen. */
-export const BUILTIN_SKILLS: readonly BuiltinSkill[] = RAW_SKILLS.map(parse);
+/** All preset skills, parsed and frozen. */
+const PRESET_SKILLS: readonly PresetSkill[] = RAW_SKILLS.map(parse);
 
-/** name → BuiltinSkill lookup */
-const byName = new Map<string, BuiltinSkill>(
-  BUILTIN_SKILLS.map((s) => [s.name, s]),
-);
-
-export function getBuiltinSkill(name: string): BuiltinSkill | undefined {
-  return byName.get(name);
-}
-
-export function listBuiltinSkills(): readonly BuiltinSkill[] {
-  return BUILTIN_SKILLS;
+export function listPresetSkills(): readonly PresetSkill[] {
+  return PRESET_SKILLS;
 }

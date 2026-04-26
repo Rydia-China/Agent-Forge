@@ -27,16 +27,12 @@ export function SkillEditor({
   onSave,
   onPublish,
 }: SkillEditorProps) {
-  const isBuiltin = versions.length === 0;
-
   return (
-    <div className={isBuiltin ? "space-y-4" : "grid gap-6 lg:grid-cols-[2fr_1fr]"}>
+    <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
       <div className="space-y-4">
         <Card size="small">
           <Typography.Text strong>{detail.name}</Typography.Text>
-          {!isBuiltin && (
-            <div><Typography.Text type="secondary" style={{ fontSize: 12 }}>v{detail.version}{detail.isProduction ? ' (Production)' : ''}</Typography.Text></div>
-          )}
+          <div><Typography.Text type="secondary" style={{ fontSize: 12 }}>v{detail.version}{detail.isProduction ? ' (Production)' : ''}</Typography.Text></div>
           {detail.tags.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {detail.tags.map((t) => (
@@ -52,8 +48,7 @@ export function SkillEditor({
               <Input.TextArea
                 rows={4}
                 value={edit.description}
-                readOnly={isBuiltin}
-                onChange={isBuiltin ? undefined : (e) => setEdit((p) => ({ ...p, description: e.target.value }))}
+                onChange={(e) => setEdit((p) => ({ ...p, description: e.target.value }))}
                 style={{ marginTop: 4 }}
               />
             </div>
@@ -62,43 +57,36 @@ export function SkillEditor({
               <Input.TextArea
                 rows={16}
                 value={edit.content}
-                readOnly={isBuiltin}
-                onChange={isBuiltin ? undefined : (e) => setEdit((p) => ({ ...p, content: e.target.value }))}
+                onChange={(e) => setEdit((p) => ({ ...p, content: e.target.value }))}
                 style={{ marginTop: 4 }}
               />
             </div>
-            {!isBuiltin && (
-              <>
-                <div>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>Tags</Typography.Text>
-                  <Input
-                    value={edit.tags}
-                    onChange={(e) => setEdit((p) => ({ ...p, tags: e.target.value }))}
-                    placeholder="tag-a, tag-b"
-                    style={{ marginTop: 4 }}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <SyncButton type="skill" name={detail.name} />
-                  <Button
-                    type="primary"
-                    icon={<SaveOutlined />}
-                    loading={isSaving}
-                    onClick={onSave}
-                  >
-                    提交新版本
-                  </Button>
-                </div>
-              </>
-            )}
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>Tags</Typography.Text>
+              <Input
+                value={edit.tags}
+                onChange={(e) => setEdit((p) => ({ ...p, tags: e.target.value }))}
+                placeholder="tag-a, tag-b"
+                style={{ marginTop: 4 }}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <SyncButton type="skill" name={detail.name} />
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                loading={isSaving}
+                onClick={onSave}
+              >
+                提交新版本
+              </Button>
+            </div>
           </div>
         </Card>
       </div>
-      {!isBuiltin && (
-        <Card size="small" title="Versions">
-          <VersionList versions={versions} isPublishing={isPublishing} onPublish={onPublish} />
-        </Card>
-      )}
+      <Card size="small" title="Versions">
+        <VersionList versions={versions} isPublishing={isPublishing} onPublish={onPublish} />
+      </Card>
     </div>
   );
 }
