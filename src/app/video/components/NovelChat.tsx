@@ -41,13 +41,22 @@ export function NovelChat({
     onRefreshNeeded,
     selectedModel,
   );
-  const img = useImageUpload((msg) => chat.setError(msg));
+  const {
+    pendingImages,
+    setPendingImages,
+    isDragOver,
+    setIsDragOver,
+    isComposing,
+    setIsComposing,
+    handleImageFiles,
+    fileInputRef,
+  } = useImageUpload((msg) => chat.setError(msg));
 
   const handleSend = useCallback(() => {
-    const images = img.pendingImages.length > 0 ? [...img.pendingImages] : undefined;
-    img.setPendingImages([]);
+    const images = pendingImages.length > 0 ? [...pendingImages] : undefined;
+    setPendingImages([]);
     void chat.sendMessage(images);
-  }, [chat, img]);
+  }, [chat, pendingImages, setPendingImages]);
 
   return (
     <div className="flex h-full bg-slate-950/60">
@@ -85,16 +94,16 @@ export function NovelChat({
         )}
 
         <footer className="px-3 py-2.5">
-          {img.pendingImages.length > 0 && (
+          {pendingImages.length > 0 && (
             <div className="mb-1.5 flex flex-wrap gap-1.5">
-              {img.pendingImages.map((url, i) => (
+              {pendingImages.map((url, i) => (
                 <div key={url} className="group relative">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={url} alt={`Pending ${i + 1}`} className="h-12 w-12 rounded border border-slate-700 object-cover" />
                   <CloseCircleFilled
                     className="absolute -right-1 -top-1 cursor-pointer text-slate-400 opacity-0 transition group-hover:opacity-100 hover:text-rose-400"
                     style={{ fontSize: 14 }}
-                    onClick={() => img.setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
+                    onClick={() => setPendingImages((prev) => prev.filter((_, idx) => idx !== i))}
                   />
                 </div>
               ))}
@@ -102,35 +111,35 @@ export function NovelChat({
           )}
           <div
             className={`flex items-end gap-2 rounded-xl border bg-slate-900/60 px-3 py-2 transition ${
-              img.isDragOver ? "border-purple-400 bg-purple-500/10" : "border-slate-700"
+              isDragOver ? "border-purple-400 bg-purple-500/10" : "border-slate-700"
             }`}
-            onDragOver={(e) => { e.preventDefault(); img.setIsDragOver(true); }}
-            onDragLeave={() => img.setIsDragOver(false)}
-            onDrop={(e) => { e.preventDefault(); img.setIsDragOver(false); void img.handleImageFiles(Array.from(e.dataTransfer.files)); }}
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={(e) => { e.preventDefault(); setIsDragOver(false); void handleImageFiles(Array.from(e.dataTransfer.files)); }}
           >
             <input
-              ref={img.fileInputRef}
+              ref={fileInputRef}
               type="file"
               accept="image/*"
               multiple
               className="hidden"
-              onChange={(e) => { void img.handleImageFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }}
+              onChange={(e) => { void handleImageFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }}
             />
             <Button
               type="text"
               size="small"
               icon={<PictureOutlined />}
-              onClick={() => img.fileInputRef.current?.click()}
+              onClick={() => fileInputRef.current?.click()}
               disabled={chat.isSending}
               className="shrink-0 !text-slate-400 hover:!text-slate-200"
             />
             <Input.TextArea
               autoSize={{ minRows: 1, maxRows: 4 }}
-              placeholder={img.isDragOver ? "松开以上传图片…" : "Chat with novel resource agent…"}
+              placeholder={isDragOver ? "松开以上传图片…" : "Chat with novel resource agent…"}
               value={chat.input}
               onChange={(e) => chat.setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (img.isComposing) return;
+                if (isComposing) return;
                 const native = e.nativeEvent;
                 const composing =
                   typeof native === "object" &&
@@ -147,11 +156,11 @@ export function NovelChat({
                 const files = Array.from(e.clipboardData.files);
                 if (files.some((f) => f.type.startsWith("image/"))) {
                   e.preventDefault();
-                  void img.handleImageFiles(files);
+                  void handleImageFiles(files);
                 }
               }}
-              onCompositionStart={() => img.setIsComposing(true)}
-              onCompositionEnd={() => img.setIsComposing(false)}
+              onCompositionStart={() => setIsComposing(true)}
+              onCompositionEnd={() => setIsComposing(false)}
               disabled={chat.isSending}
               variant="borderless"
               style={{ fontSize: 12 }}
@@ -182,7 +191,7 @@ export function NovelChat({
                   size="small"
                   icon={<SendOutlined />}
                   onClick={handleSend}
-                  disabled={chat.isSending || (chat.input.trim().length === 0 && img.pendingImages.length === 0)}
+                  disabled={chat.isSending || (chat.input.trim().length === 0 && pendingImages.length === 0)}
                 />
               )}
             </div>
