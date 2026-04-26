@@ -523,10 +523,13 @@ async function runAgentStreamInnerCore(
     let currentContent = "";
 
     try {
+      console.log(`[agent:stream] Calling LLM with ${llmMessages.length} messages, model: ${config?.model ?? 'default'}`);
       const stream = await chatCompletionStream(llmMessages, openaiTools, signal, config?.model);
       const toolCallsByIndex = new Map<number, ToolCall>();
 
+      let chunkCount = 0;
       for await (const chunk of stream) {
+        chunkCount++;
         const choice = chunk.choices[0];
         if (!choice) continue;
         const delta = choice.delta;
@@ -540,6 +543,8 @@ async function runAgentStreamInnerCore(
           }
         }
       }
+      console.log(`[agent:stream] Stream completed, received ${chunkCount} chunks`);
+
 
       lastReply = currentContent;
 
@@ -640,7 +645,9 @@ async function runAgentStreamInnerCore(
       // Flush assistant + tool messages so recall can find them
       await flush();
     } catch (err: unknown) {
+      console.error(`[agent:stream] Stream error:`, err);
       if (signal?.aborted) {
+        console.log(`[agent:stream] Aborted by signal`);
         // Strip dangling tool_calls that were accumulated before abort
         stripDanglingToolCalls(newMessages);
         if (currentContent && !newMessages.some(
