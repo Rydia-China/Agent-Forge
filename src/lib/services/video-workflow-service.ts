@@ -388,6 +388,151 @@ function sceneGridKey(sceneName: string): string {
 function costumeKey(name: string): string {
   return `costume_${name.toLowerCase().replace(/\s+/g, "_")}`;
 }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseJsonValue(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  if (!value.trim()) return null;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function parseRecord(value: unknown): Record<string, unknown> | null {
+  const parsed = parseJsonValue(value);
+  return isRecord(parsed) ? parsed : null;
+}
+
+function parseArray(value: unknown): unknown[] {
+  const parsed = parseJsonValue(value);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+function addExpectedResource(
+  items: ExpectedResourceMeta[],
+  seen: Set<string>,
+  item: ExpectedResourceMeta,
+): void {
+  if (!item.key.trim() || !item.title.trim()) return;
+  const compositeKey = `${item.scopeType}:${item.scopeId}:${item.key}`;
+  if (seen.has(compositeKey)) return;
+  seen.add(compositeKey);
+  items.push(item);
+}
+
+function addNovelCharacterResource(
+  items: ExpectedResourceMeta[],
+  seen: Set<string>,
+  novelId: string,
+  name: string,
+): void {
+  const title = name.trim();
+  if (!title) return;
+  addExpectedResource(items, seen, {
+    key: portraitKey(title),
+    category: "角色立绘",
+    title,
+    scopeType: "novel",
+    scopeId: novelId,
+  });
+}
+
+function addNovelSceneResource(
+  items: ExpectedResourceMeta[],
+  seen: Set<string>,
+  novelId: string,
+  title: string,
+): void {
+  const normalizedTitle = title.trim();
+  if (!normalizedTitle) return;
+  addExpectedResource(items, seen, {
+    key: sceneKey(normalizedTitle),
+    category: "场景",
+    title: normalizedTitle,
+    scopeType: "novel",
+    scopeId: novelId,
+  });
+}
+
+function addNovelSceneGridResource(
+  items: ExpectedResourceMeta[],
+  seen: Set<string>,
+  novelId: string,
+  title: string,
+): void {
+  const normalizedTitle = title.trim();
+  if (!normalizedTitle) return;
+  addExpectedResource(items, seen, {
+    key: sceneGridKey(normalizedTitle),
+    category: "场景",
+    title: `${normalizedTitle} (grid)`,
+    scopeType: "novel",
+    scopeId: novelId,
+  });
+}
+
+function addScriptCostumeResource(
+  items: ExpectedResourceMeta[],
+  seen: Set<string>,
+  scriptId: string,
+  name: string,
+): void {
+  const title = name.trim();
+  if (!title) return;
+  addExpectedResource(items, seen, {
+    key: costumeKey(title),
+    category: "换装",
+    title,
+    scopeType: "script",
+    scopeId: scriptId,
+  });
+}
+
+function addCharactersFromValue(
+  items: ExpectedResourceMeta[],
+  seen: Set<string>,
+  novelId: string,
+  value: unknown,
+): void {
+  for (const name of parseArray(value)) {
+    if (typeof name === "string") addNovelCharacterResource(items, seen, novelId, name);
+  }
+}
+
+function addOutfitsFromValue(
+  items: ExpectedResourceMeta[],
+  seen: Set<string>,
+  scriptId: string,
+  value: unknown,
+): void {
+  const outfits = parseRecord(value);
+  if (!outfits) return;
+  for (const name of Object.keys(outfits)) {
+    addScriptCostumeResource(items, seen, scriptId, name);
+  }
+}
+
+function addSceneLocationsFromValue(
+  items: ExpectedResourceMeta[],
+  seen: Set<string>,
+  novelId: string,
+  value: unknown,
+): void {
+  const sceneLocations = parseRecord(value);
+  if (!sceneLocations) return;
+
+  for (const [name, rawScene] of Object.entries(sceneLocations)) {
+    const scene = parseRecord(rawScene);
+    const visualPrompt = scene?.visual_prompt;
+    if (typeof visualPrompt === "string" && visualPrompt.trim()) {
+      addNovelSceneResource(items, seen, novelId, name);
+    }
+  }
+}
 
 async function createEmptyKeyResourcesWithDiff(
   novelId: string,
@@ -480,15 +625,10 @@ function computeExpectedKeys(
   createdEpisodes: EpisodeSummary[],
 ): ExpectedResourceMeta[] {
   const items: ExpectedResourceMeta[] = [];
+  const seen = new Set<string>();
 
   for (const arc of upload.character_arcs ?? []) {
-    items.push({
-      key: portraitKey(arc.name),
-      category: "角色立绘",
-      title: arc.name,
-      scopeType: "novel",
-      scopeId: novelId,
-    });
+    addNovelCharacterResource(items, seen, novelId, arc.name);
   }
 
   const locations = upload.location_bible ?? [];
@@ -505,22 +645,10 @@ function computeExpectedKeys(
     }
   }
   for (const name of allSceneNames) {
-    items.push({
-      key: sceneKey(name),
-      category: "场景",
-      title: name,
-      scopeType: "novel",
-      scopeId: novelId,
-    });
+    addNovelSceneResource(items, seen, novelId, name);
   }
   for (const name of gridParents) {
-    items.push({
-      key: sceneGridKey(name),
-      category: "场景",
-      title: `${name} (grid)`,
-      scopeType: "novel",
-      scopeId: novelId,
-    });
+    addNovelSceneGridResource(items, seen, novelId, name);
   }
 
   const episodes = upload.episodes;
@@ -528,28 +656,15 @@ function computeExpectedKeys(
     const episode = episodes[index];
     const scriptId = createdEpisodes[index]?.id;
     if (!episode || !scriptId) continue;
+    addCharactersFromValue(items, seen, novelId, episode.output.characters);
+    addSceneLocationsFromValue(items, seen, novelId, episode.output.scene_locations);
     const outfits = episode.output.character_outfits;
-    if (!outfits) continue;
-    for (const name of Object.keys(outfits)) {
-      items.push({
-        key: costumeKey(name),
-        category: "换装",
-        title: name,
-        scopeType: "script",
-        scopeId: scriptId,
-      });
-    }
+    if (outfits) addOutfitsFromValue(items, seen, scriptId, outfits);
   }
 
   return items;
 }
-
-async function createEmptyKeyResources(
-  novelId: string,
-  upload: NovelScriptUpload,
-  createdEpisodes: EpisodeSummary[],
-): Promise<void> {
-  const expectedResources = computeExpectedKeys(novelId, upload, createdEpisodes);
+async function upsertExpectedResources(expectedResources: ExpectedResourceMeta[]): Promise<void> {
   for (const resource of expectedResources) {
     await prisma.keyResource.upsert({
       where: {
@@ -573,6 +688,94 @@ async function createEmptyKeyResources(
       },
     });
   }
+}
+
+async function createEmptyKeyResources(
+  novelId: string,
+  upload: NovelScriptUpload,
+  createdEpisodes: EpisodeSummary[],
+): Promise<void> {
+  await upsertExpectedResources(computeExpectedKeys(novelId, upload, createdEpisodes));
+}
+
+async function computeStoredExpectedKeys(
+  novelId: string,
+  scriptScopeIds: Set<string>,
+): Promise<ExpectedResourceMeta[]> {
+  const tNovels = await physical("novels");
+  const tScripts = await physical("novel_scripts");
+
+  const { rows: novelRows } = await bizPool.query(
+    `SELECT character_arcs, location_bible FROM "${tNovels}" WHERE id = $1 LIMIT 1`,
+    [novelId],
+  );
+  const { rows: scriptRows } = await bizPool.query(
+    `SELECT id, init_result, characters, costumes FROM "${tScripts}" WHERE novel_id = $1`,
+    [novelId],
+  );
+
+  const items: ExpectedResourceMeta[] = [];
+  const seen = new Set<string>();
+  const novelRow = (novelRows as Array<Record<string, unknown>>)[0];
+
+  for (const arc of parseArray(novelRow?.character_arcs)) {
+    if (!isRecord(arc)) continue;
+    const name = arc.name;
+    if (typeof name === "string") addNovelCharacterResource(items, seen, novelId, name);
+  }
+
+  for (const location of parseArray(novelRow?.location_bible)) {
+    if (!isRecord(location)) continue;
+    const name = location.name;
+    const visualPrompt = location.visual_prompt;
+    if (typeof name === "string" && typeof visualPrompt === "string" && visualPrompt.trim()) {
+      addNovelSceneResource(items, seen, novelId, name);
+    }
+
+    const subLocations = parseArray(location.sub_locations);
+    const realSubLocations = subLocations.filter((subLocation) => {
+      if (!isRecord(subLocation)) return false;
+      return subLocation.id !== location.id;
+    });
+    if (typeof name === "string" && realSubLocations.length >= 2) {
+      addNovelSceneGridResource(items, seen, novelId, name);
+    }
+
+    for (const subLocation of subLocations) {
+      if (!isRecord(subLocation)) continue;
+      const subName = subLocation.name;
+      const subVisualPrompt = subLocation.visual_prompt;
+      if (typeof subName === "string" && typeof subVisualPrompt === "string" && subVisualPrompt.trim()) {
+        addNovelSceneResource(items, seen, novelId, subName);
+      }
+    }
+  }
+
+  for (const row of scriptRows as Array<Record<string, unknown>>) {
+    const scriptId = row.id;
+    if (typeof scriptId !== "string") continue;
+
+    const initResult = parseRecord(row.init_result);
+    addCharactersFromValue(items, seen, novelId, initResult?.characters ?? row.characters);
+    addSceneLocationsFromValue(items, seen, novelId, initResult?.scene_locations);
+
+    if (scriptScopeIds.has(scriptId)) {
+      addOutfitsFromValue(items, seen, scriptId, initResult?.character_outfits ?? row.costumes);
+    }
+  }
+
+  return items;
+}
+
+export async function ensureExpectedNovelResources(novelId: string): Promise<void> {
+  await upsertExpectedResources(await computeStoredExpectedKeys(novelId, new Set<string>()));
+}
+
+export async function ensureExpectedEpisodeResources(
+  novelId: string,
+  scriptId: string,
+): Promise<void> {
+  await upsertExpectedResources(await computeStoredExpectedKeys(novelId, new Set([scriptId])));
 }
 
 async function insertEpisodes(

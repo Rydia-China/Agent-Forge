@@ -7,6 +7,7 @@ import {
   getById,
   updateData,
 } from "@/lib/services/key-resource-service";
+import { ensureExpectedEpisodeResources } from "@/lib/services/video-workflow-service";
 
 /** GET /api/video/episodes/[scriptId]/resources?novelId=xxx — get episode + novel resources */
 export async function GET(
@@ -21,6 +22,7 @@ export async function GET(
   }
 
   try {
+    await ensureExpectedEpisodeResources(novelId, scriptId);
     const [novelGroups, scriptGroups] = await Promise.all([
       listResourcesByScope("novel", novelId),
       listResourcesByScope("script", scriptId),
