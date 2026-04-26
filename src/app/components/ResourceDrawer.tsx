@@ -14,7 +14,6 @@ export interface ResourceDrawerProps {
   builtinSkills: SkillSummary[];
   dbSkills: SkillSummary[];
   builtinMcps: BuiltinMcpSummary[];
-  mcps: McpSummary[];
   isLoadingResources: boolean;
   error: string | null;
   notice: string | null;
@@ -28,7 +27,6 @@ export function ResourceDrawer({
   builtinSkills,
   dbSkills,
   builtinMcps,
-  mcps,
   isLoadingResources,
   error,
   notice,
@@ -81,28 +79,27 @@ export function ResourceDrawer({
 
         <section>
           <Typography.Text type="secondary" style={{ fontSize: 10, textTransform: "uppercase" }}>
-            内置 MCPs
+            内置 MCPS
           </Typography.Text>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {builtinMcps.map((m) => (
-              <Tag
-                key={m.name}
-                color={m.active ? "green" : m.available ? "default" : undefined}
-                style={{
-                  ...((!m.active && !m.available) ? { textDecoration: "line-through", opacity: 0.5 } : {}),
-                }}
-                title={
-                  m.active
-                    ? `${m.name} (active)`
-                    : m.available
-                      ? `${m.name} (available)`
-                      : `${m.name} (unavailable)`
-                }
-              >
-                {m.name}
-              </Tag>
-            ))}
-          </div>
+          {builtinMcps.length === 0 ? (
+            <div className="mt-1">
+              <Typography.Text type="secondary" style={{ fontSize: 10 }}>
+                No MCPS servers.
+              </Typography.Text>
+            </div>
+          ) : (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {builtinMcps.map((m) => (
+                <Tag
+                  key={m.name}
+                  color={m.active ? "blue" : "default"}
+                  title={m.active ? `${m.name} (active)` : `${m.name} (available)`}
+                >
+                  {m.name}
+                </Tag>
+              ))}
+            </div>
+          )}
         </section>
 
         <Divider style={{ margin: "8px 0" }} />
@@ -127,31 +124,6 @@ export function ResourceDrawer({
                   }}
                 >
                   {s.name}
-                </Tag>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section>
-          <Typography.Text strong style={{ fontSize: 11 }}>MCPs</Typography.Text>
-          {mcps.length === 0 ? (
-            <div className="mt-1">
-              <Typography.Text type="secondary" style={{ fontSize: 10 }}>No MCP servers.</Typography.Text>
-            </div>
-          ) : (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {mcps.map((m) => (
-                <Tag
-                  key={m.name}
-                  style={{ cursor: "pointer" }}
-                  title={m.description ?? ""}
-                  onClick={() => {
-                    onSelectResource({ type: "mcp", name: m.name });
-                    onClose();
-                  }}
-                >
-                  {m.name}
                 </Tag>
               ))}
             </div>

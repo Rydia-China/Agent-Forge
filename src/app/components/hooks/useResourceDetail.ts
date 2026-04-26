@@ -6,11 +6,8 @@ import type {
   ResourceSelection,
   SkillDetail,
   SkillVersionSummary,
-  McpDetail,
-  McpVersionSummary,
   SkillSummary,
   BuiltinMcpSummary,
-  McpSummary,
 } from "../../types";
 
 export interface UseResourceDetailReturn {
@@ -20,10 +17,6 @@ export interface UseResourceDetailReturn {
   skillVersions: SkillVersionSummary[];
   skillEdit: { description: string; content: string; tags: string };
   setSkillEdit: React.Dispatch<React.SetStateAction<{ description: string; content: string; tags: string }>>;
-  mcpDetail: McpDetail | null;
-  mcpVersions: McpVersionSummary[];
-  mcpEdit: { description: string; code: string };
-  setMcpEdit: React.Dispatch<React.SetStateAction<{ description: string; code: string }>>;
   isLoadingResourceDetail: boolean;
   isSavingResource: boolean;
   isDeletingResource: boolean;
@@ -32,9 +25,7 @@ export interface UseResourceDetailReturn {
   notice: string | null;
   loadResourceDetail: (resource: ResourceSelection) => Promise<void>;
   saveSkillVersion: () => Promise<void>;
-  saveMcpVersion: () => Promise<void>;
   publishSkillVersion: (ver: number) => Promise<void>;
-  publishMcpVersion: (ver: number) => Promise<void>;
   deleteSelectedResource: () => Promise<void>;
 }
 
@@ -43,15 +34,11 @@ export function useResourceDetail(
   builtinSkills: SkillSummary[],
   dbSkills: SkillSummary[],
   builtinMcps: BuiltinMcpSummary[],
-  mcps: McpSummary[],
 ): UseResourceDetailReturn {
   const [selectedResource, setSelectedResource] = useState<ResourceSelection | null>(null);
   const [skillDetail, setSkillDetail] = useState<SkillDetail | null>(null);
   const [skillVersions, setSkillVersions] = useState<SkillVersionSummary[]>([]);
   const [skillEdit, setSkillEdit] = useState({ description: "", content: "", tags: "" });
-  const [mcpDetail, setMcpDetail] = useState<McpDetail | null>(null);
-  const [mcpVersions, setMcpVersions] = useState<McpVersionSummary[]>([]);
-  const [mcpEdit, setMcpEdit] = useState({ description: "", code: "" });
   const [isLoadingResourceDetail, setIsLoadingResourceDetail] = useState(false);
   const [isSavingResource, setIsSavingResource] = useState(false);
   const [isDeletingResource, setIsDeletingResource] = useState(false);
@@ -80,15 +67,10 @@ export function useResourceDetail(
       }
       return;
     }
-    if (
-      !builtinMcps.some((m) => m.name === selectedResource.name) &&
-      !mcps.some((m) => m.name === selectedResource.name)
-    ) {
+    if (!builtinMcps.some((m) => m.name === selectedResource.name)) {
       setSelectedResource(null);
-      setMcpDetail(null);
-      setMcpVersions([]);
     }
-  }, [builtinSkills, builtinMcps, dbSkills, mcps, selectedResource]);
+  }, [builtinSkills, builtinMcps, dbSkills, selectedResource]);
 
   const loadResourceDetail = useCallback(async (resource: ResourceSelection) => {
     const key = `${resource.type}:${resource.name}`;
@@ -107,19 +89,8 @@ export function useResourceDetail(
         setSkillDetail(d);
         setSkillVersions(v);
         setSkillEdit({ description: d.description, content: d.content, tags: joinTags(d.tags) });
-        setMcpDetail(null);
-        setMcpVersions([]);
       } else {
-        const [d, v] = await Promise.all([
-          fetchJson<McpDetail>(`/api/mcps/${resource.name}`),
-          fetchJson<McpVersionSummary[]>(`/api/mcps/${resource.name}/versions`),
-        ]);
-        if (selectedResourceRef.current !== key) return;
-        setMcpDetail(d);
-        setMcpVersions(v);
-        setMcpEdit({ description: d.description ?? "", code: d.code });
-        setSkillDetail(null);
-        setSkillVersions([]);
+        setNotice("内置 MCPS 不支持查看详情");
       }
     } catch (err: unknown) {
       if (selectedResourceRef.current === key)
@@ -166,41 +137,6 @@ export function useResourceDetail(
     }
   }, [loadResources, skillDetail, skillEdit]);
 
-  const saveMcpVersion = useCallback(async () => {
-    if (!mcpDetail) return;
-    const code = mcpEdit.code.trim();
-    if (!code) {
-      setError("Code is required.");
-      return;
-    }
-    setIsSavingResource(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const r = await fetchJson<{ version: { version: number } }>(
-        `/api/mcps/${mcpDetail.name}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            description: mcpEdit.description.trim(),
-            code,
-            promote: false,
-          }),
-        },
-      );
-      setNotice(`已提交版本 v${r.version.version}（未发布）`);
-      await loadResources();
-      setMcpVersions(
-        await fetchJson<McpVersionSummary[]>(`/api/mcps/${mcpDetail.name}/versions`),
-      );
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to save."));
-    } finally {
-      setIsSavingResource(false);
-    }
-  }, [loadResources, mcpDetail, mcpEdit]);
-
   const publishSkillVersion = useCallback(
     async (ver: number) => {
       if (!skillDetail) return;
@@ -230,39 +166,6 @@ export function useResourceDetail(
     [loadResources, skillDetail],
   );
 
-  const publishMcpVersion = useCallback(
-    async (ver: number) => {
-      if (!mcpDetail) return;
-      setIsPublishingVersion(true);
-      setError(null);
-      setNotice(null);
-      try {
-        const r = await fetchJson<{ loadError?: string }>(
-          `/api/mcps/${mcpDetail.name}/production`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ version: ver }),
-          },
-        );
-        if (r.loadError) setError(`Published but load error: ${r.loadError}`);
-        else setNotice(`已发布版本 v${ver}`);
-        await loadResources();
-        const [d, v] = await Promise.all([
-          fetchJson<McpDetail>(`/api/mcps/${mcpDetail.name}`),
-          fetchJson<McpVersionSummary[]>(`/api/mcps/${mcpDetail.name}/versions`),
-        ]);
-        setMcpDetail(d);
-        setMcpVersions(v);
-      } catch (err: unknown) {
-        setError(getErrorMessage(err, "Failed to publish."));
-      } finally {
-        setIsPublishingVersion(false);
-      }
-    },
-    [loadResources, mcpDetail],
-  );
-
   const deleteSelectedResource = useCallback(async () => {
     if (!selectedResource) return;
     setIsDeletingResource(true);
@@ -270,16 +173,12 @@ export function useResourceDetail(
     setNotice(null);
     try {
       await fetchJson<{ deleted: string }>(
-        selectedResource.type === "skill"
-          ? `/api/skills/${selectedResource.name}`
-          : `/api/mcps/${selectedResource.name}`,
+        `/api/skills/${selectedResource.name}`,
         { method: "DELETE" },
       );
       setSelectedResource(null);
       setSkillDetail(null);
       setSkillVersions([]);
-      setMcpDetail(null);
-      setMcpVersions([]);
       await loadResources();
       setNotice("已删除资源");
     } catch (err: unknown) {
@@ -296,10 +195,6 @@ export function useResourceDetail(
     skillVersions,
     skillEdit,
     setSkillEdit,
-    mcpDetail,
-    mcpVersions,
-    mcpEdit,
-    setMcpEdit,
     isLoadingResourceDetail,
     isSavingResource,
     isDeletingResource,
@@ -308,9 +203,7 @@ export function useResourceDetail(
     notice,
     loadResourceDetail,
     saveSkillVersion,
-    saveMcpVersion,
     publishSkillVersion,
-    publishMcpVersion,
     deleteSelectedResource,
   };
 }
