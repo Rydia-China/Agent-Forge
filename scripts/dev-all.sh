@@ -54,7 +54,7 @@ echo "🚀 Starting Agent-Forge Development Environment"
 echo "================================================"
 
 echo "📡 Starting MCP Proxy on port $MCP_PROXY_PORT..."
-MCP_PROXY_PORT=$MCP_PROXY_PORT node "$REPO_DIR/bin/mcp-proxy.js" >> "$LOG_DIR/mcp-proxy.log" 2>&1 &
+MCP_PROXY_PORT=$MCP_PROXY_PORT node "$REPO_DIR/scripts/mcp-proxy.js" >> "$LOG_DIR/mcp-proxy.log" 2>&1 &
 MCP_PROXY_PID=$!
 echo "$MCP_PROXY_PID" > "$MCP_PROXY_PID_FILE"
 echo "✅ MCP Proxy started (PID: $MCP_PROXY_PID)"
