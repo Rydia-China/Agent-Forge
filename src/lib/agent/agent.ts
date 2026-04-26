@@ -524,26 +524,40 @@ async function runAgentStreamInnerCore(
 
     try {
       console.log(`[agent:stream] Calling LLM with ${llmMessages.length} messages, model: ${config?.model ?? 'default'}`);
+      console.log(`[agent:stream] Last message preview:`, JSON.stringify(llmMessages[llmMessages.length - 1]).slice(0, 200));
+      
       const stream = await chatCompletionStream(llmMessages, openaiTools, signal, config?.model);
+      console.log(`[agent:stream] Stream object received, starting iteration...`);
+      
       const toolCallsByIndex = new Map<number, ToolCall>();
 
       let chunkCount = 0;
       for await (const chunk of stream) {
         chunkCount++;
+        console.log(`[agent:stream] Chunk ${chunkCount} received:`, JSON.stringify(chunk).slice(0, 300));
+        
         const choice = chunk.choices[0];
-        if (!choice) continue;
+        if (!choice) {
+          console.log(`[agent:stream] Chunk ${chunkCount} has no choices[0]`);
+          continue;
+        }
+        
         const delta = choice.delta;
+        console.log(`[agent:stream] Chunk ${chunkCount} delta:`, JSON.stringify(delta));
+        
         if (delta.content) {
           currentContent += delta.content;
+          console.log(`[agent:stream] Sending delta content to callback: "${delta.content}"`);
           callbacks.onDelta?.(delta.content);
         }
         if (delta.tool_calls?.length) {
+          console.log(`[agent:stream] Chunk ${chunkCount} has ${delta.tool_calls.length} tool calls`);
           for (const tcDelta of delta.tool_calls) {
             upsertToolCall(toolCallsByIndex, tcDelta);
           }
         }
       }
-      console.log(`[agent:stream] Stream completed, received ${chunkCount} chunks`);
+      console.log(`[agent:stream] Stream completed, received ${chunkCount} chunks, total content length: ${currentContent.length}`);
 
 
       lastReply = currentContent;

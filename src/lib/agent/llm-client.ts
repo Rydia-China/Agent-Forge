@@ -69,7 +69,15 @@ export async function chatCompletionStream(
   model?: string,
 ): Promise<AsyncIterable<ChatCompletionChunk>> {
   const client = getClient();
-  return client.chat.completions.create(
+  
+  console.log("[llm-client] Creating stream with:", {
+    model: model ?? DEFAULT_MODEL,
+    messageCount: messages.length,
+    toolCount: tools?.length ?? 0,
+    baseURL: process.env.LLM_BASE_URL,
+  });
+  
+  const stream = await client.chat.completions.create(
     {
       model: model ?? DEFAULT_MODEL,
       messages,
@@ -78,6 +86,10 @@ export async function chatCompletionStream(
     },
     signal ? { signal } : undefined,
   );
+  
+  console.log("[llm-client] Stream created, type:", typeof stream);
+  
+  return stream;
 }
 
 /* ------------------------------------------------------------------ */
