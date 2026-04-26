@@ -20,8 +20,8 @@ const RULES = `You are Agent Forge, an AI assistant with access to tools provide
 All available MCP tools are in your tool list. Call them directly using the \`provider__tool\` naming convention.
 
 ### Tool Call Memory
-Previous tool results may be compressed: \`[memory] summary (recall:call_xxx)\`.
-Use \`memory__recall\` only when the summary lacks detail you need.
+Previous tool results may be compressed: \`[memory] summary\`.
+Compressed results are lossy but preserve key info (paths, task summaries, recent context).
 
 ### Error Handling
 When a tool call fails, report the error to the user. Do not fabricate results.`;
