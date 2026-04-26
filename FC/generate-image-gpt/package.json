@@ -1,0 +1,10 @@
+{
+  "name": "fc-generate-image",
+  "version": "1.0.0",
+  "description": "阿里云FC函数 - 图片生成",
+  "main": "index.js",
+  "dependencies": {
+    "@google/genai": "^1.31.0",
+    "ali-oss": "^6.23.0"
+  }
+}

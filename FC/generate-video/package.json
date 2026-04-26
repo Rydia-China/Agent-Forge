@@ -1,0 +1,9 @@
+{
+  "name": "fc-generate-video",
+  "version": "1.0.0",
+  "description": "阿里云FC函数 - 视频生成（即梦API）",
+  "main": "index.js",
+  "dependencies": {
+    "ali-oss": "^6.23.0"
+  }
+}
