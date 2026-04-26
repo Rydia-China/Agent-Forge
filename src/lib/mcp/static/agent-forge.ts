@@ -11,8 +11,12 @@ function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
 }
 
+function json(data: unknown): CallToolResult {
+  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+}
+
 /* ================================================================== */
-/*  1. request_upload  (migrated from upload.ts)                       */
+/*  1. request_upload (from ui.ts)                                    */
 /* ================================================================== */
 
 const RequestUploadParams = z.object({
@@ -50,12 +54,31 @@ function uploadResult(req: UploadRequest): CallToolResult {
   return result;
 }
 
-/* ==================================================================
+/* ================================================================== */
+/*  2. AgentAgentForge tool                                           */
+/* ================================================================== */
+
+const AgentAgentForgeParams = z.object({
+  task: z.string().describe("Task description for AgentForge agent"),
+  context: z.string().optional().describe("Additional context for the task"),
+});
+
+/* ================================================================== */
+/*  3. AgentVideoCreator tool                                         */
+/* ================================================================== */
+
+const AgentVideoCreatorParams = z.object({
+  task: z.string().describe("Video creation task description"),
+  novel_id: z.string().optional().describe("Novel ID if working with novel-to-video workflow"),
+  context: z.string().optional().describe("Additional context for video creation"),
+});
+
+/* ================================================================== */
 /*  Provider                                                           */
 /* ================================================================== */
 
-export const uiMcp: McpProvider = {
-  name: "ui",
+export const agentForgeMcp: McpProvider = {
+  name: "agent_forge",
 
   async listTools(): Promise<Tool[]> {
     return [
@@ -130,6 +153,56 @@ export const uiMcp: McpProvider = {
         },
       },
 
+      /* ---------- AgentAgentForge ---------- */
+      {
+        name: "AgentAgentForge",
+        description:
+          "Invoke the AgentForge agent to handle general-purpose tasks. " +
+          "Use this for tasks that require the full capabilities of the Agent Forge system, " +
+          "including skills management, MCP orchestration, and multi-agent coordination.",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            task: {
+              type: "string",
+              description: "Task description for AgentForge agent",
+            },
+            context: {
+              type: "string",
+              description: "Additional context for the task",
+            },
+          },
+          required: ["task"],
+        },
+      },
+
+      /* ---------- AgentVideoCreator ---------- */
+      {
+        name: "AgentVideoCreator",
+        description:
+          "Invoke the VideoCreator agent for video-related tasks. " +
+          "Use this for novel-to-video workflows, storyboard generation, video asset management, " +
+          "and other video production tasks. This agent has access to the video domain context " +
+          "and specialized video creation skills.",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            task: {
+              type: "string",
+              description: "Video creation task description",
+            },
+            novel_id: {
+              type: "string",
+              description: "Novel ID if working with novel-to-video workflow",
+            },
+            context: {
+              type: "string",
+              description: "Additional context for video creation",
+            },
+          },
+          required: ["task"],
+        },
+      },
     ];
   },
 
@@ -145,6 +218,31 @@ export const uiMcp: McpProvider = {
           ...params,
         };
         return uploadResult(req);
+      }
+
+      case "AgentAgentForge": {
+        const params = AgentAgentForgeParams.parse(args);
+        // TODO: Implement actual agent invocation logic
+        return json({
+          status: "pending",
+          agent: "AgentForge",
+          task: params.task,
+          context: params.context,
+          message: "AgentForge agent invocation not yet implemented",
+        });
+      }
+
+      case "AgentVideoCreator": {
+        const params = AgentVideoCreatorParams.parse(args);
+        // TODO: Implement actual agent invocation logic
+        return json({
+          status: "pending",
+          agent: "VideoCreator",
+          task: params.task,
+          novel_id: params.novel_id,
+          context: params.context,
+          message: "VideoCreator agent invocation not yet implemented",
+        });
       }
 
       default:
