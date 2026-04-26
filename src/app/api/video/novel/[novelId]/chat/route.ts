@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { submitSubAgent } from "@/lib/services/subagent-service";
-import { VideoContextProvider } from "@/lib/video/context-provider";
+import { NovelContextProvider } from "@/lib/video/novel-context-provider";
 import { ensureVideoSchema } from "@/lib/video/schema";
 import { resolveModel } from "@/lib/agent/models";
-
-const VideoContextSchema = z.object({
-  novelId: z.string().min(1),
-  scriptId: z.string().min(1),
-  scriptKey: z.string().min(1),
-});
 
 const SubmitSchema = z.object({
   message: z.string().min(1),
@@ -17,12 +11,16 @@ const SubmitSchema = z.object({
   user: z.string().optional(),
   images: z.array(z.string()).optional(),
   model: z.string().optional(),
-  video_context: VideoContextSchema,
   skills: z.array(z.string()).optional(),
 });
 
-/** POST /api/video/tasks — submit a video workflow agent subagent */
-export async function POST(req: NextRequest) {
+/** POST /api/video/novel/[novelId]/chat — submit a novel-level resource subagent */
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ novelId: string }> },
+) {
+  const { novelId } = await params;
+
   let raw: unknown;
   try {
     raw = await req.json();
@@ -35,22 +33,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  const { message, session_id, user, images, model, video_context, skills } = parsed.data;
-
-  const contextProvider = new VideoContextProvider({
-    novelId: video_context.novelId,
-    scriptId: video_context.scriptId,
-    scriptKey: video_context.scriptKey,
-  });
-
+  const { message, session_id, user, images, model, skills } = parsed.data;
   const result = await submitSubAgent({
     message,
     sessionId: session_id,
-    user,
+    user: user ?? `video:${novelId}`,
     images,
     model: resolveModel(model),
     agentConfig: {
-      contextProvider,
+      contextProvider: new NovelContextProvider({ novelId }),
       skills,
     },
     beforeRun: () => ensureVideoSchema(),

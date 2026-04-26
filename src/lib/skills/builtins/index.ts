@@ -7,6 +7,8 @@ import matter from "gray-matter";
 import { raw as skillCreator } from "./skill-creator";
 import { raw as businessDatabase } from "./business-database";
 import { raw as videoMgr } from "./video-mgr";
+import { raw as novelResourceMgr } from "./novel-resource-mgr";
+import { raw as epVideoWorkflow } from "./ep-video-workflow";
 import { raw as langfuse } from "./langfuse";
 import { raw as subagent } from "./subagent";
 import { raw as oss } from "./oss";
@@ -17,6 +19,8 @@ const RAW_SKILLS: readonly string[] = [
   skillCreator,
   businessDatabase,
   videoMgr,
+  novelResourceMgr,
+  epVideoWorkflow,
   langfuse,
   subagent,
   oss,
