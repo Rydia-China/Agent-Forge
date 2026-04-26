@@ -28,9 +28,9 @@ COPY --from=builder /app/next.config.ts ./
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/src/generated ./src/generated
 
-COPY docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh
+COPY scripts/docker-entrypoint.sh ./scripts/
+RUN chmod +x scripts/docker-entrypoint.sh
 
 EXPOSE 8001
 
-ENTRYPOINT ["./docker-entrypoint.sh"]
+ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
