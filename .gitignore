@@ -39,6 +39,9 @@ FC/**/package-lock.json
 FC/**/.env
 !FC/**/.env.example
 FC/**/.s/
+# FC deployment configs with secrets
+FC/**/s.yaml
+!FC/**/s.yaml.example
 
 # prisma generated client
 src/generated
