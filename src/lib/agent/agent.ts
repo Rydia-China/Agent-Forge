@@ -1,9 +1,7 @@
 import { registry } from "@/lib/mcp/registry";
 import { initMcp } from "@/lib/mcp/init";
 import { type ToolContext, parseToolName } from "@/lib/mcp/types";
-import { getBuiltinSkill } from "@/lib/skills/builtins";
 import { getSkill } from "@/lib/services/skill-service";
-import { extractRequiredSchemas } from "@/lib/skills/required-schemas";
 import {
   chatCompletion,
   chatCompletionStream,
@@ -125,46 +123,6 @@ export interface AgentConfig {
   model?: string;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Core MCP names — always in scope                                   */
-/* ------------------------------------------------------------------ */
-
-const CORE_MCPS = new Set(["skills", "mcp_manager", "ui", "sync"]);
-
-/* ------------------------------------------------------------------ */
-/*  Skill → MCP resolution + on-demand loading                         */
-/* ------------------------------------------------------------------ */
-
-/** Resolve skill names to their declared requiresMcps. */
-function resolveSkillMcps(skillNames: string[]): string[] {
-  const mcps: string[] = [];
-  for (const name of skillNames) {
-    const builtin = getBuiltinSkill(name);
-    if (builtin) {
-      for (const mcp of builtin.requiresMcps) mcps.push(mcp);
-    }
-  }
-  return mcps;
-}
-
-/**
- * Resolve implicit MCP dependencies from DB skills' metadata.
- * Skills with requiredSchemas implicitly depend on biz_db.
- */
-async function resolveImplicitMcps(skillNames: string[]): Promise<string[]> {
-  const mcps: string[] = [];
-  for (const name of skillNames) {
-    if (getBuiltinSkill(name)) continue; // already handled by resolveSkillMcps
-    const skill = await getSkill(name);
-    if (!skill) continue;
-    const schemas = extractRequiredSchemas(skill.metadata);
-    if (schemas?.length) {
-      mcps.push("biz_db");
-      break; // only need to add once
-    }
-  }
-  return mcps;
-}
 
 /* ------------------------------------------------------------------ */
 /*  Per-session concurrency lock                                       */
@@ -336,16 +294,7 @@ async function runAgentInnerCore(
   images?: string[],
   config?: AgentConfig,
 ): Promise<AgentResponse> {
-  // --- Build active scope: core + skill-required MCPs ---
-  const activeScope = new Set(CORE_MCPS);
-  if (config?.skills) {
-    const skillMcps = resolveSkillMcps(config.skills);
-    const implicitMcps = await resolveImplicitMcps(config.skills);
-    const allMcps = [...skillMcps, ...implicitMcps];
-    for (const m of allMcps) activeScope.add(m);
-  }
-
-  const systemPrompt = await buildSystemPrompt(config?.skills, activeScope);
+  const systemPrompt = await buildSystemPrompt(config?.skills);
   const ctxProvider = config?.contextProvider ?? new BaseContextProvider(
     toolCtx.sessionId ? { scopeType: "session", scopeId: toolCtx.sessionId } : undefined,
   );
@@ -390,7 +339,7 @@ async function runAgentInnerCore(
       ...compressed.map(chatMsgToLlm),
     ];
 
-    const mcpTools = await registry.listToolsForProviders(activeScope);
+    const mcpTools = await registry.listAllTools();
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
 
     const completion = await chatCompletion(llmMessages, openaiTools, config?.model);
@@ -444,11 +393,6 @@ async function runAgentInnerCore(
 
       // Register with eviction tracker
       tracker.register(tc.id, tc.function.name, tc.function.arguments, content);
-
-      // Expand scope if mcp_manager__use was called
-      if (tc.function.name === "mcp_manager__use" && typeof args.provider === "string") {
-        activeScope.add(args.provider);
-      }
 
       const toolMsg: ChatMessage = {
         role: "tool",
@@ -520,16 +464,7 @@ async function runAgentStreamInnerCore(
   images?: string[],
   config?: AgentConfig,
 ): Promise<AgentResponse> {
-  // --- Build active scope: core + skill-required MCPs ---
-  const activeScope = new Set(CORE_MCPS);
-  if (config?.skills) {
-    const skillMcps = resolveSkillMcps(config.skills);
-    const implicitMcps = await resolveImplicitMcps(config.skills);
-    const allMcps = [...skillMcps, ...implicitMcps];
-    for (const m of allMcps) activeScope.add(m);
-  }
-
-  const systemPrompt = await buildSystemPrompt(config?.skills, activeScope);
+  const systemPrompt = await buildSystemPrompt(config?.skills);
   const ctxProvider = config?.contextProvider ?? new BaseContextProvider(
     toolCtx.sessionId ? { scopeType: "session", scopeId: toolCtx.sessionId } : undefined,
   );
@@ -577,7 +512,7 @@ async function runAgentStreamInnerCore(
       ...compressed.map(chatMsgToLlm),
     ];
 
-    const mcpTools = await registry.listToolsForProviders(activeScope);
+    const mcpTools = await registry.listAllTools();
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
 
     let currentContent = "";
@@ -663,11 +598,6 @@ async function runAgentStreamInnerCore(
 
           // Register with eviction tracker
           tracker.register(tc.id, tc.function.name, tc.function.arguments, content);
-
-          // Expand scope if mcp_manager__use was called
-          if (tc.function.name === "mcp_manager__use" && typeof args.provider === "string") {
-            activeScope.add(args.provider);
-          }
 
           // Extract key resources from known resource-producing tools
           for (const kr of extractKeyResources(tc.function.name, content)) {
