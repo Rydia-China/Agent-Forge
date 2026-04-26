@@ -21,10 +21,6 @@ function json(data: unknown): CallToolResult {
 /*  Zod input schemas                                                  */
 /* ------------------------------------------------------------------ */
 
-const GetPromptParams = z.object({
-  names: z.array(z.string().min(1)).min(1),
-});
-
 const CompilePromptParams = z.object({
   items: z.array(
     z.object({
@@ -48,22 +44,6 @@ export const langfuseMcp: McpProvider = {
         description:
           "List all prompts in Langfuse (names and metadata only, no content). Use to discover available prompt templates.",
         inputSchema: { type: "object" as const, properties: {} },
-      },
-      {
-        name: "get_prompts",
-        description:
-          "Get prompt templates by name from Langfuse. Returns an array of results with raw template and {{variable}} placeholders. For a single prompt, pass a one-element array.",
-        inputSchema: {
-          type: "object" as const,
-          properties: {
-            names: {
-              type: "array",
-              items: { type: "string" },
-              description: "Array of prompt names to fetch",
-            },
-          },
-          required: ["names"],
-        },
       },
       {
         name: "compile_prompts",
@@ -108,30 +88,6 @@ export const langfuseMcp: McpProvider = {
           tags: p.tags,
         }));
         return json(list);
-      }
-
-      case "get_prompts": {
-        const { names } = GetPromptParams.parse(args);
-        const results = await Promise.allSettled(
-          names.map(async (promptName) => {
-            const raw = await langfuseFetch(
-              `/api/public/v2/prompts/${encodeURIComponent(promptName)}`,
-            );
-            const parsed = PromptDetailSchema.parse(raw);
-            return {
-              name: parsed.name,
-              version: parsed.version,
-              labels: parsed.labels,
-              template: extractTemplate(parsed),
-            };
-          }),
-        );
-        const output = results.map((r, i) =>
-          r.status === "fulfilled"
-            ? { status: "ok" as const, ...r.value }
-            : { status: "error" as const, name: names[i], error: r.reason instanceof Error ? r.reason.message : String(r.reason) },
-        );
-        return json(output);
       }
 
       case "compile_prompts": {
