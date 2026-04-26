@@ -178,8 +178,8 @@ export async function submitSubAgent(
         message: input.message,
         images: input.images ?? [],
         model: input.model,
-        agentConfig: input.agentConfig,
-      } satisfies Prisma.InputJsonValue as Prisma.InputJsonValue,
+        agentConfig: input.agentConfig as Prisma.InputJsonValue | undefined,
+      } as Prisma.InputJsonValue,
     },
   });
 
