@@ -23,10 +23,6 @@
 # misc
 .DS_Store
 
-# SSL 证书：公钥提交，私钥忽略
-cert/*.key
-!cert/*.pem
-
 # debug
 npm-debug.log*
 yarn-debug.log*
