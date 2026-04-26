@@ -197,7 +197,7 @@ export async function createNovelWithScript(
 ): Promise<{ novelId: string; episodes: EpisodeSummary[]; diff: ResourceDiff }> {
   const tNovels = await physical("novels");
   const tScripts = await physical("novel_scripts");
-  const episodes = upload.episodes;
+  const episodes = upload.episodes ?? [];
 
   const { rows: novelRows } = await bizPool.query(
     `INSERT INTO "${tNovels}" (name, episode_count, synopsis, character_arcs, location_bible)
@@ -230,7 +230,7 @@ export async function replaceNovelScript(
 ): Promise<{ episodes: EpisodeSummary[]; diff: ResourceDiff }> {
   const tNovels = await physical("novels");
   const tScripts = await physical("novel_scripts");
-  const episodes = upload.episodes;
+  const episodes = upload.episodes ?? [];
 
   const newByKey = new Map<string, ScriptEpisode>();
   for (const episode of episodes) {
@@ -645,7 +645,7 @@ function computeExpectedKeys(
     addNovelSceneGridResource(items, seen, novelId, name);
   }
 
-  const episodes = upload.episodes;
+  const episodes = upload.episodes ?? [];
   for (let index = 0; index < episodes.length; index++) {
     const episode = episodes[index];
     const scriptId = createdEpisodes[index]?.id;
