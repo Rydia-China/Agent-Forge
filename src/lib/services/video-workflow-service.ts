@@ -5,6 +5,7 @@
  * No business concepts (characters, costumes, scenes, shots) in code.
  */
 
+import crypto from "node:crypto";
 import { bizPool } from "@/lib/biz-db";
 import { resolveTable, GLOBAL_USER } from "@/lib/biz-db-namespace";
 import { ensureVideoSchema } from "@/lib/video/schema";
@@ -366,6 +367,15 @@ interface ExpectedResourceMeta {
   scopeId: string;
 }
 
+interface ExistingKeyResourceMeta {
+  key: string;
+  category: string | null;
+  title: string | null;
+  scopeType: string;
+  scopeId: string;
+  currentVersion: number;
+}
+
 function scriptKeyForEpisode(episode: ScriptEpisode): string {
   return episode.variant_kind === "mainline"
     ? `EP${episode.ep_num}`
@@ -540,16 +550,8 @@ async function createEmptyKeyResourcesWithDiff(
   createdEpisodes: EpisodeSummary[],
 ): Promise<ResourceDiff> {
   const scriptIds = createdEpisodes.map((episode) => episode.id);
-  const existingNovel = await prisma.keyResource.findMany({
-    where: { scopeType: "novel", scopeId: novelId },
-    select: { key: true, category: true, title: true, scopeType: true, scopeId: true },
-  });
-  const existingScript = scriptIds.length > 0
-    ? await prisma.keyResource.findMany({
-        where: { scopeType: "script", scopeId: { in: scriptIds } },
-        select: { key: true, category: true, title: true, scopeType: true, scopeId: true },
-      })
-    : [];
+  const existingNovel = await listKeyResourceMetaByScope("novel", novelId);
+  const existingScript = await listKeyResourceMetaByScopeIds("script", scriptIds);
   const existingKeys = new Set(
     [...existingNovel, ...existingScript].map(
       (resource) => `${resource.scopeType}:${resource.scopeId}:${resource.key}`,
@@ -563,16 +565,8 @@ async function createEmptyKeyResourcesWithDiff(
 
   await createEmptyKeyResources(novelId, upload, createdEpisodes);
 
-  const novelResources = await prisma.keyResource.findMany({
-    where: { scopeType: "novel", scopeId: novelId },
-    select: { key: true, scopeType: true, scopeId: true, currentVersion: true },
-  });
-  const scriptResources = scriptIds.length > 0
-    ? await prisma.keyResource.findMany({
-        where: { scopeType: "script", scopeId: { in: scriptIds } },
-        select: { key: true, scopeType: true, scopeId: true, currentVersion: true },
-      })
-    : [];
+  const novelResources = await listKeyResourceMetaByScope("novel", novelId);
+  const scriptResources = await listKeyResourceMetaByScopeIds("script", scriptIds);
   const versionMap = new Map<string, number>();
   for (const resource of [...novelResources, ...scriptResources]) {
     versionMap.set(
@@ -664,29 +658,76 @@ function computeExpectedKeys(
 
   return items;
 }
+
+async function listKeyResourceMetaByScope(
+  scopeType: string,
+  scopeId: string,
+): Promise<ExistingKeyResourceMeta[]> {
+  return prisma.$queryRaw<ExistingKeyResourceMeta[]>`
+    SELECT
+      key,
+      category,
+      title,
+      "scopeType",
+      "scopeId",
+      "currentVersion"
+    FROM "KeyResource"
+    WHERE "scopeType" = ${scopeType}
+      AND "scopeId" = ${scopeId}
+  `;
+}
+
+async function listKeyResourceMetaByScopeIds(
+  scopeType: string,
+  scopeIds: string[],
+): Promise<ExistingKeyResourceMeta[]> {
+  if (scopeIds.length === 0) return [];
+  return prisma.$queryRaw<ExistingKeyResourceMeta[]>`
+    SELECT
+      key,
+      category,
+      title,
+      "scopeType",
+      "scopeId",
+      "currentVersion"
+    FROM "KeyResource"
+    WHERE "scopeType" = ${scopeType}
+      AND "scopeId" = ANY(${scopeIds}::text[])
+  `;
+}
+
 async function upsertExpectedResources(expectedResources: ExpectedResourceMeta[]): Promise<void> {
   for (const resource of expectedResources) {
-    await prisma.keyResource.upsert({
-      where: {
-        scopeType_scopeId_key: {
-          scopeType: resource.scopeType,
-          scopeId: resource.scopeId,
-          key: resource.key,
-        },
-      },
-      create: {
-        scopeType: resource.scopeType,
-        scopeId: resource.scopeId,
-        key: resource.key,
-        mediaType: "image",
-        category: resource.category,
-        title: resource.title,
-      },
-      update: {
-        category: resource.category,
-        title: resource.title,
-      },
-    });
+    await prisma.$executeRaw`
+      INSERT INTO "KeyResource" (
+        id,
+        "scopeType",
+        "scopeId",
+        key,
+        "mediaType",
+        category,
+        title,
+        "currentVersion",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${crypto.randomUUID()},
+        ${resource.scopeType},
+        ${resource.scopeId},
+        ${resource.key},
+        'image',
+        ${resource.category},
+        ${resource.title},
+        0,
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT ("scopeType", "scopeId", key) DO UPDATE
+      SET category = EXCLUDED.category,
+          title = EXCLUDED.title,
+          "updatedAt" = NOW()
+    `;
   }
 }
 
