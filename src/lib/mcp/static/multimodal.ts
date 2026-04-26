@@ -24,6 +24,17 @@ const GenerateVideoParams = z.object({
     z.object({
       prompt: z.string().min(1),
       sourceImageUrl: z.string().url().optional(),
+      styleName: z.string().optional(),
+      referenceImageUrls: z.array(z.string().url()).optional(),
+      sourceVideoUrls: z.array(z.string().url()).optional(),
+    }),
+  ).min(1),
+});
+
+const ConcatClipsParams = z.object({
+  items: z.array(
+    z.object({
+      clipUrls: z.array(z.string().url()).min(1),
     }),
   ).min(1),
 });
@@ -141,7 +152,7 @@ export const multimodalMcp: McpProvider = {
       {
         name: "generate_video",
         description:
-          "Generate video(s) from text prompt and optional source image via FC. Returns array of {status, videoUrl} for each item.",
+          "Generate video(s) via Seedance through FC. Supports shotPrompt mode (recommended) with referenceImageUrls and sourceVideoUrls for continuation. Returns array of {status, videoUrl} for each item.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -152,7 +163,18 @@ export const multimodalMcp: McpProvider = {
                 type: "object",
                 properties: {
                   prompt: { type: "string", description: "Motion/animation prompt describing the desired video effect" },
-                  sourceImageUrl: { type: "string", description: "Optional source image URL to animate" },
+                  sourceImageUrl: { type: "string", description: "Optional source image URL for image-to-video (first_frame mode)" },
+                  styleName: { type: "string", description: "Optional style name for video generation" },
+                  referenceImageUrls: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Optional reference image URLs for style/content guidance",
+                  },
+                  sourceVideoUrls: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Optional source video URLs for continuation (use crop_video to extract tail segments)",
+                  },
                 },
                 required: ["prompt"],
               },
@@ -164,7 +186,7 @@ export const multimodalMcp: McpProvider = {
       {
         name: "crop_video",
         description:
-          "Crop video(s) by time range via FC. Returns array of {status, videoUrl} for each item.",
+          "Crop video(s) by time range via FC. Use this to extract segments (e.g., last N seconds for continuation). Returns array of {status, videoUrl} for each item.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -179,6 +201,32 @@ export const multimodalMcp: McpProvider = {
                   endTime: { type: "number", description: "End time in seconds" },
                 },
                 required: ["videoUrl", "startTime", "endTime"],
+              },
+            },
+          },
+          required: ["items"],
+        },
+      },
+      {
+        name: "concat_clips",
+        description:
+          "Concatenate multiple video clips into a single video via FC. Returns array of {status, videoUrl} for each concatenation task.",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            items: {
+              type: "array",
+              description: "Array of video concatenation tasks",
+              items: {
+                type: "object",
+                properties: {
+                  clipUrls: {
+                    type: "array",
+                    items: { type: "string" },
+                    description: "Array of video clip URLs to concatenate in order",
+                  },
+                },
+                required: ["clipUrls"],
               },
             },
           },
@@ -281,11 +329,19 @@ export const multimodalMcp: McpProvider = {
         const results = await Promise.allSettled(
           items.map(async (item, i) => {
             try {
-              const videoUrl = await callFcEndpoint(url, token, {
-                action: "generate",
-                prompt: item.prompt,
-                imageUrl: item.sourceImageUrl,
-              });
+              const videoUrl = await callFcEndpoint(
+                url,
+                token,
+                {
+                  action: "generate",
+                  prompt: item.prompt,
+                  imageUrl: item.sourceImageUrl,
+                  styleName: item.styleName,
+                  referenceImageUrls: item.referenceImageUrls,
+                  sourceVideoUrls: item.sourceVideoUrls,
+                },
+                300000, // 5 minutes for video generation
+              );
               return { index: i, status: "ok" as const, videoUrl };
             } catch (e) {
               return {
@@ -300,15 +356,74 @@ export const multimodalMcp: McpProvider = {
       }
 
       case "crop_video": {
-        // TODO: 需要实现视频裁剪 FC 函数
+        const url = process.env.FC_CROP_VIDEO_URL;
+        const token = process.env.FC_CROP_VIDEO_TOKEN;
+        if (!url || !token) {
+          return json([
+            {
+              status: "error",
+              error: "FC_CROP_VIDEO_URL and FC_CROP_VIDEO_TOKEN must be configured in .env",
+            },
+          ]);
+        }
+
         const { items } = CropVideoParams.parse(args);
-        return json(
-          items.map((item, i) => ({
-            index: i,
-            status: "error" as const,
-            error: "Video cropping FC function not yet implemented",
-          })),
+        const results = await Promise.allSettled(
+          items.map(async (item, i) => {
+            try {
+              const videoUrl = await callFcEndpoint(url, token, {
+                videoUrl: item.videoUrl,
+                startTime: item.startTime,
+                endTime: item.endTime,
+              });
+              return { index: i, status: "ok" as const, videoUrl };
+            } catch (e) {
+              return {
+                index: i,
+                status: "error" as const,
+                error: e instanceof Error ? e.message : String(e),
+              };
+            }
+          }),
         );
+        return json(results.map((r) => (r.status === "fulfilled" ? r.value : r.reason)));
+      }
+
+      case "concat_clips": {
+        const url = process.env.FC_CONCAT_CLIPS_URL;
+        const token = process.env.FC_CONCAT_CLIPS_TOKEN;
+        if (!url || !token) {
+          return json([
+            {
+              status: "error",
+              error: "FC_CONCAT_CLIPS_URL and FC_CONCAT_CLIPS_TOKEN must be configured in .env",
+            },
+          ]);
+        }
+
+        const { items } = ConcatClipsParams.parse(args);
+        const results = await Promise.allSettled(
+          items.map(async (item, i) => {
+            try {
+              const videoUrl = await callFcEndpoint(
+                url,
+                token,
+                {
+                  clipUrls: item.clipUrls,
+                },
+                300000, // 5 minutes for concatenation
+              );
+              return { index: i, status: "ok" as const, videoUrl };
+            } catch (e) {
+              return {
+                index: i,
+                status: "error" as const,
+                error: e instanceof Error ? e.message : String(e),
+              };
+            }
+          }),
+        );
+        return json(results.map((r) => (r.status === "fulfilled" ? r.value : r.reason)));
       }
 
       default:
