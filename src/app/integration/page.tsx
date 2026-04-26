@@ -446,23 +446,6 @@ See \`.env.example\` for complete list.
               <li>Core: <Text code>mcp_manager</Text>, <Text code>ui</Text>, <Text code>sync</Text>, <Text code>subagent</Text></li>
               <li>Catalog: <Text code>agent</Text>, <Text code>skill_admin</Text>, <Text code>biz_db</Text>, <Text code>apis</Text>, <Text code>video_workflow</Text>, <Text code>media_generation</Text>, <Text code>langfuse</Text>, <Text code>langfuse_admin</Text>, <Text code>oss</Text>, <Text code>style_preset</Text></li>
             </ul>
-
-            <Title level={4} className="mt-6">列出动态 MCPs（用户创建）</Title>
-            <pre className="bg-slate-900 p-4 rounded overflow-x-auto">
-              <code>curl http://localhost:8001/api/mcps</code>
-            </pre>
-
-            <Title level={4} className="mt-6">创建动态 MCP</Title>
-            <pre className="bg-slate-900 p-4 rounded overflow-x-auto">
-              <code>{`curl -X POST http://localhost:8001/api/mcps \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "name": "my_custom_mcp",
-    "description": "Custom MCP server",
-    "code": "export function listTools() { return []; }...",
-    "enabled": true
-  }'`}</code>
-            </pre>
           </Card>
         </div>
       ),
@@ -668,10 +651,9 @@ LLM_BASE_URL=https://...           # LLM API endpoint`}</code>
             </ul>
 
             <Title level={4} className="mt-4">受保护的 Providers</Title>
-            <ul className="list-disc list-inside space-y-2">
-              <li>Core + catalog providers 不能被替换/删除</li>
-              <li>动态 MCPs 可以自由创建/更新/删除</li>
-            </ul>
+            <Paragraph>
+              Core + catalog providers 不能被替换/删除
+            </Paragraph>
           </Card>
 
           <Card>

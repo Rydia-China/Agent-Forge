@@ -19,7 +19,7 @@ curl -s -X POST http://localhost:8001/api/chat \
   -d '{"message":"你知道哪些 skills？", "logs": true}'
 ```
 期望：返回 `session_id`（非空）和 `reply`（非空）。
-agent 不调用 tool 就能列出 `skill-creator` 和 `dynamic-mcp-builder`（因为内置 skill 已注入 system prompt）。
+agent 不调用 tool 就能列出 `skill-creator`（因为内置 skill 已注入 system prompt）。
 
 ### 2. 通过 chat 创建 skill
 ```bash

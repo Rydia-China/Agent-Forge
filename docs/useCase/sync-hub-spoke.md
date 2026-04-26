@@ -1,12 +1,12 @@
 # Use Case: Hub-Spoke Sync（Skills & MCPs 同步）
 
 ## 场景
-本地 Spoke 实例通过 REST API 和 MCP tools 与远程 Hub 同步 Skills 和 MCPs。
+本地 Spoke 实例通过 REST API 和 MCP tools 与远程 Hub 同步 Skills。
 验证 discover → diff → pull 完整链路，以及 push（仅 MCP tool）。
 
 ## 前置条件
 - Hub 已部署并可访问（默认 `https://agent.mob-ai.cn/`）
-- Hub 上至少存在 1 个 skill（内置的 `skill-creator` / `dynamic-mcp-builder` / `forge-sync`）
+- Hub 上至少存在 1 个 skill（内置的 `skill-creator` / `forge-sync`）
 - Hub 上 `.env` 中 `FORGE_IS_HUB=true`（启用自同步保护）
 
 ## 验证步骤
@@ -23,16 +23,8 @@ curl -s -X POST $HUB/api/sync/discover \
   -d '{"type":"skill"}'
 ```
 期望：返回 JSON 数组，每个元素包含 `name`, `description`, `tags`, `productionVersion`。
-至少包含内置 skills（`skill-creator`, `dynamic-mcp-builder`, `forge-sync`）。
+至少包含内置 skills（`skill-creator`, `forge-sync`）。
 
-```bash
-curl -s -X POST $HUB/api/sync/discover \
-  -H 'Content-Type: application/json' \
-  -d '{"type":"mcp"}'
-```
-期望：返回 MCP 列表，每个元素包含 `name`, `description`, `enabled`, `productionVersion`。
-
-**带 tag 过滤:**
 ```bash
 curl -s -X POST $HUB/api/sync/discover \
   -H 'Content-Type: application/json' \
@@ -85,14 +77,7 @@ curl -s -X POST $SPOKE/api/sync/push \
   -H 'Content-Type: application/json' \
   -d '{"type":"skill","name":"<skill-name>","targetUrl":"$HUB"}'
 ```
-期望：返回 `action: "created"` 或 `"updated"`，`targetUrl` 为 hub 地址。
-
-```bash
-curl -s -X POST $SPOKE/api/sync/push \
-  -H 'Content-Type: application/json' \
-  -d '{"type":"mcp","name":"<mcp-name>","targetUrl":"$HUB"}'
-```
-期望：同上。`targetUrl` 可省略，默认使用 `FORGE_HUB_URL`。
+期望：返回 `action: "created"` 或 `"updated"`，`targetUrl` 为 hub 地址。`targetUrl` 可省略，默认使用 `FORGE_HUB_URL`。
 
 ### 5. 自同步保护（Hub 端验证）
 
@@ -115,7 +100,7 @@ curl -s -X POST $SPOKE/api/sync/discover \
 期望：尝试连接指定 URL；如果不可达返回 error（非 500 crash）。
 
 ## 异常场景
-- `type` 不是 `skill` 或 `mcp` → Zod 校验 400
+- `type` 不是 `skill` → Zod 校验 400
 - `name` 为空字符串 → Zod 校验 400
 - Hub 不可达 → 返回明确 error message（含 HTTP status）
 - Pull 不存在的 skill name → 返回 404 相关 error
