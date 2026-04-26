@@ -37,6 +37,11 @@ export interface ResourceCategoryGroup {
 /**
  * List all KeyResources for a given scope, grouped by category.
  * Returns only resources that have a category set.
+ *
+ * Keep category filtering and sorting in application code instead of Prisma
+ * query args. Dev servers may keep an older generated Prisma Client loaded
+ * across schema updates; querying by newly added fields would then fail before
+ * the caller can recover.
  * URL is resolved from the current version.
  */
 export async function listResourcesByScope(
@@ -47,14 +52,13 @@ export async function listResourcesByScope(
     where: {
       scopeType,
       scopeId,
-      category: { not: null },
     },
     include: {
       versions: {
         orderBy: { version: "asc" },
       },
     },
-    orderBy: [{ category: "asc" }, { createdAt: "asc" }],
+    orderBy: { createdAt: "asc" },
   });
 
   const groups = new Map<string, ResourceItem[]>();
@@ -85,8 +89,10 @@ export async function listResourcesByScope(
     groups.set(item.category, list);
   }
 
-  return [...groups.entries()].map(([category, items]) => ({
-    category,
-    items,
-  }));
+  return [...groups.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([category, items]) => ({
+      category,
+      items,
+    }));
 }
