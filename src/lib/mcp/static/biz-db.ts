@@ -8,7 +8,6 @@ import {
   buildRewriteMap,
   applySqlRewrite,
   upgradeToGlobal,
-  findRelatedTables,
   GLOBAL_USER,
 } from "@/lib/biz-db-namespace";
 import * as schemaSvc from "@/lib/services/biz-schema-service";
@@ -305,9 +304,6 @@ export const bizDbMcp: McpProvider = {
 
         const logicalName = String(args.table);
         const confirm = args.confirm === true;
-        const includeRelated = Array.isArray(args.include_related)
-          ? (args.include_related as string[])
-          : [];
 
         const resolved = await resolveTable(userName, logicalName);
         if (!resolved || resolved.owner !== userName) {
@@ -317,33 +313,20 @@ export const bizDbMcp: McpProvider = {
           return text(`"${logicalName}" is already a global table.`);
         }
 
-        // First call: detect related tables and ask for confirmation
         if (!confirm) {
-          const related = await findRelatedTables(userName, logicalName);
           return json({
             action: "upgrade_global",
             table: logicalName,
-            related_tables: related,
-            message: related.length > 0
-              ? `Found related user tables: ${related.join(", ")}. Call again with confirm=true and optionally include_related=[...] to also upgrade them. This is IRREVERSIBLE.`
-              : `No related tables found. Call again with confirm=true to proceed. This is IRREVERSIBLE.`,
+            message: `Upgrading "${logicalName}" to global is IRREVERSIBLE. Call again with confirm=true to proceed.`,
           });
         }
 
-        // Confirmed: upgrade ownership (no data copy needed)
-        const tables = [logicalName, ...includeRelated];
-        const results: string[] = [];
-
-        for (const t of tables) {
-          const upgraded = await upgradeToGlobal(userName, t);
-          if (upgraded) {
-            results.push(`OK "${t}": upgraded to global`);
-          } else {
-            results.push(`SKIP "${t}": user table not found`);
-          }
+        const upgraded = await upgradeToGlobal(userName, logicalName);
+        if (!upgraded) {
+          return text(`Failed to upgrade "${logicalName}": user table not found`);
         }
 
-        return text(`Upgrade complete:\n${results.join("\n")}`);
+        return text(`Upgrade complete: "${logicalName}" is now a global table`);
       }
 
       case "list_global_tables": {
