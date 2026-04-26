@@ -2,6 +2,11 @@ import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 
 export type { Tool, CallToolResult };
 
+export interface ToolProgressEvent {
+  type: string;
+  data: unknown;
+}
+
 /**
  * Explicit execution context passed through callTool.
  * Replaces AsyncLocalStorage — all context is threaded via parameters.
@@ -9,6 +14,12 @@ export type { Tool, CallToolResult };
 export interface ToolContext {
   sessionId?: string;
   userName?: string;
+  /** Parent in-memory subagent ID when tools are called by a subagent. */
+  parentAgentId?: string;
+  /** Current subagent nesting depth. */
+  agentDepth?: number;
+  /** Optional progress bridge used by streaming agent/subagent execution. */
+  onProgress?: (event: ToolProgressEvent) => void;
 }
 
 /**

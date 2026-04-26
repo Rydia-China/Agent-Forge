@@ -101,6 +101,20 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 
 **因果**：SubAgent 状态和事件持久化到 DB，客户端断开不影响执行，重连后从断点继续。
 
+### SubAgent MCP Provider（2026-04-26 恢复）
+`subagent` 是给主 agent 和外部 `/mcp` 调用方使用的 MCP provider，和 `/api/subagents` 后端驱动架构并存，不替代 REST/SSE 任务入口。
+
+时序：
+1. `initMcp()` 注册 static provider 后，`registry.listAllTools()` 暴露 `subagent__run`、`subagent__run_async`、`subagent__get_result`、`subagent__get_trace`、`subagent__continue`、`subagent__wait`
+2. `subagent__run` 接收 `tasks[]`；每个 task 不传 `mcpScope` 时是 single-shot LLM 调用，传非空 `mcpScope` 时进入 tool-use loop，只能调用指定 provider 的 tools
+3. 同步执行完成后返回 `agentId`；该 ID 是进程内 active registry 状态，可继续调用 `subagent__continue` 或 `subagent__get_trace`
+4. `subagent__run_async` 或带 `timeout` 的 `subagent__run` 会创建 `SubAgent` DB 记录作为 `taskId`，后台执行完成后把 output/error/trace 写回该记录
+5. `subagent__get_result`/`subagent__get_trace` 用 `taskId` 查询 DB 持久化结果；`subagent__continue` 只能用仍在当前进程内存中的 `agentId`
+
+调度兼容性：历史 `schedule` tool 已恢复 tool 面，但当前代码库没有原 scheduler service；只支持进程内一次性 `runAt`，`cron` 会返回明确的 unsupported 结果。
+
+验证重点：`registry.listAllTools()` 或 `/mcp` 的 `tools/list` 必须能看到 `subagent__run`；带 `mcpScope` 的任务必须只看到对应 provider tools；async 返回的 `taskId` 能通过 `subagent__get_result` 查询状态。
+
 ### Video 本地剧本导入（2026-04-26 恢复）
 `/video` 不应依赖远程 novel service 获取小说列表。业务流来自本地 `feat/hierarchical-agent` 的 `/video` 业务提交，迁移时只恢复上传、落库、读取逻辑，不同步 agent/subagent/runtime 优化。
 
