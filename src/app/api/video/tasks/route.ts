@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { submitSubAgent } from "@/lib/services/subagent-service";
 import { VideoContextProvider } from "@/lib/video/context-provider";
-import { ensureVideoSchema } from "@/lib/video/schema";
 import { resolveModel } from "@/lib/agent/models";
 
 const VideoContextSchema = z.object({
@@ -53,7 +52,6 @@ export async function POST(req: NextRequest) {
       contextProvider,
       skills,
     },
-    beforeRun: () => ensureVideoSchema(),
   });
 
   return NextResponse.json({

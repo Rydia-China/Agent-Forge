@@ -1,42 +1,38 @@
 /**
  * Video Workflow Service — data access for the video UI.
  *
- * Uses domain_resources (generic) + novel_scripts (episode container).
+ * Uses Prisma models: Novel, NovelScript, DomainResource.
  * No business concepts (characters, costumes, scenes, shots) in code.
  */
 
-import crypto from "node:crypto";
-import { bizPool } from "@/lib/biz-db";
-import { resolveTable, GLOBAL_USER } from "@/lib/biz-db-namespace";
-import { ensureVideoSchema } from "@/lib/video/schema";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma";
 import type { ScriptEpisode, NovelScriptUpload } from "@/lib/video/script-upload-schema";
-import {
-  getResourcesByScope,
-  deleteResourcesByScope,
-  deleteResource,
-  updateResourceData,
-} from "@/lib/domain/resource-service";
-import type {
-  DomainResource,
-  CategoryGroup,
-  DomainResources,
-} from "@/lib/domain/resource-service";
-import "@/lib/domain/resource-cleanup"; // register biz-table cleanup hook
 import { initMcp } from "@/lib/mcp/init";
 import { registry } from "@/lib/mcp/registry";
 
-export type { DomainResource, CategoryGroup, DomainResources };
-
 /* ------------------------------------------------------------------ */
-/*  Helper: resolve physical table name                                */
+/*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-async function physical(logicalName: string): Promise<string> {
-  await ensureVideoSchema();
-  const resolved = await resolveTable(GLOBAL_USER, logicalName);
-  if (!resolved) throw new Error(`Video table "${logicalName}" not found in BizTableMapping`);
-  return resolved.physicalName;
+export interface DomainResource {
+  id: string;
+  category: string;
+  mediaType: string;
+  title: string | null;
+  url: string | null;
+  data: unknown;
+  keyResourceId: string | null;
+  sortOrder: number;
+}
+
+export interface CategoryGroup {
+  category: string;
+  items: DomainResource[];
+}
+
+export interface DomainResources {
+  categories: CategoryGroup[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -87,35 +83,36 @@ export interface EpisodeSummary {
 /* ------------------------------------------------------------------ */
 
 export async function listNovels(): Promise<NovelSummary[]> {
-  const tNovels = await physical("novels");
-  const { rows } = await bizPool.query(
-    `SELECT id, name, episode_count, created_at
-     FROM "${tNovels}"
-     ORDER BY created_at DESC`,
-  );
-  return (rows as Array<Record<string, unknown>>).map((row) => ({
-    id: row.id as string,
-    name: row.name as string,
-    episodeCount: row.episode_count as number,
-    createdAt: String(row.created_at),
+  const novels = await prisma.novel.findMany({
+    orderBy: { createdAt: "desc" },
+  });
+  return novels.map((novel) => ({
+    id: novel.id,
+    name: novel.name,
+    episodeCount: novel.episodeCount,
+    createdAt: novel.createdAt.toISOString(),
   }));
 }
 
 export async function deleteNovel(novelId: string): Promise<void> {
-  const tNovels = await physical("novels");
-  const tScripts = await physical("novel_scripts");
+  // Cascade delete: Novel -> NovelScript -> KeyResource, DomainResource, ChatSession
+  // Get all script IDs first
+  const scripts = await prisma.novelScript.findMany({
+    where: { novelId },
+    select: { id: true },
+  });
 
-  const { rows: episodeRows } = await bizPool.query(
-    `SELECT id FROM "${tScripts}" WHERE novel_id = $1`,
-    [novelId],
-  );
-  for (const row of episodeRows as Array<{ id: string }>) {
-    await deleteEpisode(row.id);
+  // Delete each episode (handles KeyResource, DomainResource, ChatSession cleanup)
+  for (const script of scripts) {
+    await deleteEpisode(script.id);
   }
 
+  // Delete novel-scoped resources
   await prisma.keyResource.deleteMany({ where: { scopeType: "novel", scopeId: novelId } });
-  await deleteResourcesByScope("novel", novelId);
-  await bizPool.query(`DELETE FROM "${tNovels}" WHERE id = $1`, [novelId]);
+  await prisma.domainResource.deleteMany({ where: { scopeType: "novel", scopeId: novelId } });
+
+  // Delete the novel itself (cascade deletes NovelScript via Prisma FK)
+  await prisma.novel.delete({ where: { id: novelId } });
 }
 
 /* ------------------------------------------------------------------ */
@@ -123,39 +120,31 @@ export async function deleteNovel(novelId: string): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 export async function listEpisodes(novelId: string): Promise<EpisodeSummary[]> {
-  const tScripts = await physical("novel_scripts");
-
-  const { rows: scripts } = await bizPool.query(
-    `SELECT id, novel_id, script_key, script_name,
-            script_content IS NOT NULL AS has_content,
-            created_at
-     FROM "${tScripts}"
-     WHERE novel_id = $1
-     ORDER BY script_key`,
-    [novelId],
-  );
+  const scripts = await prisma.novelScript.findMany({
+    where: { novelId },
+    orderBy: { scriptKey: "asc" },
+  });
 
   const episodes: EpisodeSummary[] = [];
-  for (const row of scripts as Array<Record<string, unknown>>) {
-    const scriptId = row.id as string;
-    const hasContent = row.has_content as boolean;
+  for (const script of scripts) {
+    const hasContent = script.scriptContent != null;
 
     // Check if any generated KeyResources exist for this script
     let hasResources = false;
     if (hasContent) {
       const keyResourceCount = await prisma.keyResource.count({
-        where: { scopeType: "script", scopeId: scriptId, currentVersion: { gt: 0 } },
+        where: { scopeType: "script", scopeId: script.id, currentVersion: { gt: 0 } },
       });
       hasResources = keyResourceCount > 0;
     }
 
     episodes.push({
-      id: scriptId,
-      novelId: row.novel_id as string,
-      scriptKey: row.script_key as string,
-      scriptName: row.script_name as string | null,
+      id: script.id,
+      novelId: script.novelId,
+      scriptKey: script.scriptKey,
+      scriptName: script.scriptName,
       status: !hasContent ? "empty" : hasResources ? "has_resources" : "uploaded",
-      createdAt: String(row.created_at),
+      createdAt: script.createdAt.toISOString(),
     });
   }
 
@@ -168,18 +157,15 @@ export async function createEpisode(
   scriptName: string | null,
   scriptContent: string | null,
 ): Promise<{ id: string }> {
-  const tScripts = await physical("novel_scripts");
-
-  const { rows } = await bizPool.query(
-    `INSERT INTO "${tScripts}" (novel_id, script_key, script_name, script_content)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id`,
-    [novelId, scriptKey, scriptName, scriptContent],
-  );
-
-  const row = rows[0] as { id: string } | undefined;
-  if (!row) throw new Error("Failed to create episode");
-  return row;
+  const script = await prisma.novelScript.create({
+    data: {
+      novelId,
+      scriptKey,
+      scriptName,
+      scriptContent,
+    },
+  });
+  return { id: script.id };
 }
 
 /* ------------------------------------------------------------------ */
@@ -195,29 +181,22 @@ export async function createNovelWithScript(
   name: string,
   upload: NovelScriptUpload,
 ): Promise<{ novelId: string; episodes: EpisodeSummary[]; diff: ResourceDiff }> {
-  const tNovels = await physical("novels");
-  const tScripts = await physical("novel_scripts");
   const episodes = upload.episodes ?? [];
 
-  const { rows: novelRows } = await bizPool.query(
-    `INSERT INTO "${tNovels}" (name, episode_count, synopsis, character_arcs, location_bible)
-     VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb) RETURNING id`,
-    [
+  const novel = await prisma.novel.create({
+    data: {
       name,
-      episodes.length,
-      upload.synopsis ? JSON.stringify(upload.synopsis) : null,
-      upload.character_arcs ? JSON.stringify(upload.character_arcs) : null,
-      upload.location_bible ? JSON.stringify(upload.location_bible) : null,
-    ],
-  );
-  const novelRow = novelRows[0] as { id: string } | undefined;
-  if (!novelRow) throw new Error("Failed to create novel");
-  const novelId = novelRow.id;
+      episodeCount: episodes.length,
+      synopsis: upload.synopsis as Prisma.InputJsonValue,
+      characterArcs: upload.character_arcs as Prisma.InputJsonValue,
+      locationBible: upload.location_bible as Prisma.InputJsonValue,
+    },
+  });
 
-  const created = await insertEpisodes(tScripts, novelId, episodes);
-  const diff = await createEmptyKeyResourcesWithDiff(novelId, upload, created);
+  const created = await insertEpisodes(novel.id, episodes);
+  const diff = await createEmptyKeyResourcesWithDiff(novel.id, upload, created);
 
-  return { novelId, episodes: created, diff };
+  return { novelId: novel.id, episodes: created, diff };
 }
 
 /**
@@ -228,8 +207,6 @@ export async function replaceNovelScript(
   novelId: string,
   upload: NovelScriptUpload,
 ): Promise<{ episodes: EpisodeSummary[]; diff: ResourceDiff }> {
-  const tNovels = await physical("novels");
-  const tScripts = await physical("novel_scripts");
   const episodes = upload.episodes ?? [];
 
   const newByKey = new Map<string, ScriptEpisode>();
@@ -237,18 +214,20 @@ export async function replaceNovelScript(
     newByKey.set(scriptKeyForEpisode(episode), episode);
   }
 
-  const { rows: existingRows } = await bizPool.query(
-    `SELECT id, script_key, created_at FROM "${tScripts}" WHERE novel_id = $1`,
-    [novelId],
-  );
-  const existingByKey = new Map<string, { id: string; createdAt: string }>();
-  for (const row of existingRows as Array<{ id: string; script_key: string; created_at: string }>) {
-    existingByKey.set(row.script_key, { id: row.id, createdAt: String(row.created_at) });
+  const existingScripts = await prisma.novelScript.findMany({
+    where: { novelId },
+    select: { id: true, scriptKey: true, createdAt: true },
+  });
+
+  const existingByKey = new Map<string, { id: string; createdAt: Date }>();
+  for (const script of existingScripts) {
+    existingByKey.set(script.scriptKey, { id: script.id, createdAt: script.createdAt });
   }
 
+  // Delete scripts that are no longer in the upload
   for (const [key, { id }] of existingByKey) {
     if (!newByKey.has(key)) {
-      await bizPool.query(`DELETE FROM "${tScripts}" WHERE id = $1`, [id]);
+      await prisma.novelScript.delete({ where: { id } });
     }
   }
 
@@ -258,70 +237,56 @@ export async function replaceNovelScript(
     const existing = existingByKey.get(scriptKey);
 
     if (existing) {
-      await bizPool.query(
-        `UPDATE "${tScripts}"
-         SET script_name = $1, script_content = $2,
-             init_result = $3::jsonb, characters = $4::jsonb, costumes = $5::jsonb
-         WHERE id = $6`,
-        [
-          episode.output.episode_title,
-          episode.output.pre_choice_script,
-          JSON.stringify(episode.output),
-          JSON.stringify(episode.output.characters),
-          JSON.stringify(episode.output.character_outfits ?? {}),
-          existing.id,
-        ],
-      );
+      await prisma.novelScript.update({
+        where: { id: existing.id },
+        data: {
+          scriptName: episode.output.episode_title,
+          scriptContent: episode.output.pre_choice_script,
+          initResult: episode.output as Prisma.InputJsonValue,
+          characters: episode.output.characters as Prisma.InputJsonValue,
+          costumes: (episode.output.character_outfits ?? {}) as Prisma.InputJsonValue,
+        },
+      });
       result.push({
         id: existing.id,
         novelId,
         scriptKey,
         scriptName: episode.output.episode_title,
         status: "uploaded",
-        createdAt: existing.createdAt,
+        createdAt: existing.createdAt.toISOString(),
       });
     } else {
-      const { rows } = await bizPool.query(
-        `INSERT INTO "${tScripts}"
-          (novel_id, script_key, script_name, script_content,
-           init_result, characters, costumes)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb)
-         RETURNING id, created_at`,
-        [
+      const script = await prisma.novelScript.create({
+        data: {
           novelId,
           scriptKey,
-          episode.output.episode_title,
-          episode.output.pre_choice_script,
-          JSON.stringify(episode.output),
-          JSON.stringify(episode.output.characters),
-          JSON.stringify(episode.output.character_outfits ?? {}),
-        ],
-      );
-      const row = rows[0] as { id: string; created_at: string } | undefined;
-      if (!row) throw new Error(`Failed to insert episode ${scriptKey}`);
+          scriptName: episode.output.episode_title,
+          scriptContent: episode.output.pre_choice_script,
+          initResult: episode.output as Prisma.InputJsonValue,
+          characters: episode.output.characters as Prisma.InputJsonValue,
+          costumes: (episode.output.character_outfits ?? {}) as Prisma.InputJsonValue,
+        },
+      });
       result.push({
-        id: row.id,
+        id: script.id,
         novelId,
         scriptKey,
         scriptName: episode.output.episode_title,
         status: "uploaded",
-        createdAt: String(row.created_at),
+        createdAt: script.createdAt.toISOString(),
       });
     }
   }
 
-  await bizPool.query(
-    `UPDATE "${tNovels}"
-     SET episode_count = $1, synopsis = $2::jsonb, character_arcs = $3::jsonb, location_bible = $4::jsonb
-     WHERE id = $5`,
-    [
-      result.length,
-      upload.synopsis ? JSON.stringify(upload.synopsis) : null,
-      upload.character_arcs ? JSON.stringify(upload.character_arcs) : null,
-      upload.location_bible ? JSON.stringify(upload.location_bible) : null,
-      novelId,
-    ],
-  );
+  await prisma.novel.update({
+    where: { id: novelId },
+    data: {
+      episodeCount: result.length,
+      synopsis: upload.synopsis as Prisma.InputJsonValue,
+      characterArcs: upload.character_arcs as Prisma.InputJsonValue,
+      locationBible: upload.location_bible as Prisma.InputJsonValue,
+    },
+  });
 
   const diff = await createEmptyKeyResourcesWithDiff(novelId, upload, result);
 
@@ -329,25 +294,22 @@ export async function replaceNovelScript(
 }
 
 export async function deleteEpisode(scriptId: string): Promise<void> {
-  const tScripts = await physical("novel_scripts");
-
   // Look up novel_id + script_key to derive session userName
-  const { rows: scriptRows } = await bizPool.query(
-    `SELECT novel_id, script_key FROM "${tScripts}" WHERE id = $1 LIMIT 1`,
-    [scriptId],
-  );
-  const scriptRow = scriptRows[0] as { novel_id: string; script_key: string } | undefined;
+  const script = await prisma.novelScript.findUnique({
+    where: { id: scriptId },
+    select: { novelId: true, scriptKey: true },
+  });
 
-  // Delete script-scoped KeyResources and legacy domain_resources for this script
+  // Delete script-scoped KeyResources and DomainResources
   await prisma.keyResource.deleteMany({ where: { scopeType: "script", scopeId: scriptId } });
-  await deleteResourcesByScope("script", scriptId);
+  await prisma.domainResource.deleteMany({ where: { scopeType: "script", scopeId: scriptId } });
 
   // Delete the script itself
-  await bizPool.query(`DELETE FROM "${tScripts}" WHERE id = $1`, [scriptId]);
+  await prisma.novelScript.delete({ where: { id: scriptId } });
 
   // Cascade-delete associated sessions (messages, tasks, events, key resources)
-  if (scriptRow) {
-    const userName = `video:${scriptRow.novel_id}:${scriptRow.script_key}`;
+  if (script) {
+    const userName = `video:${script.novelId}:${script.scriptKey}`;
     const user = await prisma.user.findUnique({ where: { name: userName } });
     if (user) {
       await prisma.chatSession.deleteMany({ where: { userId: user.id } });
@@ -743,29 +705,26 @@ async function computeStoredExpectedKeys(
   novelId: string,
   scriptScopeIds: Set<string>,
 ): Promise<ExpectedResourceMeta[]> {
-  const tNovels = await physical("novels");
-  const tScripts = await physical("novel_scripts");
+  const novel = await prisma.novel.findUnique({
+    where: { id: novelId },
+    select: { characterArcs: true, locationBible: true },
+  });
 
-  const { rows: novelRows } = await bizPool.query(
-    `SELECT character_arcs, location_bible FROM "${tNovels}" WHERE id = $1 LIMIT 1`,
-    [novelId],
-  );
-  const { rows: scriptRows } = await bizPool.query(
-    `SELECT id, init_result, characters, costumes FROM "${tScripts}" WHERE novel_id = $1`,
-    [novelId],
-  );
+  const scripts = await prisma.novelScript.findMany({
+    where: { novelId },
+    select: { id: true, initResult: true, characters: true, costumes: true },
+  });
 
   const items: ExpectedResourceMeta[] = [];
   const seen = new Set<string>();
-  const novelRow = (novelRows as Array<Record<string, unknown>>)[0];
 
-  for (const arc of parseArray(novelRow?.character_arcs)) {
+  for (const arc of parseArray(novel?.characterArcs)) {
     if (!isRecord(arc)) continue;
     const name = arc.name;
     if (typeof name === "string") addNovelCharacterResource(items, seen, novelId, name);
   }
 
-  for (const location of parseArray(novelRow?.location_bible)) {
+  for (const location of parseArray(novel?.locationBible)) {
     if (!isRecord(location)) continue;
     const name = location.name;
     const visualPrompt = location.visual_prompt;
@@ -792,16 +751,15 @@ async function computeStoredExpectedKeys(
     }
   }
 
-  for (const row of scriptRows as Array<Record<string, unknown>>) {
-    const scriptId = row.id;
-    if (typeof scriptId !== "string") continue;
+  for (const script of scripts) {
+    const scriptId = script.id;
 
-    const initResult = parseRecord(row.init_result);
-    addCharactersFromValue(items, seen, novelId, initResult?.characters ?? row.characters);
+    const initResult = parseRecord(script.initResult);
+    addCharactersFromValue(items, seen, novelId, initResult?.characters ?? script.characters);
     addSceneLocationsFromValue(items, seen, novelId, initResult?.scene_locations);
 
     if (scriptScopeIds.has(scriptId)) {
-      addOutfitsFromValue(items, seen, scriptId, initResult?.character_outfits ?? row.costumes);
+      addOutfitsFromValue(items, seen, scriptId, initResult?.character_outfits ?? script.costumes);
     }
   }
 
@@ -820,7 +778,6 @@ export async function ensureExpectedEpisodeResources(
 }
 
 async function insertEpisodes(
-  tScripts: string,
   novelId: string,
   episodes: ScriptEpisode[],
 ): Promise<EpisodeSummary[]> {
@@ -828,33 +785,25 @@ async function insertEpisodes(
   for (const episode of episodes) {
     const scriptKey = scriptKeyForEpisode(episode);
 
-    const { rows } = await bizPool.query(
-      `INSERT INTO "${tScripts}"
-        (novel_id, script_key, script_name, script_content,
-         init_result, characters, costumes)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb)
-       RETURNING id, created_at`,
-      [
+    const script = await prisma.novelScript.create({
+      data: {
         novelId,
         scriptKey,
-        episode.output.episode_title,
-        episode.output.pre_choice_script,
-        JSON.stringify(episode.output),
-        JSON.stringify(episode.output.characters),
-        JSON.stringify(episode.output.character_outfits ?? {}),
-      ],
-    );
-
-    const row = rows[0] as { id: string; created_at: string } | undefined;
-    if (!row) throw new Error(`Failed to insert episode ${scriptKey}`);
+        scriptName: episode.output.episode_title,
+        scriptContent: episode.output.pre_choice_script,
+        initResult: episode.output as Prisma.InputJsonValue,
+        characters: episode.output.characters as Prisma.InputJsonValue,
+        costumes: (episode.output.character_outfits ?? {}) as Prisma.InputJsonValue,
+      },
+    });
 
     created.push({
-      id: row.id,
+      id: script.id,
       novelId,
       scriptKey,
       scriptName: episode.output.episode_title,
       status: "uploaded",
-      createdAt: String(row.created_at),
+      createdAt: script.createdAt.toISOString(),
     });
   }
   return created;
@@ -863,6 +812,67 @@ async function insertEpisodes(
 /* ------------------------------------------------------------------ */
 /*  Resources                                                          */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Get all resources for a given scope, grouped by category.
+ * When a resource is linked to a KeyResource (keyResourceId), resolve
+ * the URL from the KeyResource's current version so the panel always
+ * reflects the active version (after rollback / regenerate).
+ */
+async function getResourcesByScope(
+  scopeType: string,
+  scopeId: string,
+): Promise<CategoryGroup[]> {
+  const resources = await prisma.domainResource.findMany({
+    where: { scopeType, scopeId },
+    orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+
+  const domainResources: DomainResource[] = resources.map((r) => ({
+    id: r.id,
+    category: r.category,
+    mediaType: r.mediaType,
+    title: r.title,
+    url: r.url,
+    data: r.data,
+    keyResourceId: r.keyResourceId,
+    sortOrder: r.sortOrder,
+  }));
+
+  // Collect linked KeyResource IDs to resolve current-version URLs in a single query
+  const linkedIds = domainResources
+    .map((r) => r.keyResourceId)
+    .filter((id): id is string => id != null);
+
+  if (linkedIds.length > 0) {
+    const keyResources = await prisma.keyResource.findMany({
+      where: { id: { in: linkedIds } },
+      include: { versions: { orderBy: { version: "asc" } } },
+    });
+
+    const urlMap = new Map<string, string | null>();
+    for (const kr of keyResources) {
+      const curVer = kr.versions.find((v) => v.version === kr.currentVersion);
+      urlMap.set(kr.id, curVer?.url ?? null);
+    }
+
+    // Override static url with the current-version url from KeyResource
+    for (const r of domainResources) {
+      if (r.keyResourceId && urlMap.has(r.keyResourceId)) {
+        r.url = urlMap.get(r.keyResourceId) ?? r.url;
+      }
+    }
+  }
+
+  const groups = new Map<string, DomainResource[]>();
+  for (const r of domainResources) {
+    const list = groups.get(r.category) ?? [];
+    list.push(r);
+    groups.set(r.category, list);
+  }
+
+  return [...groups.entries()].map(([category, items]) => ({ category, items }));
+}
 
 export async function getResources(
   scriptId: string,
@@ -896,16 +906,41 @@ export async function getResources(
 /**
  * Update a domain resource's data field (for JSON editor).
  */
-export { updateResourceData, deleteResource };
+export async function updateResourceData(
+  id: string,
+  data: unknown,
+): Promise<void> {
+  await prisma.domainResource.update({
+    where: { id },
+    data: { data: data as Prisma.InputJsonValue },
+  });
+}
+
+/**
+ * Delete a single resource by id.
+ */
+export async function deleteResource(id: string): Promise<void> {
+  const resource = await prisma.domainResource.findUnique({
+    where: { id },
+    select: { keyResourceId: true },
+  });
+
+  await prisma.domainResource.delete({ where: { id } });
+
+  // Cascade-cleanup linked KeyResource
+  if (resource?.keyResourceId) {
+    await prisma.keyResource.delete({ where: { id: resource.keyResourceId } }).catch(() => {
+      // Already gone — ignore
+    });
+  }
+}
 
 export async function getEpisodeContent(scriptId: string): Promise<string | null> {
-  const tScripts = await physical("novel_scripts");
-  const { rows } = await bizPool.query(
-    `SELECT script_content FROM "${tScripts}" WHERE id = $1 LIMIT 1`,
-    [scriptId],
-  );
-  const row = rows[0] as { script_content: string | null } | undefined;
-  return row?.script_content ?? null;
+  const script = await prisma.novelScript.findUnique({
+    where: { id: scriptId },
+    select: { scriptContent: true },
+  });
+  return script?.scriptContent ?? null;
 }
 
 /**
@@ -914,16 +949,12 @@ export async function getEpisodeContent(scriptId: string): Promise<string | null
 export async function getEpisodeOutput(
   scriptId: string,
 ): Promise<Record<string, unknown> | null> {
-  const tScripts = await physical("novel_scripts");
-  const { rows } = await bizPool.query(
-    `SELECT init_result FROM "${tScripts}" WHERE id = $1 LIMIT 1`,
-    [scriptId],
-  );
-  const row = rows[0] as { init_result: unknown } | undefined;
-  if (!row?.init_result) return null;
-  return (typeof row.init_result === "string"
-    ? JSON.parse(row.init_result)
-    : row.init_result) as Record<string, unknown>;
+  const script = await prisma.novelScript.findUnique({
+    where: { id: scriptId },
+    select: { initResult: true },
+  });
+  if (!script?.initResult) return null;
+  return script.initResult as Record<string, unknown>;
 }
 
 export interface NovelLevelData {
@@ -936,38 +967,21 @@ export interface NovelLevelData {
  * Read novel-level data (character_arcs, location_bible, synopsis) from novels table.
  */
 export async function getNovelLevelData(novelId: string): Promise<NovelLevelData> {
-  const tNovels = await physical("novels");
-  const { rows } = await bizPool.query(
-    `SELECT character_arcs, location_bible, synopsis FROM "${tNovels}" WHERE id = $1 LIMIT 1`,
-    [novelId],
-  );
-  const row = rows[0] as {
-    character_arcs: unknown;
-    location_bible: unknown;
-    synopsis: unknown;
-  } | undefined;
-  if (!row) return { characterArcs: [], locationBible: [], synopsis: null };
+  const novel = await prisma.novel.findUnique({
+    where: { id: novelId },
+    select: { characterArcs: true, locationBible: true, synopsis: true },
+  });
 
-  const parse = (value: unknown): Array<Record<string, unknown>> | Record<string, unknown> | null => {
-    if (value == null) return null;
-    if (typeof value === "string") {
-      try {
-        return JSON.parse(value) as Array<Record<string, unknown>>;
-      } catch {
-        return null;
-      }
-    }
-    return value as Array<Record<string, unknown>> | Record<string, unknown>;
-  };
+  if (!novel) return { characterArcs: [], locationBible: [], synopsis: null };
 
-  const characterArcs = parse(row.character_arcs);
-  const locationBible = parse(row.location_bible);
-  const synopsis = parse(row.synopsis);
+  const characterArcs = novel.characterArcs;
+  const locationBible = novel.locationBible;
+  const synopsis = novel.synopsis;
 
   return {
-    characterArcs: Array.isArray(characterArcs) ? characterArcs : [],
-    locationBible: Array.isArray(locationBible) ? locationBible : [],
-    synopsis: synopsis && !Array.isArray(synopsis) ? synopsis : null,
+    characterArcs: Array.isArray(characterArcs) ? characterArcs as Array<Record<string, unknown>> : [],
+    locationBible: Array.isArray(locationBible) ? locationBible as Array<Record<string, unknown>> : [],
+    synopsis: synopsis && !Array.isArray(synopsis) ? synopsis as Record<string, unknown> : null,
   };
 }
 
@@ -1005,22 +1019,15 @@ export async function runInitWorkflow(
 
   const parsed = JSON.parse(text) as InitWorkflowResult;
 
-  // Persist init_result + characters/costumes via parameterized query
-  // (MCP tool may also write these, but this is the reliable fallback)
-  const tScripts = await physical("novel_scripts");
-  await bizPool.query(
-    `UPDATE "${tScripts}"
-     SET init_result = $1,
-         characters = $2::jsonb,
-         costumes   = $3::jsonb
-     WHERE id = $4`,
-    [
-      JSON.stringify(parsed),
-      JSON.stringify(parsed.characters ?? []),
-      JSON.stringify(parsed.costumes ?? {}),
-      scriptDbId,
-    ],
-  );
+  // Persist init_result + characters/costumes
+  await prisma.novelScript.update({
+    where: { id: scriptDbId },
+    data: {
+      initResult: parsed as unknown as Prisma.InputJsonValue,
+      characters: (parsed.characters ?? []) as Prisma.InputJsonValue,
+      costumes: (parsed.costumes ?? {}) as Prisma.InputJsonValue,
+    },
+  });
 
   return parsed;
 }
@@ -1032,32 +1039,21 @@ export async function getInitResult(
   novelId: string,
   scriptKey: string,
 ): Promise<InitWorkflowResult | null> {
-  const tScripts = await physical("novel_scripts");
-  const { rows } = await bizPool.query(
-    `SELECT init_result FROM "${tScripts}"
-     WHERE novel_id = $1 AND script_key = $2
-     LIMIT 1`,
-    [novelId, scriptKey],
-  );
-  const row = rows[0] as { init_result: unknown } | undefined;
-  if (!row?.init_result) return null;
-  return (typeof row.init_result === "string"
-    ? JSON.parse(row.init_result)
-    : row.init_result) as InitWorkflowResult;
+  const script = await prisma.novelScript.findFirst({
+    where: { novelId, scriptKey },
+    select: { initResult: true },
+  });
+  if (!script?.initResult) return null;
+  return script.initResult as unknown as InitWorkflowResult;
 }
 
 export async function getEpisodeStatus(scriptId: string): Promise<EpStatus> {
-  const tScripts = await physical("novel_scripts");
+  const script = await prisma.novelScript.findUnique({
+    where: { id: scriptId },
+    select: { scriptContent: true },
+  });
 
-  const { rows: scriptRows } = await bizPool.query(
-    `SELECT script_content IS NOT NULL AS has_content
-     FROM "${tScripts}"
-     WHERE id = $1`,
-    [scriptId],
-  );
-
-  const script = scriptRows[0] as { has_content: boolean } | undefined;
-  if (!script || !script.has_content) return "empty";
+  if (!script || !script.scriptContent) return "empty";
 
   const keyResourceCount = await prisma.keyResource.count({
     where: { scopeType: "script", scopeId: scriptId, currentVersion: { gt: 0 } },

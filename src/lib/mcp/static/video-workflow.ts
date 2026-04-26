@@ -13,9 +13,6 @@
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider, ToolContext } from "../types";
-import { bizPool } from "@/lib/biz-db";
-import { resolveTable, GLOBAL_USER } from "@/lib/biz-db-namespace";
-import { ensureVideoSchema } from "@/lib/video/schema";
 import * as keyResourceService from "@/lib/services/key-resource-service";
 import { prisma } from "@/lib/db";
 import { getNovelLevelData } from "@/lib/services/video-workflow-service";
@@ -32,23 +29,6 @@ function text(t: string): CallToolResult {
 
 function json(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
-}
-
-async function physical(logicalName: string): Promise<string> {
-  await ensureVideoSchema();
-  const resolved = await resolveTable(GLOBAL_USER, logicalName);
-  if (!resolved) throw new Error(`Table "${logicalName}" not found`);
-  return resolved.physicalName;
-}
-
-/** Safely parse JSONB that pg may return as string or object. */
-function parseJsonb(val: unknown): Record<string, unknown> | null {
-  if (val == null) return null;
-  if (typeof val === "object" && !Array.isArray(val)) return val as Record<string, unknown>;
-  if (typeof val === "string") {
-    try { return JSON.parse(val) as Record<string, unknown>; } catch { return null; }
-  }
-  return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -588,16 +568,15 @@ export const videoWorkflowMcp: McpProvider = {
       /*  list_novels                                                  */
       /* ------------------------------------------------------------ */
       case "list_novels": {
-        const tNovels = await physical("novels");
-        const { rows } = await bizPool.query(
-          `SELECT id, name, episode_count, created_at FROM "${tNovels}" ORDER BY created_at DESC`,
-        );
+        const novels = await prisma.novel.findMany({
+          orderBy: { createdAt: "desc" },
+        });
         return json(
-          (rows as Array<{ id: string; name: string; episode_count: number; created_at: Date }>).map((r) => ({
-            id: r.id,
-            name: r.name,
-            episodeCount: r.episode_count ?? 0,
-            createdAt: r.created_at,
+          novels.map((n) => ({
+            id: n.id,
+            name: n.name,
+            episodeCount: n.episodeCount,
+            createdAt: n.createdAt,
           })),
         );
       }
@@ -607,17 +586,16 @@ export const videoWorkflowMcp: McpProvider = {
       /* ------------------------------------------------------------ */
       case "list_episodes": {
         const { novelId } = NovelIdParam.parse(args);
-        const tScriptsLE = await physical("novel_scripts");
-        const { rows } = await bizPool.query(
-          `SELECT id, script_key, script_name, created_at FROM "${tScriptsLE}" WHERE novel_id = $1 ORDER BY script_key`,
-          [novelId],
-        );
+        const scripts = await prisma.novelScript.findMany({
+          where: { novelId },
+          orderBy: { scriptKey: "asc" },
+        });
         return json(
-          (rows as Array<{ id: string; script_key: string; script_name: string | null; created_at: Date }>).map((r) => ({
-            scriptId: r.id,
-            scriptKey: r.script_key,
-            scriptName: r.script_name,
-            createdAt: r.created_at,
+          scripts.map((s) => ({
+            scriptId: s.id,
+            scriptKey: s.scriptKey,
+            scriptName: s.scriptName,
+            createdAt: s.createdAt,
           })),
         );
       }
@@ -627,20 +605,15 @@ export const videoWorkflowMcp: McpProvider = {
       /* ------------------------------------------------------------ */
       case "get_episode": {
         const { scriptId } = ScriptIdParam.parse(args);
-        const tScripts = await physical("novel_scripts");
+        const script = await prisma.novelScript.findUnique({
+          where: { id: scriptId },
+          select: { scriptKey: true, initResult: true },
+        });
 
-        const { rows } = await bizPool.query(
-          `SELECT script_key, init_result FROM "${tScripts}" WHERE id = $1 LIMIT 1`,
-          [scriptId],
-        );
+        if (!script) return text(`Episode not found: ${scriptId}`);
+        if (!script.initResult) return text(`Episode ${scriptId} has no init_result data`);
 
-        const row = rows[0] as { script_key: string; init_result: unknown } | undefined;
-        if (!row) return text(`Episode not found: ${scriptId}`);
-
-        const ir = parseJsonb(row.init_result);
-        if (!ir) return text(`Episode ${scriptId} has no init_result data`);
-
-        return json({ scriptKey: row.script_key, ...ir });
+        return json({ scriptKey: script.scriptKey, ...script.initResult as Record<string, unknown> });
       }
 
       /* ------------------------------------------------------------ */
@@ -655,15 +628,13 @@ export const videoWorkflowMcp: McpProvider = {
         let scriptKey: string | undefined;
 
         if (scriptId) {
-          const tScriptsS = await physical("novel_scripts");
-          const { rows: sRows } = await bizPool.query(
-            `SELECT novel_id, script_key FROM "${tScriptsS}" WHERE id = $1 LIMIT 1`,
-            [scriptId],
-          );
-          const sRow = sRows[0] as { novel_id: string; script_key: string } | undefined;
-          if (!sRow) return text(`Episode not found: ${scriptId}`);
-          if (!novelId) novelId = sRow.novel_id;
-          scriptKey = sRow.script_key;
+          const script = await prisma.novelScript.findUnique({
+            where: { id: scriptId },
+            select: { novelId: true, scriptKey: true },
+          });
+          if (!script) return text(`Episode not found: ${scriptId}`);
+          if (!novelId) novelId = script.novelId;
+          scriptKey = script.scriptKey;
         }
 
         if (!novelId) return text("At least one of scriptId or novelId is required");
@@ -695,12 +666,11 @@ export const videoWorkflowMcp: McpProvider = {
           });
         } else {
           // Novel-wide: include ALL EPs' resources
-          const tScriptsN = await physical("novel_scripts");
-          const { rows: epRows } = await bizPool.query(
-            `SELECT id FROM "${tScriptsN}" WHERE novel_id = $1`,
-            [novelId],
-          );
-          const epIds = (epRows as Array<{ id: string }>).map((r) => r.id);
+          const scripts = await prisma.novelScript.findMany({
+            where: { novelId },
+            select: { id: true },
+          });
+          const epIds = scripts.map((s) => s.id);
           if (epIds.length > 0) {
             scriptResources = await prisma.keyResource.findMany({
               where: { scopeType: "script", scopeId: { in: epIds }, ...mediaFilter },
@@ -1076,14 +1046,12 @@ export const videoWorkflowMcp: McpProvider = {
         const shotParams = ExecuteVideoShotParams.parse(args);
 
         // 1. Resolve novelId from scriptId
-        const tScriptsShot = await physical("novel_scripts");
-        const { rows: shotRows } = await bizPool.query(
-          `SELECT novel_id FROM "${tScriptsShot}" WHERE id = $1 LIMIT 1`,
-          [shotParams.scriptId],
-        );
-        const shotRow = shotRows[0] as { novel_id: string } | undefined;
-        if (!shotRow) return text(`Episode not found: ${shotParams.scriptId}`);
-        const shotNovelId = shotRow.novel_id;
+        const script = await prisma.novelScript.findUnique({
+          where: { id: shotParams.scriptId },
+          select: { novelId: true },
+        });
+        if (!script) return text(`Episode not found: ${shotParams.scriptId}`);
+        const shotNovelId = script.novelId;
 
         // 2. Get all resources for reference matching
         const allResources = await prisma.keyResource.findMany({
@@ -1200,16 +1168,14 @@ export const videoWorkflowMcp: McpProvider = {
         const { scriptId, characterName, referenceUrls, styleName, model } =
           GenerateCostumeParams.parse(args);
 
-        const tScripts = await physical("novel_scripts");
-        const { rows: scriptRows } = await bizPool.query(
-          `SELECT novel_id, init_result FROM "${tScripts}" WHERE id = $1 LIMIT 1`,
-          [scriptId],
-        );
-        const scriptRow = scriptRows[0] as { novel_id: string; init_result: unknown } | undefined;
-        if (!scriptRow) return text(`Episode not found: ${scriptId}`);
+        const script = await prisma.novelScript.findUnique({
+          where: { id: scriptId },
+          select: { novelId: true, initResult: true },
+        });
+        if (!script) return text(`Episode not found: ${scriptId}`);
 
         // Auto-read outfit description from this episode's character_outfits
-        const ir = parseJsonb(scriptRow.init_result);
+        const ir = script.initResult as Record<string, unknown> | null;
         const outfits = ir?.character_outfits as Record<string, string> | undefined;
         const demographics = outfits?.[characterName];
         if (!demographics) return text(`No outfit for "${characterName}" in episode ${scriptId}`);
@@ -1224,7 +1190,7 @@ export const videoWorkflowMcp: McpProvider = {
         // Auto-fetch character portrait as reference (换装基于原立绘修改)
         const portraitKey = `char_${characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
         const portrait = await prisma.keyResource.findFirst({
-          where: { scopeType: "novel", scopeId: scriptRow.novel_id, key: portraitKey },
+          where: { scopeType: "novel", scopeId: script.novelId, key: portraitKey },
           include: { versions: { orderBy: { version: "desc" }, take: 1 } },
         });
         const portraitUrl = portrait?.versions[0]?.url ?? null;
@@ -1254,14 +1220,12 @@ export const videoWorkflowMcp: McpProvider = {
         const style = await resolveStyle(params.styleName);
 
         // --- 1. Resolve novelId from scriptId ---
-        const tScriptsV = await physical("novel_scripts");
-        const { rows: svRows } = await bizPool.query(
-          `SELECT novel_id FROM "${tScriptsV}" WHERE id = $1 LIMIT 1`,
-          [params.scriptId],
-        );
-        const svRow = svRows[0] as { novel_id: string } | undefined;
-        if (!svRow) return text(`Episode not found: ${params.scriptId}`);
-        const novelId = svRow.novel_id;
+        const script = await prisma.novelScript.findUnique({
+          where: { id: params.scriptId },
+          select: { novelId: true },
+        });
+        if (!script) return text(`Episode not found: ${params.scriptId}`);
+        const novelId = script.novelId;
 
         let prompt: string;
         let referenceImageUrls: string[];

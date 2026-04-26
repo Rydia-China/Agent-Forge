@@ -1,14 +1,12 @@
 /**
- * Domain Resource Service — generic CRUD for the domain_resources table.
+ * Domain Resource Service — generic CRUD for the DomainResource table.
  *
  * No business concepts (characters, costumes, scenes, shots) — only
  * scope, category, and media_type.
  */
 
-import { bizPool } from "@/lib/biz-db";
-import { resolveTable, GLOBAL_USER } from "@/lib/biz-db-namespace";
-import { ensureDomainResourcesTable, DOMAIN_RESOURCES_TABLE } from "./resource-schema";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -35,30 +33,6 @@ export interface DomainResources {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
-async function physical(): Promise<string> {
-  await ensureDomainResourcesTable();
-  const resolved = await resolveTable(GLOBAL_USER, DOMAIN_RESOURCES_TABLE);
-  if (!resolved) throw new Error("domain_resources table not found in BizTableMapping");
-  return resolved.physicalName;
-}
-
-function toResource(row: Record<string, unknown>): DomainResource {
-  return {
-    id: row.id as string,
-    category: row.category as string,
-    mediaType: row.media_type as string,
-    title: (row.title as string | null) ?? null,
-    url: (row.url as string | null) ?? null,
-    data: row.data ?? null,
-    keyResourceId: (row.key_resource_id as string | null) ?? (row.image_gen_id as string | null) ?? null,
-    sortOrder: (row.sort_order as number) ?? 0,
-  };
-}
-
-/* ------------------------------------------------------------------ */
 /*  Query                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -72,18 +46,24 @@ export async function getResourcesByScope(
   scopeType: string,
   scopeId: string,
 ): Promise<CategoryGroup[]> {
-  const t = await physical();
-  const { rows } = await bizPool.query(
-    `SELECT * FROM "${t}"
-     WHERE scope_type = $1 AND scope_id = $2
-     ORDER BY category, sort_order, created_at`,
-    [scopeType, scopeId],
-  );
+  const resources = await prisma.domainResource.findMany({
+    where: { scopeType, scopeId },
+    orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
+  });
 
-  const resources = (rows as Array<Record<string, unknown>>).map(toResource);
+  const domainResources: DomainResource[] = resources.map((r) => ({
+    id: r.id,
+    category: r.category,
+    mediaType: r.mediaType,
+    title: r.title,
+    url: r.url,
+    data: r.data,
+    keyResourceId: r.keyResourceId,
+    sortOrder: r.sortOrder,
+  }));
 
   // Collect linked KeyResource IDs to resolve current-version URLs in a single query
-  const linkedIds = resources
+  const linkedIds = domainResources
     .map((r) => r.keyResourceId)
     .filter((id): id is string => id != null);
 
@@ -100,7 +80,7 @@ export async function getResourcesByScope(
     }
 
     // Override static url with the current-version url from KeyResource
-    for (const r of resources) {
+    for (const r of domainResources) {
       if (r.keyResourceId && urlMap.has(r.keyResourceId)) {
         r.url = urlMap.get(r.keyResourceId) ?? r.url;
       }
@@ -108,7 +88,7 @@ export async function getResourcesByScope(
   }
 
   const groups = new Map<string, DomainResource[]>();
-  for (const r of resources) {
+  for (const r of domainResources) {
     const list = groups.get(r.category) ?? [];
     list.push(r);
     groups.set(r.category, list);
@@ -125,16 +105,13 @@ export async function collectKnownUrls(
   scopeType: string,
   scopeId: string,
 ): Promise<Set<string>> {
-  const t = await physical();
-  const { rows } = await bizPool.query(
-    `SELECT url FROM "${t}"
-     WHERE scope_type = $1 AND scope_id = $2
-       AND url IS NOT NULL`,
-    [scopeType, scopeId],
-  );
+  const resources = await prisma.domainResource.findMany({
+    where: { scopeType, scopeId, url: { not: null } },
+    select: { url: true },
+  });
   const urls = new Set<string>();
-  for (const row of rows as Array<{ url: string }>) {
-    urls.add(row.url);
+  for (const resource of resources) {
+    if (resource.url) urls.add(resource.url);
   }
   return urls;
 }
@@ -160,27 +137,20 @@ export interface CreateResourceInput {
  * Returns the generated UUID.
  */
 export async function createResource(input: CreateResourceInput): Promise<string> {
-  const t = await physical();
-  const { rows } = await bizPool.query(
-    `INSERT INTO "${t}"
-       (scope_type, scope_id, category, media_type, title, url, data, key_resource_id, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     RETURNING id`,
-    [
-      input.scopeType,
-      input.scopeId,
-      input.category,
-      input.mediaType,
-      input.title ?? null,
-      input.url ?? null,
-      input.data != null ? JSON.stringify(input.data) : null,
-      input.keyResourceId ?? null,
-      input.sortOrder ?? 0,
-    ],
-  );
-  const row = rows[0] as { id: string } | undefined;
-  if (!row) throw new Error("Failed to create resource");
-  return row.id;
+  const resource = await prisma.domainResource.create({
+    data: {
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      category: input.category,
+      mediaType: input.mediaType,
+      title: input.title ?? null,
+      url: input.url ?? null,
+      data: input.data as Prisma.InputJsonValue,
+      keyResourceId: input.keyResourceId ?? null,
+      sortOrder: input.sortOrder ?? 0,
+    },
+  });
+  return resource.id;
 }
 
 /**
@@ -188,71 +158,72 @@ export async function createResource(input: CreateResourceInput): Promise<string
  * already exists in the same scope, update it; otherwise insert.
  */
 export async function upsertByKeyResource(input: CreateResourceInput & { keyResourceId: string }): Promise<string> {
-  const t = await physical();
-  const { rows: existing } = await bizPool.query(
-    `SELECT id FROM "${t}"
-     WHERE scope_type = $1 AND scope_id = $2 AND key_resource_id = $3
-     LIMIT 1`,
-    [input.scopeType, input.scopeId, input.keyResourceId],
-  );
-  const existingRow = (existing as Array<{ id: string }>)[0];
-  if (existingRow) {
-    const id = existingRow.id;
-    await bizPool.query(
-      `UPDATE "${t}"
-       SET category = $1, title = $2, url = $3, data = $4, sort_order = $5
-       WHERE id = $6`,
-      [
-        input.category,
-        input.title ?? null,
-        input.url ?? null,
-        input.data != null ? JSON.stringify(input.data) : null,
-        input.sortOrder ?? 0,
-        id,
-      ],
-    );
-    return id;
+  const existing = await prisma.domainResource.findFirst({
+    where: {
+      scopeType: input.scopeType,
+      scopeId: input.scopeId,
+      keyResourceId: input.keyResourceId,
+    },
+  });
+
+  if (existing) {
+    await prisma.domainResource.update({
+      where: { id: existing.id },
+      data: {
+        category: input.category,
+        title: input.title ?? null,
+        url: input.url ?? null,
+        data: input.data as Prisma.InputJsonValue,
+        sortOrder: input.sortOrder ?? 0,
+      },
+    });
+    return existing.id;
   }
+
   return createResource(input);
 }
 
 /**
  * Delete all resources for a given scope (used when deleting an episode).
- * Cascade-deletes linked KeyResources, nulls dangling refs,
- * then notifies registered cleanup hooks.
+ * Cascade-deletes linked KeyResources, then notifies registered cleanup hooks.
  */
 export async function deleteResourcesByScope(
   scopeType: string,
   scopeId: string,
 ): Promise<void> {
-  const t = await physical();
-
   // 1. Collect full info before deleting (for hooks + KeyResource cascade)
-  const { rows } = await bizPool.query(
-    `SELECT scope_type, scope_id, media_type, title, url, key_resource_id
-     FROM "${t}" WHERE scope_type = $1 AND scope_id = $2`,
-    [scopeType, scopeId],
-  );
-  const deleted: DeletedResourceInfo[] = (rows as Array<Record<string, unknown>>).map((r) => ({
-    scopeType: r.scope_type as string,
-    scopeId: r.scope_id as string,
-    mediaType: r.media_type as string,
-    title: (r.title as string | null) ?? null,
-    url: (r.url as string | null) ?? null,
-    keyResourceId: (r.key_resource_id as string | null) ?? null,
+  const resources = await prisma.domainResource.findMany({
+    where: { scopeType, scopeId },
+    select: {
+      scopeType: true,
+      scopeId: true,
+      mediaType: true,
+      title: true,
+      url: true,
+      keyResourceId: true,
+    },
+  });
+
+  const deleted: DeletedResourceInfo[] = resources.map((r) => ({
+    scopeType: r.scopeType,
+    scopeId: r.scopeId,
+    mediaType: r.mediaType,
+    title: r.title,
+    url: r.url,
+    keyResourceId: r.keyResourceId,
   }));
+
   const keyResourceIds = deleted
     .map((d) => d.keyResourceId)
     .filter((id): id is string => id != null);
 
-  // 2. Delete the biz-db rows
-  await bizPool.query(
-    `DELETE FROM "${t}" WHERE scope_type = $1 AND scope_id = $2`,
-    [scopeType, scopeId],
-  );
+  // 2. Delete the Prisma rows
+  await prisma.domainResource.deleteMany({
+    where: { scopeType, scopeId },
+  });
 
   // 3. Cascade-cleanup linked KeyResources
-  await cascadeDeleteKeyResources(t, keyResourceIds);
+  await cascadeDeleteKeyResources(keyResourceIds);
 
   // 4. Notify hooks
   await notifyDeleteHooks(deleted);
@@ -301,36 +272,39 @@ async function notifyDeleteHooks(deleted: DeletedResourceInfo[]): Promise<void> 
 
 /**
  * Delete a single resource by id.
- * Cascade-deletes linked KeyResource, nulls dangling refs,
- * then notifies registered cleanup hooks.
+ * Cascade-deletes linked KeyResource, then notifies registered cleanup hooks.
  */
 export async function deleteResource(id: string): Promise<DeletedResourceInfo | null> {
-  const t = await physical();
-
   // 1. Fetch full row before deleting
-  const { rows } = await bizPool.query(
-    `SELECT scope_type, scope_id, media_type, title, url, key_resource_id
-     FROM "${t}" WHERE id = $1 LIMIT 1`,
-    [id],
-  );
-  const row = rows[0] as Record<string, unknown> | undefined;
-  if (!row) return null;
+  const resource = await prisma.domainResource.findUnique({
+    where: { id },
+    select: {
+      scopeType: true,
+      scopeId: true,
+      mediaType: true,
+      title: true,
+      url: true,
+      keyResourceId: true,
+    },
+  });
+
+  if (!resource) return null;
 
   const info: DeletedResourceInfo = {
-    scopeType: row.scope_type as string,
-    scopeId: row.scope_id as string,
-    mediaType: row.media_type as string,
-    title: (row.title as string | null) ?? null,
-    url: (row.url as string | null) ?? null,
-    keyResourceId: (row.key_resource_id as string | null) ?? null,
+    scopeType: resource.scopeType,
+    scopeId: resource.scopeId,
+    mediaType: resource.mediaType,
+    title: resource.title,
+    url: resource.url,
+    keyResourceId: resource.keyResourceId,
   };
 
-  // 2. Delete the biz-db row
-  await bizPool.query(`DELETE FROM "${t}" WHERE id = $1`, [id]);
+  // 2. Delete the Prisma row
+  await prisma.domainResource.delete({ where: { id } });
 
   // 3. Cascade-cleanup linked KeyResource
   if (info.keyResourceId) {
-    await cascadeDeleteKeyResources(t, [info.keyResourceId]);
+    await cascadeDeleteKeyResources([info.keyResourceId]);
   }
 
   // 4. Notify hooks
@@ -344,19 +318,16 @@ export async function deleteResource(id: string): Promise<DeletedResourceInfo | 
  * references that point to them.
  */
 async function cascadeDeleteKeyResources(
-  physicalTable: string,
   keyResourceIds: string[],
 ): Promise<void> {
   if (keyResourceIds.length === 0) return;
 
-  // Null out key_resource_id in any other domain_resources rows
+  // Null out keyResourceId in any other domain_resources rows
   // that still reference these KeyResources
-  await bizPool.query(
-    `UPDATE "${physicalTable}"
-     SET key_resource_id = NULL
-     WHERE key_resource_id = ANY($1::text[])`,
-    [keyResourceIds],
-  );
+  await prisma.domainResource.updateMany({
+    where: { keyResourceId: { in: keyResourceIds } },
+    data: { keyResourceId: null },
+  });
 
   // Delete the KeyResources themselves (versions cascade via Prisma FK)
   for (const krId of keyResourceIds) {
@@ -373,9 +344,8 @@ export async function updateResourceData(
   id: string,
   data: unknown,
 ): Promise<void> {
-  const t = await physical();
-  await bizPool.query(
-    `UPDATE "${t}" SET data = $1 WHERE id = $2`,
-    [JSON.stringify(data), id],
-  );
+  await prisma.domainResource.update({
+    where: { id },
+    data: { data: data as Prisma.InputJsonValue },
+  });
 }

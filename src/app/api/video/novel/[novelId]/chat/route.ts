@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { submitSubAgent } from "@/lib/services/subagent-service";
 import { NovelContextProvider } from "@/lib/video/novel-context-provider";
-import { ensureVideoSchema } from "@/lib/video/schema";
 import { resolveModel } from "@/lib/agent/models";
 
 const SubmitSchema = z.object({
@@ -44,7 +43,6 @@ export async function POST(
       contextProvider: new NovelContextProvider({ novelId }),
       skills,
     },
-    beforeRun: () => ensureVideoSchema(),
   });
 
   return NextResponse.json({

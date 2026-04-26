@@ -218,4 +218,58 @@ model BizSchemaVersion {
   @@index([bizSchemaId])
 }
 
+/// Novel — 小说实体，存储小说级元数据
+model Novel {
+  id            String        @id @default(cuid())
+  name          String
+  episodeCount  Int           @default(0)
+  synopsis      Json?
+  characterArcs Json?
+  locationBible Json?
+  scripts       NovelScript[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([createdAt])
+}
+
+/// NovelScript — 剧集实体，存储剧集内容和元数据
+model NovelScript {
+  id            String   @id @default(cuid())
+  novelId       String
+  novel         Novel    @relation(fields: [novelId], references: [id], onDelete: Cascade)
+  scriptKey     String
+  scriptName    String?
+  scriptContent String?
+  initResult    Json?
+  characters    Json?
+  costumes      Json?
+  storyboardRaw String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([novelId, scriptKey])
+  @@index([novelId])
+}
+
+/// DomainResource — 通用领域资源表，LLM 通过 category 自由分类
+/// 代码只按 mediaType (image/video/json) 渲染
+model DomainResource {
+  id            String   @id @default(cuid())
+  scopeType     String   // "novel" | "script"
+  scopeId       String   // novel ID / script ID
+  category      String   // LLM 自由分类：角色立绘、场景、换装、视频、分镜等
+  mediaType     String   // "image" | "video" | "json"
+  title         String?
+  url           String?
+  data          Json?
+  keyResourceId String?  // 链接到 KeyResource（版本化资源）
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([scopeType, scopeId])
+  @@index([keyResourceId])
+}
+
 
