@@ -36,7 +36,7 @@ export interface KeyResourceEvent {
   title?: string;
   /**
    * When set, the resource was already persisted by the MCP tool.
-   * task-service should only push the SSE event, not call upsertResource.
+   * subagent-service should only push the SSE event, not call upsertResource.
    */
   persisted?: { id: string; version: number };
 }

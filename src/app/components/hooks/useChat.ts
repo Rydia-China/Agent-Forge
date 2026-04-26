@@ -9,7 +9,7 @@ import type {
   SessionDetail,
   UploadRequestPayload,
 } from "../../types";
-import { useTaskStream } from "./useTaskStream";
+import { useSubAgentStream } from "./useSubAgentStream";
 
 export interface UseChatReturn {
   sessionId: string | undefined;
@@ -54,7 +54,7 @@ export function useChat(
   onTitleChangeRef.current = onTitleChange;
 
   /* ---- Shared SSE infrastructure ---- */
-  const stream = useTaskStream(initialSessionId, {
+  const stream = useSubAgentStream(initialSessionId, {
     onSessionCreated,
     onRefreshNeeded,
     onSessionDetail: (detail: SessionDetail) => {
@@ -126,8 +126,8 @@ export function useChat(
       if (hasImages) payload.images = images;
       if (model) payload.model = model;
 
-      const result = await fetchJson<{ task_id: string; session_id: string }>(
-        "/api/tasks",
+      const result = await fetchJson<{ subagent_id: string; session_id: string }>(
+        "/api/subagents",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -140,13 +140,13 @@ export function useChat(
         stream.sessionIdRef.current = result.session_id;
       }
 
-      stream.connectToTask(result.task_id);
+      stream.connectToSubAgent(result.subagent_id);
 
       if (wasNewSession) {
         void generateTitle(result.session_id, text);
       }
     } catch (err: unknown) {
-      stream.setError(getErrorMessage(err, "Failed to submit task."));
+      stream.setError(getErrorMessage(err, "Failed to submit subagent."));
       stream.setStatus("error");
       stream.setIsSending(false);
       stream.activeSendRef.current = false;

@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cancelTask } from "@/lib/services/task-service";
+import { cancelSubAgent } from "@/lib/services/subagent-service";
 
 type Params = { params: Promise<{ id: string }> };
 
-/** POST /api/tasks/:id/cancel — cancel a running task */
 export async function POST(_req: NextRequest, { params }: Params) {
   const { id } = await params;
-  const cancelled = await cancelTask(id);
+  const cancelled = await cancelSubAgent(id);
   if (!cancelled) {
     return NextResponse.json(
-      { error: "Task not found or already finished" },
+      { error: "SubAgent not found or already finished" },
       { status: 404 },
     );
   }

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * useTaskStream — shared SSE task subscription infrastructure.
+ * useSubAgentStream — shared SSE task subscription infrastructure.
  *
  * Encapsulates the core state management, EventSource subscription,
  * session loading/reconnect, stopStreaming, and cleanup that both
@@ -27,7 +27,7 @@ import type {
 /*  Config                                                             */
 /* ------------------------------------------------------------------ */
 
-export interface TaskStreamCallbacks {
+export interface SubAgentStreamCallbacks {
   onSessionCreated: (sessionId: string) => void;
   onRefreshNeeded: () => void;
   /** Called after session detail is fetched on task completion. */
@@ -42,7 +42,7 @@ export interface TaskStreamCallbacks {
 /*  Return type                                                        */
 /* ------------------------------------------------------------------ */
 
-export interface TaskStreamReturn {
+export interface SubAgentStreamReturn {
   /* ---- Read state ---- */
   sessionId: string | undefined;
   messages: ChatMessage[];
@@ -72,7 +72,7 @@ export interface TaskStreamReturn {
   activeSendRef: React.MutableRefObject<boolean>;
 
   /* ---- Actions ---- */
-  connectToTask: (taskId: string, opts?: { isReconnect?: boolean }) => void;
+  connectToSubAgent: (subagentId: string, opts?: { isReconnect?: boolean }) => void;
   stopStreaming: () => void;
 }
 
@@ -80,10 +80,10 @@ export interface TaskStreamReturn {
 /*  Hook                                                               */
 /* ------------------------------------------------------------------ */
 
-export function useTaskStream(
+export function useSubAgentStream(
   initialSessionId: string | undefined,
-  callbacks: TaskStreamCallbacks,
-): TaskStreamReturn {
+  callbacks: SubAgentStreamCallbacks,
+): SubAgentStreamReturn {
   /* ---- State ---- */
   const [sessionId, setSessionId] = useState<string | undefined>(initialSessionId);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -99,7 +99,7 @@ export function useTaskStream(
   const [uploadDialog, setUploadDialog] = useState<UploadRequestPayload | null>(null);
 
   /* ---- Refs ---- */
-  const taskIdRef = useRef<string | null>(null);
+  const subagentIdRef = useRef<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const sessionIdRef = useRef<string | undefined>(initialSessionId);
   const activeSendRef = useRef(false);
@@ -124,8 +124,8 @@ export function useTaskStream(
   /*  EventSource SSE subscription                                     */
   /* ---------------------------------------------------------------- */
 
-  const connectToTask = useCallback(
-    (taskId: string, opts?: { isReconnect?: boolean }) => {
+  const connectToSubAgent = useCallback(
+    (subagentId: string, opts?: { isReconnect?: boolean }) => {
       eventSourceRef.current?.close();
       if (timeoutCheckIntervalRef.current) {
         clearInterval(timeoutCheckIntervalRef.current);
@@ -142,8 +142,8 @@ export function useTaskStream(
       activeSendRef.current = true;
       setStatus("running");
 
-      taskIdRef.current = taskId;
-      const es = new EventSource(`/api/tasks/${taskId}/events`);
+      subagentIdRef.current = subagentId;
+      const es = new EventSource(`/api/subagents/${subagentId}/events`);
       eventSourceRef.current = es;
 
       // 连接超时检测：如果 90 秒内没有收到任何消息（包括心跳），则认为连接已死
@@ -151,14 +151,14 @@ export function useTaskStream(
       timeoutCheckIntervalRef.current = setInterval(() => {
         const elapsed = Date.now() - lastMessageTime;
         if (elapsed > 90000 && es.readyState === EventSource.OPEN) {
-          console.error(`[task:${taskId}] No message received for ${elapsed}ms, considering connection dead`);
+          console.error(`[subagent:${subagentId}] No message received for ${elapsed}ms, considering connection dead`);
           if (timeoutCheckIntervalRef.current) {
             clearInterval(timeoutCheckIntervalRef.current);
             timeoutCheckIntervalRef.current = null;
           }
           es.close();
           eventSourceRef.current = null;
-          taskIdRef.current = null;
+          subagentIdRef.current = null;
           setIsStreaming(false);
           setIsSending(false);
           activeSendRef.current = false;
@@ -282,7 +282,7 @@ export function useTaskStream(
         }
         es.close();
         eventSourceRef.current = null;
-        taskIdRef.current = null;
+        subagentIdRef.current = null;
         cbRef.current.onRefreshNeeded();
 
         // Reload full session to get final state
@@ -309,7 +309,7 @@ export function useTaskStream(
       /* ---- error ---- */
 
       es.addEventListener("error", (e: Event) => {
-        console.log(`[task:${taskId}] EventSource error event:`, e);
+        console.log(`[subagent:${subagentId}] EventSource error event:`, e);
         
         // 处理服务端发送的错误事件 (MessageEvent with data)
         if (e instanceof MessageEvent && e.data) {
@@ -326,7 +326,7 @@ export function useTaskStream(
           } catch { /* ignore */ }
           es.close();
           eventSourceRef.current = null;
-          taskIdRef.current = null;
+          subagentIdRef.current = null;
           setIsStreaming(false);
           setIsSending(false);
           activeSendRef.current = false;
@@ -339,14 +339,14 @@ export function useTaskStream(
         
         // 处理连接错误 (readyState === 0 or 2)
         if (es.readyState === EventSource.CLOSED) {
-          console.error(`[task:${taskId}] EventSource connection closed unexpectedly`);
+          console.error(`[subagent:${subagentId}] EventSource connection closed unexpectedly`);
           if (timeoutCheckIntervalRef.current) {
             clearInterval(timeoutCheckIntervalRef.current);
             timeoutCheckIntervalRef.current = null;
           }
           es.close();
           eventSourceRef.current = null;
-          taskIdRef.current = null;
+          subagentIdRef.current = null;
           setIsStreaming(false);
           setIsSending(false);
           activeSendRef.current = false;
@@ -382,7 +382,7 @@ export function useTaskStream(
           data.activeTask &&
           (data.activeTask.status === "pending" || data.activeTask.status === "running")
         ) {
-          connectToTask(data.activeTask.id, { isReconnect: true });
+          connectToSubAgent(data.activeTask.id, { isReconnect: true });
         }
       })
       .catch((err: unknown) => {
@@ -390,16 +390,16 @@ export function useTaskStream(
         setError(msg);
       })
       .finally(() => setIsLoadingSession(false));
-  }, [initialSessionId, connectToTask]);
+  }, [initialSessionId, connectToSubAgent]);
 
   /* ---------------------------------------------------------------- */
   /*  stopStreaming                                                     */
   /* ---------------------------------------------------------------- */
 
   const stopStreaming = useCallback(() => {
-    const tid = taskIdRef.current;
+    const tid = subagentIdRef.current;
     if (tid) {
-      void fetch(`/api/tasks/${tid}/cancel`, { method: "POST" }).catch(() => {});
+      void fetch(`/api/subagents/${tid}/cancel`, { method: "POST" }).catch(() => {});
     }
     if (timeoutCheckIntervalRef.current) {
       clearInterval(timeoutCheckIntervalRef.current);
@@ -407,7 +407,7 @@ export function useTaskStream(
     }
     eventSourceRef.current?.close();
     eventSourceRef.current = null;
-    taskIdRef.current = null;
+    subagentIdRef.current = null;
     setIsStreaming(false);
     setIsSending(false);
     activeSendRef.current = false;
@@ -472,7 +472,7 @@ export function useTaskStream(
     sessionIdRef,
     activeSendRef,
 
-    connectToTask,
+    connectToSubAgent,
     stopStreaming,
   };
 }

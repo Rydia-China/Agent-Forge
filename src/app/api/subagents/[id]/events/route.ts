@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { subscribeEvents, getTask } from "@/lib/services/task-service";
+import { subscribeEvents, getSubAgent } from "@/lib/services/subagent-service";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -7,19 +7,17 @@ function toSse(id: number, event: string, data: unknown): string {
   return `id: ${id}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-/** GET /api/tasks/:id/events — SSE stream with reconnection via Last-Event-ID */
 export async function GET(req: NextRequest, { params }: Params) {
   const { id } = await params;
 
-  const task = await getTask(id);
-  if (!task) {
+  const subagent = await getSubAgent(id);
+  if (!subagent) {
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers: { "Content-Type": "application/json" },
     });
   }
 
-  // Parse Last-Event-ID from header (standard SSE reconnection)
   const lastEventIdRaw = req.headers.get("Last-Event-ID")
     ?? req.nextUrl.searchParams.get("last_event_id");
   const lastEventId = lastEventIdRaw ? parseInt(lastEventIdRaw, 10) : undefined;
@@ -35,12 +33,10 @@ export async function GET(req: NextRequest, { params }: Params) {
         try {
           controller.enqueue(encoder.encode(chunk));
         } catch (err) {
-          // Controller closed (client disconnected)
-          console.log(`[task:${id}] SSE send failed (client disconnected):`, err);
+          console.log(`[subagent:${id}] SSE send failed (client disconnected):`, err);
         }
       };
 
-      // 心跳计时器，每 30 秒发送一次
       const heartbeatInterval = setInterval(() => {
         if (!ac.signal.aborted) {
           send(toSse(Date.now(), "heartbeat", {}));
@@ -53,9 +49,7 @@ export async function GET(req: NextRequest, { params }: Params) {
           send(toSse(event.id, event.type, event.data));
         }
       } catch (err) {
-        // Generator threw or was aborted
-        console.error(`[task:${id}] SSE stream error:`, err);
-        // 尝试发送错误事件给客户端
+        console.error(`[subagent:${id}] SSE stream error:`, err);
         try {
           const errorMsg = err instanceof Error ? err.message : String(err);
           send(toSse(Date.now(), "error", { error: errorMsg }));

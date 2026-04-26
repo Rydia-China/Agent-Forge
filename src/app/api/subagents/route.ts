@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { submitTask } from "@/lib/services/task-service";
+import { submitSubAgent } from "@/lib/services/subagent-service";
 import { resolveModel } from "@/lib/agent/models";
 
 const SubmitSchema = z.object({
@@ -8,10 +8,10 @@ const SubmitSchema = z.object({
   session_id: z.string().optional(),
   user: z.string().optional(),
   images: z.array(z.string()).optional(),
+  parent_agent_id: z.string().optional(),
   model: z.string().optional(),
 });
 
-/** POST /api/tasks — submit a new agent task (returns immediately) */
 export async function POST(req: NextRequest) {
   let raw: unknown;
   try {
@@ -25,17 +25,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  const { message, session_id, user, images, model } = parsed.data;
-  const result = await submitTask({
+  const { message, session_id, user, images, parent_agent_id, model } = parsed.data;
+  const result = await submitSubAgent({
     message,
     sessionId: session_id,
     user,
     images,
+    parentAgentId: parent_agent_id,
     model: resolveModel(model),
   });
 
   return NextResponse.json({
-    task_id: result.taskId,
+    subagent_id: result.subagentId,
     session_id: result.sessionId,
   });
 }

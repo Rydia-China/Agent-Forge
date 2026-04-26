@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTask } from "@/lib/services/task-service";
+import { getSubAgent } from "@/lib/services/subagent-service";
 
 type Params = { params: Promise<{ id: string }> };
 
-/** GET /api/tasks/:id — get task status */
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
-  const task = await getTask(id);
-  if (!task) {
+  const subagent = await getSubAgent(id);
+  if (!subagent) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  return NextResponse.json(task);
+  return NextResponse.json(subagent);
 }

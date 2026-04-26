@@ -4,11 +4,11 @@ import {
   deleteSession,
   updateSessionTitle,
 } from "@/lib/services/chat-session-service";
-import { getActiveTaskForSession } from "@/lib/services/task-service";
+import { getActiveSubAgentForSession } from "@/lib/services/subagent-service";
 
 type Params = { params: Promise<{ id: string }> };
 
-/** GET /api/sessions/:id — get session with messages + active task */
+/** GET /api/sessions/:id — get session with messages + active subagent */
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
   const session = await getSession(id);
@@ -16,11 +16,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const activeTask = await getActiveTaskForSession(id);
+  const activeSubAgent = await getActiveSubAgentForSession(id);
   return NextResponse.json({
     ...session,
-    activeTask: activeTask
-      ? { id: activeTask.id, status: activeTask.status }
+    activeSubAgent: activeSubAgent
+      ? { id: activeSubAgent.id, status: activeSubAgent.status }
       : null,
   });
 }
