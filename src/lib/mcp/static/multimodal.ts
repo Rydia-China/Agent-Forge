@@ -268,6 +268,7 @@ export const multimodalMcp: McpProvider = {
           items.map(async (item, i) => {
             try {
               const videoUrl = await callFcEndpoint(url, token, {
+                action: "generate",
                 prompt: item.prompt,
                 sourceImageUrl: item.sourceImageUrl,
               });
