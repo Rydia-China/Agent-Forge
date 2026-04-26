@@ -67,7 +67,6 @@ export type McpVersionSummary = {
 
 export type BuiltinMcpSummary = {
   name: string;
-  available: boolean;
 };
 
 /* ---- Resources ---- */
