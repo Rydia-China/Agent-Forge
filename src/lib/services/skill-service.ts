@@ -1,23 +1,8 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import type { Prisma, Skill, SkillVersion } from "@/generated/prisma";
+import type { Prisma, Skill } from "@/generated/prisma";
 import matter from "gray-matter";
-import {
-  listBuiltinSkills,
-  getBuiltinSkill,
-  type BuiltinSkill,
-} from "@/lib/skills/builtins";
-
-/* ------------------------------------------------------------------ */
-/*  Built-in name protection                                          */
-/* ------------------------------------------------------------------ */
-
-/** Throw if the name collides with a built-in skill. */
-function rejectIfBuiltin(name: string): void {
-  if (getBuiltinSkill(name)) {
-    throw new Error(`Skill name "${name}" is reserved by a system built-in skill and cannot be created, updated, or deleted`);
-  }
-}
+import * as ossService from "@/lib/services/oss-service";
 
 /* ------------------------------------------------------------------ */
 /*  Zod schemas
@@ -102,6 +87,25 @@ export function toSkillMd(skill: { name: string; description: string; content: s
 }
 
 /* ------------------------------------------------------------------ */
+/*  OSS helpers                                                       */
+/* ------------------------------------------------------------------ */
+
+function buildOssUrl(ossKey: string): string {
+  const bucket = process.env.OSS_BUCKET!;
+  const region = process.env.OSS_REGION!;
+  return `https://${bucket}.oss-${region}.aliyuncs.com/${ossKey}`;
+}
+
+async function fetchSkillContentFromOss(ossKey: string): Promise<string> {
+  const url = buildOssUrl(ossKey);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch skill from OSS: ${ossKey} (${response.status})`);
+  }
+  return response.text();
+}
+
+/* ------------------------------------------------------------------ */
 /*  Service functions                                                 */
 /* ------------------------------------------------------------------ */
 
@@ -109,45 +113,26 @@ export interface SkillSummary {
   name: string;
   description: string;
   tags: string[];
-  requiresMcps: string[];
-  productionVersion: number;
+  version: number;
+  isProduction: boolean;
 }
 
 export async function listSkills(tag?: string): Promise<SkillSummary[]> {
   const skills = await prisma.skill.findMany({
-    where: tag ? { tags: { has: tag } } : undefined,
-    include: { versions: { orderBy: { version: "desc" as const }, take: 1 } },
+    where: {
+      isProduction: true,
+      ...(tag ? { tags: { has: tag } } : {}),
+    },
     orderBy: { name: "asc" },
   });
 
-  const dbSkills: SkillSummary[] = skills
-    .filter((s) => s.versions.length > 0)
-    .map((s) => {
-      // Use production version's description; fall back to latest
-      const prodVer = s.versions.find((v) => v.version === s.productionVersion) ?? s.versions[0]!;
-      return {
-        name: s.name,
-        description: prodVer.description,
-        tags: s.tags,
-        requiresMcps: [],
-        productionVersion: s.productionVersion,
-      };
-    });
-
-  // Merge: builtins take precedence over DB skills with the same name
-  const builtinList = listBuiltinSkills()
-    .filter((b) => !tag || b.tags.includes(tag))
-    .map((b): SkillSummary => ({
-      name: b.name,
-      description: b.description,
-      tags: [...b.tags],
-      requiresMcps: [...b.requiresMcps],
-      productionVersion: 0,
-    }));
-  const builtinNames = new Set(builtinList.map((b) => b.name));
-  const userSkills = dbSkills.filter((s) => !builtinNames.has(s.name));
-
-  return [...builtinList, ...userSkills].sort((a, b) => a.name.localeCompare(b.name));
+  return skills.map((s) => ({
+    name: s.name,
+    description: s.description,
+    tags: s.tags,
+    version: s.version,
+    isProduction: s.isProduction,
+  }));
 }
 
 export interface SkillDetail {
@@ -157,123 +142,152 @@ export interface SkillDetail {
   tags: string[];
   metadata: Prisma.JsonValue | null;
   version: number;
-  productionVersion: number;
+  isProduction: boolean;
 }
 
-/** Resolve a skill by name: builtins first, then DB production version. */
+/** Get production version of a skill by name. */
 export async function getSkill(name: string): Promise<SkillDetail | null> {
-  const builtin = getBuiltinSkill(name);
-  if (builtin) return builtinToSkillShape(builtin);
+  const skill = await prisma.skill.findFirst({
+    where: { name, isProduction: true },
+    orderBy: { updatedAt: "desc" }, // Last-Write-Wins
+  });
 
-  const skill = await prisma.skill.findUnique({ where: { name } });
   if (!skill) return null;
 
-  const ver = await prisma.skillVersion.findUnique({
-    where: { skillId_version: { skillId: skill.id, version: skill.productionVersion } },
-  });
-  if (!ver) return null;
+  // Fetch content from OSS
+  const skillMd = await fetchSkillContentFromOss(skill.ossKey);
+  const parsed = parseSkillMd(skillMd);
 
   return {
     name: skill.name,
-    description: ver.description,
-    content: ver.content,
+    description: skill.description,
+    content: parsed.content,
     tags: skill.tags,
-    metadata: ver.metadata,
-    version: ver.version,
-    productionVersion: skill.productionVersion,
-  };
-}
-
-function builtinToSkillShape(b: BuiltinSkill): SkillDetail {
-  return {
-    name: b.name,
-    description: b.description,
-    content: b.content,
-    tags: [...b.tags],
-    metadata: null,
-    version: 0,
-    productionVersion: 0,
+    metadata: skill.metadata,
+    version: skill.version,
+    isProduction: skill.isProduction,
   };
 }
 
 export interface SkillCreateResult {
   skill: Skill;
-  version: SkillVersion;
 }
 
 export async function createSkill(
   params: z.infer<typeof SkillCreateParams>,
 ): Promise<SkillCreateResult> {
-  rejectIfBuiltin(params.name);
+  // Check if skill already exists
+  const existing = await prisma.skill.findFirst({
+    where: { name: params.name },
+  });
+  if (existing) {
+    throw new Error(`Skill "${params.name}" already exists. Use updateSkill to create a new version.`);
+  }
+
+  const version = 1;
+  const ossKey = `skills/${params.name}/v${version}.md`;
+
+  // Generate SKILL.md content
+  const skillMd = toSkillMd({
+    name: params.name,
+    description: params.description,
+    content: params.content,
+    metadata: params.metadata as Prisma.JsonValue ?? null,
+  });
+
+  // 1. Upload to OSS first
+  await ossService.uploadBuffer(
+    Buffer.from(skillMd, "utf-8"),
+    `${params.name}/v${version}.md`,
+    "skills"
+  );
+
+  // 2. Write to DB
   const skill = await prisma.skill.create({
     data: {
       name: params.name,
+      version,
+      description: params.description,
       tags: params.tags,
-      productionVersion: 1,
-      versions: {
-        create: {
-          version: 1,
-          description: params.description,
-          content: params.content,
-          metadata: params.metadata as Prisma.InputJsonValue ?? undefined,
-        },
-      },
+      ossKey,
+      isProduction: true,
+      metadata: params.metadata as Prisma.InputJsonValue ?? undefined,
     },
-    include: { versions: true },
   });
-  return { skill, version: skill.versions[0]! };
+
+  return { skill };
 }
 
 export interface SkillUpdateResult {
   skill: Skill;
-  version: SkillVersion;
 }
 
 /** Push a new version. Defaults to auto-promote. */
 export async function updateSkill(
   params: z.infer<typeof SkillUpdateParams>,
 ): Promise<SkillUpdateResult> {
-  rejectIfBuiltin(params.name);
-  const found = await prisma.skill.findUnique({
+  // Find latest version
+  const latest = await prisma.skill.findFirst({
     where: { name: params.name },
-    include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+    orderBy: { version: "desc" },
   });
-  if (!found) throw new Error(`Skill "${params.name}" not found`);
 
-  const nextVersion = (found.versions[0]?.version ?? 0) + 1;
+  if (!latest) {
+    throw new Error(`Skill "${params.name}" not found. Use createSkill to create it first.`);
+  }
 
-  const newVer = await prisma.skillVersion.create({
+  const nextVersion = latest.version + 1;
+  const ossKey = `skills/${params.name}/v${nextVersion}.md`;
+
+  // Generate SKILL.md content
+  const skillMd = toSkillMd({
+    name: params.name,
+    description: params.description,
+    content: params.content,
+    metadata: params.metadata as Prisma.JsonValue ?? null,
+  });
+
+  // 1. Upload to OSS first
+  await ossService.uploadBuffer(
+    Buffer.from(skillMd, "utf-8"),
+    `${params.name}/v${nextVersion}.md`,
+    "skills"
+  );
+
+  // 2. Write to DB
+  const newSkill = await prisma.skill.create({
     data: {
-      skillId: found.id,
+      name: params.name,
       version: nextVersion,
       description: params.description,
-      content: params.content,
+      tags: params.tags ?? latest.tags,
+      ossKey,
+      isProduction: params.promote,
       metadata: params.metadata as Prisma.InputJsonValue ?? undefined,
     },
   });
 
-  let updated: Skill = found;
+  // 3. If promoting, unset old production version
   if (params.promote) {
-    updated = await prisma.skill.update({
-      where: { id: found.id },
-      data: {
-        productionVersion: nextVersion,
-        ...(params.tags !== undefined ? { tags: params.tags } : {}),
+    await prisma.skill.updateMany({
+      where: {
+        name: params.name,
+        id: { not: newSkill.id },
+        isProduction: true,
       },
-    });
-  } else if (params.tags !== undefined) {
-    updated = await prisma.skill.update({
-      where: { id: found.id },
-      data: { tags: params.tags },
+      data: { isProduction: false },
     });
   }
 
-  return { skill: updated, version: newVer };
+  return { skill: newSkill };
 }
 
 export async function deleteSkill(name: string): Promise<void> {
-  rejectIfBuiltin(name);
-  await prisma.skill.delete({ where: { name } });
+  // Delete all versions of this skill
+  await prisma.skill.deleteMany({ where: { name } });
+  
+  // Note: OSS files are not deleted (orphan files are harmless)
+  // Can be cleaned up later with a separate cleanup script
 }
 
 /** Import from SKILL.md. Creates if new, pushes new version if exists. */
@@ -282,9 +296,8 @@ export async function importSkill(
 ): Promise<SkillCreateResult | SkillUpdateResult> {
   const parsed = parseSkillMd(params.skillMd);
   if (!parsed.name) throw new Error("SKILL.md missing 'name' in frontmatter");
-  rejectIfBuiltin(parsed.name);
 
-  const existing = await prisma.skill.findUnique({ where: { name: parsed.name } });
+  const existing = await prisma.skill.findFirst({ where: { name: parsed.name } });
   if (!existing) {
     return createSkill({
       name: parsed.name,
@@ -306,7 +319,6 @@ export async function importSkill(
 }
 
 export async function exportSkill(name: string): Promise<string | null> {
-  if (getBuiltinSkill(name)) throw new Error(`Skill "${name}" is a system built-in and cannot be exported`);
   const skill = await getSkill(name);
   if (!skill) return null;
   return toSkillMd(skill);
@@ -324,56 +336,59 @@ export interface SkillVersionSummary {
 }
 
 export async function listSkillVersions(name: string): Promise<SkillVersionSummary[]> {
-  if (getBuiltinSkill(name)) return []; // builtins are code-defined, no versions
-  const skill = await prisma.skill.findUnique({ where: { name } });
-  if (!skill) return [];
-
-  const versions = await prisma.skillVersion.findMany({
-    where: { skillId: skill.id },
+  const versions = await prisma.skill.findMany({
+    where: { name },
     orderBy: { version: "desc" },
-    select: { version: true, description: true, createdAt: true },
+    select: { version: true, description: true, isProduction: true, createdAt: true },
   });
 
-  return versions.map((v) => ({
-    version: v.version,
-    description: v.description,
-    isProduction: v.version === skill.productionVersion,
-    createdAt: v.createdAt,
-  }));
+  return versions;
 }
 
 export async function getSkillVersion(name: string, version: number): Promise<SkillDetail | null> {
-  const skill = await prisma.skill.findUnique({ where: { name } });
+  const skill = await prisma.skill.findUnique({
+    where: { name_version: { name, version } },
+  });
+
   if (!skill) return null;
 
-  const ver = await prisma.skillVersion.findUnique({
-    where: { skillId_version: { skillId: skill.id, version } },
-  });
-  if (!ver) return null;
+  // Fetch content from OSS
+  const skillMd = await fetchSkillContentFromOss(skill.ossKey);
+  const parsed = parseSkillMd(skillMd);
 
   return {
     name: skill.name,
-    description: ver.description,
-    content: ver.content,
+    description: skill.description,
+    content: parsed.content,
     tags: skill.tags,
-    metadata: ver.metadata,
-    version: ver.version,
-    productionVersion: skill.productionVersion,
+    metadata: skill.metadata,
+    version: skill.version,
+    isProduction: skill.isProduction,
   };
 }
 
 export async function setSkillProduction(name: string, version: number): Promise<Skill> {
-  rejectIfBuiltin(name);
-  const skill = await prisma.skill.findUnique({ where: { name } });
-  if (!skill) throw new Error(`Skill "${name}" not found`);
-
-  const ver = await prisma.skillVersion.findUnique({
-    where: { skillId_version: { skillId: skill.id, version } },
+  const target = await prisma.skill.findUnique({
+    where: { name_version: { name, version } },
   });
-  if (!ver) throw new Error(`Skill "${name}" has no version ${version}`);
 
-  return prisma.skill.update({
-    where: { id: skill.id },
-    data: { productionVersion: version },
-  });
+  if (!target) {
+    throw new Error(`Skill "${name}" version ${version} not found`);
+  }
+
+  // Use transaction to ensure atomicity
+  await prisma.$transaction([
+    // Unset current production
+    prisma.skill.updateMany({
+      where: { name, isProduction: true },
+      data: { isProduction: false },
+    }),
+    // Set new production
+    prisma.skill.update({
+      where: { id: target.id },
+      data: { isProduction: true },
+    }),
+  ]);
+
+  return prisma.skill.findUniqueOrThrow({ where: { id: target.id } });
 }

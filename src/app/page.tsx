@@ -28,9 +28,7 @@ export default function Home() {
 
   const resourceDetail = useResourceDetail(
     resources.loadResources,
-    resources.builtinSkills,
-    resources.dbSkills,
-    resources.builtinMcps,
+    resources.skills,
   );
 
   const sessionsHook = useSessions(
@@ -92,8 +90,7 @@ export default function Home() {
 
       <ResourceDrawer
         open={showResources}
-        builtinSkills={resources.builtinSkills}
-        dbSkills={resources.dbSkills}
+        skills={resources.skills}
         builtinMcps={resources.builtinMcps}
         isLoadingResources={resources.isLoadingResources}
         error={resourceDetail.error}

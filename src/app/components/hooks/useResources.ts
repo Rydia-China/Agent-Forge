@@ -8,8 +8,6 @@ export interface UseResourcesReturn {
   skills: SkillSummary[];
   mcps: McpSummary[];
   builtinMcps: BuiltinMcpSummary[];
-  builtinSkills: SkillSummary[];
-  dbSkills: SkillSummary[];
   isLoadingResources: boolean;
   loadResources: () => Promise<void>;
 }
@@ -25,15 +23,6 @@ export function useResources(
 
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
-
-  const builtinSkills = useMemo(
-    () => skills.filter((s) => s.productionVersion === 0),
-    [skills],
-  );
-  const dbSkills = useMemo(
-    () => skills.filter((s) => s.productionVersion > 0),
-    [skills],
-  );
 
   const loadResources = useCallback(async () => {
     setIsLoadingResources(true);
@@ -62,8 +51,6 @@ export function useResources(
     skills,
     mcps,
     builtinMcps,
-    builtinSkills,
-    dbSkills,
     isLoadingResources,
     loadResources,
   };

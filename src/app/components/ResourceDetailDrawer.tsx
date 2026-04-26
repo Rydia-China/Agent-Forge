@@ -13,7 +13,7 @@ export function ResourceDetailDrawer({ detail }: ResourceDetailDrawerProps) {
   const showDelete =
     detail.selectedResource?.type === "skill" &&
     detail.skillDetail &&
-    detail.skillDetail.productionVersion > 0;
+    !detail.skillDetail.isProduction;
 
   return (
     <Drawer

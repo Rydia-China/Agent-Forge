@@ -9,30 +9,23 @@ datasource db {
 }
 
 /// Skill — 遵循 Agent Skills 开放标准 (agentskills.io)
-/// 实体表只保留身份字段 + production 指针，内容存在 SkillVersion
+/// 统一存储到 OSS，DB 只保留轻量级元数据
+/// 每个版本一条记录，通过 isProduction 标记当前生产版本
 model Skill {
-  id                String         @id @default(cuid())
-  name              String         @unique
-  tags              String[]
-  productionVersion Int            @default(1)
-  versions          SkillVersion[]
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-}
+  id           String   @id @default(cuid())
+  name         String   // skill 名称（非唯一，支持多版本）
+  version      Int      // 版本号
+  description  String   // 用于 system prompt 索引
+  tags         String[]
+  ossKey       String   @unique // OSS 对象 key，如 "skills/skill-creator/v1.md"
+  isProduction Boolean  @default(false) // 是否为当前生产版本
+  metadata     Json?    // 扩展字段（如 requiredSchemas）
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt // 用于冲突解决（Last-Write-Wins）
 
-/// SkillVersion — 不可变的版本快照
-model SkillVersion {
-  id          String   @id @default(cuid())
-  skillId     String
-  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  version     Int
-  description String
-  content     String
-  metadata    Json?
-  createdAt   DateTime @default(now())
-
-  @@unique([skillId, version])
-  @@index([skillId])
+  @@unique([name, version])
+  @@index([name, isProduction]) // 快速查询生产版本
+  @@index([tags]) // 按标签检索
 }
 
 /// User — 轻量用户标识，无密码，按 name 区分

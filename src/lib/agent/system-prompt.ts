@@ -84,8 +84,7 @@ async function appendSkillIndex(lines: string[], preloadedSkills?: string[]): Pr
 
   lines.push("Available skills:");
   for (const s of skills) {
-    const mcps = s.requiresMcps.length > 0 ? ` [needs: ${s.requiresMcps.map((m) => `\`${m}\``).join(", ")}]` : "";
-    lines.push(`- **${s.name}**: ${s.description}${mcps}`);
+    lines.push(`- **${s.name}**: ${s.description}`);
   }
 
   // Append pre-loaded skill content inline (with requiredSchemas check)

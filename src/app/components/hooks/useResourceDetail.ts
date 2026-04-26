@@ -31,9 +31,7 @@ export interface UseResourceDetailReturn {
 
 export function useResourceDetail(
   loadResources: () => Promise<void>,
-  builtinSkills: SkillSummary[],
-  dbSkills: SkillSummary[],
-  builtinMcps: BuiltinMcpSummary[],
+  skills: SkillSummary[],
 ): UseResourceDetailReturn {
   const [selectedResource, setSelectedResource] = useState<ResourceSelection | null>(null);
   const [skillDetail, setSkillDetail] = useState<SkillDetail | null>(null);
@@ -57,20 +55,13 @@ export function useResourceDetail(
   useEffect(() => {
     if (!selectedResource) return;
     if (selectedResource.type === "skill") {
-      if (
-        !builtinSkills.some((s) => s.name === selectedResource.name) &&
-        !dbSkills.some((s) => s.name === selectedResource.name)
-      ) {
+      if (!skills.some((s) => s.name === selectedResource.name)) {
         setSelectedResource(null);
         setSkillDetail(null);
         setSkillVersions([]);
       }
-      return;
     }
-    if (!builtinMcps.some((m) => m.name === selectedResource.name)) {
-      setSelectedResource(null);
-    }
-  }, [builtinSkills, builtinMcps, dbSkills, selectedResource]);
+  }, [skills, selectedResource]);
 
   const loadResourceDetail = useCallback(async (resource: ResourceSelection) => {
     const key = `${resource.type}:${resource.name}`;

@@ -87,20 +87,16 @@ export async function createAsMcpServer(): Promise<Server> {
   // --- resources/list (skills as MCP resources, using production version) ---
   server.setRequestHandler(ListResourcesRequestSchema, async () => {
     const skills = await prisma.skill.findMany({
-      include: { versions: { orderBy: { version: "desc" as const }, take: 1 } },
+      where: { isProduction: true },
+      orderBy: { name: "asc" },
     });
     return {
-      resources: skills
-        .filter((s) => s.versions.length > 0)
-        .map((s) => {
-          const prodVer = s.versions.find((v) => v.version === s.productionVersion) ?? s.versions[0]!;
-          return {
-            uri: `skill://${s.name}`,
-            name: s.name,
-            description: prodVer.description,
-            mimeType: "text/markdown",
-          };
-        }),
+      resources: skills.map((s) => ({
+        uri: `skill://${s.name}`,
+        name: s.name,
+        description: s.description,
+        mimeType: "text/markdown",
+      })),
     };
   });
 
@@ -110,17 +106,26 @@ export async function createAsMcpServer(): Promise<Server> {
     const match = uri.match(/^skill:\/\/(.+)$/);
     const skillName = match?.[1];
     if (!skillName) throw new Error(`Unknown resource URI: ${uri}`);
-    const skill = await prisma.skill.findUnique({
-      where: { name: skillName },
+    
+    const skill = await prisma.skill.findFirst({
+      where: { name: skillName, isProduction: true },
+      orderBy: { updatedAt: "desc" },
     });
     if (!skill) throw new Error(`Skill "${skillName}" not found`);
-    const ver = await prisma.skillVersion.findUnique({
-      where: { skillId_version: { skillId: skill.id, version: skill.productionVersion } },
-    });
-    if (!ver) throw new Error(`Skill "${skillName}" has no production version`);
+    
+    // Fetch content from OSS
+    const bucket = process.env.OSS_BUCKET!;
+    const region = process.env.OSS_REGION!;
+    const ossUrl = `https://${bucket}.oss-${region}.aliyuncs.com/${skill.ossKey}`;
+    const response = await fetch(ossUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch skill content from OSS: ${skill.ossKey}`);
+    }
+    const content = await response.text();
+    
     return {
       contents: [
-        { uri, mimeType: "text/markdown", text: ver.content },
+        { uri, mimeType: "text/markdown", text: content },
       ],
     };
   });
