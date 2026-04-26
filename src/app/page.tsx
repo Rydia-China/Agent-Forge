@@ -31,7 +31,6 @@ export default function Home() {
     resources.builtinSkills,
     resources.dbSkills,
     resources.builtinMcps,
-    resources.mcps,
   );
 
   const sessionsHook = useSessions(
@@ -96,7 +95,6 @@ export default function Home() {
         builtinSkills={resources.builtinSkills}
         dbSkills={resources.dbSkills}
         builtinMcps={resources.builtinMcps}
-        mcps={resources.mcps}
         isLoadingResources={resources.isLoadingResources}
         error={resourceDetail.error}
         notice={resourceDetail.notice}

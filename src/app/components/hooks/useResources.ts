@@ -40,13 +40,12 @@ export function useResources(
     try {
       const sid = currentSessionIdRef.current;
       const sp = sid ? `?session=${encodeURIComponent(sid)}` : "";
-      const [sk, mc, bm] = await Promise.all([
+      const [sk, bm] = await Promise.all([
         fetchJson<SkillSummary[]>("/api/skills"),
-        fetchJson<McpSummary[]>("/api/mcps"),
-        fetchJson<BuiltinMcpSummary[]>(`/api/mcps/builtins${sp}`),
+        fetchJson<BuiltinMcpSummary[]>(`/api/mcps${sp}`),
       ]);
       setSkills(sk);
-      setMcps(mc);
+      setMcps([]);
       setBuiltinMcps(bm);
     } catch (err: unknown) {
       onErrorRef.current(getErrorMessage(err, "Failed to load resources."));
