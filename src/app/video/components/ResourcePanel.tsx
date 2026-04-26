@@ -147,7 +147,7 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
     <div key={r.id} className="group/card relative overflow-hidden rounded-lg">
       {renderDeleteBtn(r.id)}
       {r.url ? (
-        renderSmartImage(r.url, r.title ?? "Image", r.keyResourceId)
+        renderSmartImage(r.url, r.title ?? "Image", r.keyResourceId ?? r.id)
       ) : (
         <div className="flex aspect-square items-center justify-center bg-slate-800">
           <span className="text-xs text-slate-600">No image</span>

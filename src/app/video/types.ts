@@ -13,27 +13,32 @@ export interface EpisodeSummary {
   createdAt: string;
 }
 
-/* ---- Generic domain resource types ---- */
+/* ---- Versioned resource types ---- */
 
-export interface DomainResource {
+export interface ResourceItem {
   id: string;
+  key: string;
   category: string;
   mediaType: string;
   title: string | null;
   url: string | null;
   data: unknown;
-  keyResourceId: string | null;
-  sortOrder: number;
+  prompt: string | null;
+  currentVersion: number;
+  keyResourceId?: string | null;
+  sortOrder?: number;
 }
+export type DomainResource = ResourceItem;
 
 export interface CategoryGroup {
   category: string;
-  items: DomainResource[];
+  items: ResourceItem[];
 }
 
-export interface DomainResources {
+export interface ResourceData {
   categories: CategoryGroup[];
 }
+export type DomainResources = ResourceData;
 
 export interface VideoResourceData {
   key?: string;

@@ -1,20 +1,25 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Empty, Spin, Typography, Button, ConfigProvider, theme as antTheme } from "antd";
-import { ReloadOutlined, VideoCameraOutlined } from "@ant-design/icons";
+import {
+  ReloadOutlined,
+  VideoCameraOutlined,
+  UploadOutlined,
+  DeleteOutlined,
+} from "@ant-design/icons";
 import { fetchJson } from "@/app/components/client-utils";
 
 /* ------------------------------------------------------------------ */
-/*  Types (mirrors remote novel service response)                      */
+/*  Types (local novels)                                               */
 /* ------------------------------------------------------------------ */
 
 interface NovelItem {
-  id: number;
+  id: string;
   name: string;
-  content_length?: number;
-  created_at?: string;
+  episodeCount: number;
+  createdAt: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -23,16 +28,18 @@ interface NovelItem {
 
 export default function VideoNovelListPage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [novels, setNovels] = useState<NovelItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadNovels = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await fetchJson<{ novels: NovelItem[] }>("/api/video/novels");
-      setNovels(data.novels);
+      const data = await fetchJson<NovelItem[]>("/api/video/novels");
+      setNovels(data);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load novels");
     } finally {
@@ -48,6 +55,68 @@ export default function VideoNovelListPage() {
     router.push(`/video/${novel.id}?name=${encodeURIComponent(novel.name)}`);
   };
 
+  const handleDelete = async (novel: NovelItem) => {
+    if (!confirm(`Delete "${novel.name}"? All episodes and resources will be removed.`)) return;
+    try {
+      await fetchJson(`/api/video/novels/${encodeURIComponent(novel.id)}`, {
+        method: "DELETE",
+      });
+      await loadNovels();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete novel");
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith(".json")) {
+      alert("Only .json files are accepted");
+      event.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        if (typeof reader.result !== "string") {
+          throw new Error("File content is not text");
+        }
+        const script: unknown = JSON.parse(reader.result);
+        const title = typeof script === "object" && script !== null
+          ? Reflect.get(script, "title")
+          : undefined;
+        const novelName = typeof title === "string" && title.trim().length > 0
+          ? title
+          : file.name.replace(/\.json$/i, "");
+        void doUpload(novelName, script);
+      } catch {
+        alert("Invalid JSON file");
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  };
+
+  const doUpload = async (name: string, script: unknown) => {
+    setIsUploading(true);
+    setError(null);
+    try {
+      const result = await fetchJson<{ novelId: string }>("/api/video/novels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, script }),
+      });
+      await loadNovels();
+      router.push(`/video/${result.novelId}?name=${encodeURIComponent(name)}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to upload script");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <ConfigProvider
       theme={{
@@ -56,24 +125,40 @@ export default function VideoNovelListPage() {
       }}
     >
       <main className="flex h-screen w-full flex-col bg-slate-950 text-slate-100">
-        {/* Header */}
         <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
           <div className="flex items-center gap-2">
-            <VideoCameraOutlined style={{ fontSize: 20 }} />
+            <VideoCameraOutlined style={{ fontSize: 28 }} />
             <Typography.Title level={4} style={{ margin: 0 }}>
               Video Workflow
             </Typography.Title>
           </div>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => void loadNovels()}
-            loading={isLoading}
-          >
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              icon={<UploadOutlined />}
+              onClick={() => fileInputRef.current?.click()}
+              loading={isUploading}
+              disabled={isUploading}
+              type="primary"
+            >
+              {isUploading ? "Uploading…" : "Upload Script JSON"}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleFileUpload}
+              style={{ display: "none" }}
+            />
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => void loadNovels()}
+              loading={isLoading}
+            >
+              Refresh
+            </Button>
+          </div>
         </header>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {error && (
             <div className="mb-4 rounded border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-300">
@@ -83,10 +168,10 @@ export default function VideoNovelListPage() {
 
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
-<Spin description="Loading novels…" size="large" />
+              <Spin description="Loading novels…" size="large" />
             </div>
           ) : novels.length === 0 ? (
-            <Empty description="No novels found" style={{ marginTop: 80 }} />
+            <Empty description="No novels. Click Upload Script JSON to get started." style={{ marginTop: 80 }} />
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {novels.map((novel) => (
@@ -102,14 +187,25 @@ export default function VideoNovelListPage() {
                     borderColor: "rgb(51, 65, 85)",
                   }}
                 >
-                  <Typography.Text strong style={{ fontSize: 14 }}>
-                    {novel.name}
-                  </Typography.Text>
-                  <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-400">
-                    <span>ID: {novel.id}</span>
-                    {novel.content_length != null && (
-                      <span>{(novel.content_length / 1000).toFixed(0)}k chars</span>
-                    )}
+                  <div className="flex items-start justify-between">
+                    <Typography.Text strong style={{ fontSize: 18 }}>
+                      {novel.name}
+                    </Typography.Text>
+                    <Button
+                      type="text"
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleDelete(novel);
+                      }}
+                      style={{ width: 28, height: 28, minWidth: 28 }}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center gap-3 text-sm text-slate-400">
+                    <span>{novel.episodeCount} episodes</span>
+                    <span>{new Date(novel.createdAt).toLocaleDateString()}</span>
                   </div>
                 </Card>
               ))}
