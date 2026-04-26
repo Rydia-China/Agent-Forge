@@ -1,7 +1,7 @@
 import type { McpProvider } from "./types";
-import { registry } from "./registry";
 import { bizDbMcp } from "./static/biz-db";
 import { videoMgrMcp } from "./static/video-mgr";
+import { videoWorkflowMcp } from "./static/video-workflow";
 import { langfuseMcp } from "./static/langfuse";
 import { langfuseAdminMcp } from "./static/langfuse-admin";
 import { subagentMcp } from "./static/subagent";
@@ -24,6 +24,7 @@ export interface McpCatalogEntry {
 const CATALOG: readonly McpCatalogEntry[] = [
   { name: "biz_db", provider: bizDbMcp },
   { name: "video_mgr", provider: videoMgrMcp },
+  { name: "video_workflow", provider: videoWorkflowMcp },
   { name: "multimodal", provider: multimodalMcp },
   { name: "langfuse", provider: langfuseMcp },
   { name: "langfuse_admin", provider: langfuseAdminMcp },
