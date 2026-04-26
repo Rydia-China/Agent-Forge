@@ -17,11 +17,7 @@ const RULES = `You are Agent Forge, an AI assistant with access to tools provide
 - Never create, update, or import skills unless the user explicitly asks.
 
 ### MCP Servers
-Your tool list contains **active** MCPs only. Additional MCPs are listed under "Available MCPs" below.
-
-- **Active MCPs** — their tools are in your tool list; call directly.
-- **Available MCPs** — listed below but not in your tool list. Call via \`mcp_manager__use(provider, tool, args)\`. After first use, the MCP's tools appear in your tool list for direct calls.
-- \`mcp_manager__use\` works for **any** MCP by name. Use \`mcp_manager__list\` to discover all MCPs in the system.
+All available MCP tools are in your tool list. Call them directly using the \`provider__tool\` naming convention.
 
 ### Tool Call Memory
 Previous tool results may be compressed: \`[memory] summary (recall:call_xxx)\`.

@@ -184,9 +184,8 @@ const result = await callTool("agent__agent_delegate", {
 curl http://localhost:8001/api/mcps/builtins
 \`\`\`
 
-Returns core + catalog providers:
-- Core: \`mcp_manager\`, \`ui\`, \`sync\`, \`subagent\`
-- Catalog: \`agent\`, \`skill_admin\`, \`biz_db\`, \`apis\`, \`video_workflow\`, \`media_generation\`, \`langfuse\`, \`langfuse_admin\`, \`oss\`, \`style_preset\`
+Returns all built-in static providers:
+- \`agent_forge\`, \`biz_db\`, \`langfuse_admin\`, \`langfuse\`, \`multimodal\`, \`oss\`, \`skills\`, \`subagent\`, \`video_mgr\`
 
 ### List Dynamic MCPs (User-Created)
 
@@ -440,11 +439,10 @@ See \`.env.example\` for complete list.
               <code>curl http://localhost:8001/api/mcps/builtins</code>
             </pre>
             <Paragraph className="mt-4">
-              返回 core + catalog providers：
+              返回所有内置静态 providers：
             </Paragraph>
             <ul className="list-disc list-inside space-y-1">
-              <li>Core: <Text code>mcp_manager</Text>, <Text code>ui</Text>, <Text code>sync</Text>, <Text code>subagent</Text></li>
-              <li>Catalog: <Text code>agent</Text>, <Text code>skill_admin</Text>, <Text code>biz_db</Text>, <Text code>apis</Text>, <Text code>video_workflow</Text>, <Text code>media_generation</Text>, <Text code>langfuse</Text>, <Text code>langfuse_admin</Text>, <Text code>oss</Text>, <Text code>style_preset</Text></li>
+              <li><Text code>agent_forge</Text>, <Text code>biz_db</Text>, <Text code>langfuse_admin</Text>, <Text code>langfuse</Text>, <Text code>multimodal</Text>, <Text code>oss</Text>, <Text code>skills</Text>, <Text code>subagent</Text>, <Text code>video_mgr</Text></li>
             </ul>
           </Card>
         </div>
