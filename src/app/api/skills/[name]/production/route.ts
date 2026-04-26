@@ -10,7 +10,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const body: unknown = await req.json();
     const { version } = svc.SkillSetProductionParams.omit({ name: true }).parse(body);
     const skill = await svc.setSkillProduction(name, version);
-    return NextResponse.json({ name: skill.name, productionVersion: skill.productionVersion });
+    return NextResponse.json({ name: skill.name, version: skill.version, isProduction: skill.isProduction });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 400 });
