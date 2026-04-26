@@ -515,13 +515,21 @@ async function runAgentStreamInnerCore(
     const mcpTools = await registry.listAllTools();
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
 
+    console.log(`[agent:stream] Available tools: ${mcpTools.length}`);
+    if (mcpTools.length === 0) {
+      console.warn(`[agent:stream] WARNING: No tools available! Agent cannot use any tools.`);
+    }
+
     let currentContent = "";
 
     try {
+      console.log(`[agent:stream] Calling LLM with ${llmMessages.length} messages, model: ${config?.model ?? 'default'}`);
       const stream = await chatCompletionStream(llmMessages, openaiTools, signal, config?.model);
       const toolCallsByIndex = new Map<number, ToolCall>();
 
+      let chunkCount = 0;
       for await (const chunk of stream) {
+        chunkCount++;
         const choice = chunk.choices[0];
         if (!choice) continue;
         const delta = choice.delta;
@@ -535,12 +543,16 @@ async function runAgentStreamInnerCore(
           }
         }
       }
+      console.log(`[agent:stream] Stream completed, received ${chunkCount} chunks`);
+
 
       lastReply = currentContent;
 
       const toolCalls = Array.from(toolCallsByIndex.entries())
         .sort((a, b) => a[0] - b[0])
         .map((entry) => entry[1]);
+
+      console.log(`[agent:stream] LLM response - content length: ${currentContent.length}, tool_calls: ${toolCalls.length}`);
 
       const stored: ChatMessage = {
         role: "assistant",
@@ -552,6 +564,7 @@ async function runAgentStreamInnerCore(
       newMessages.push(stored);
 
       if (toolCalls.length === 0) {
+        console.log(`[agent:stream] No tool calls, ending stream with reply: "${currentContent.substring(0, 100)}..."`);
         await flush();
         const allMessages = [...session.messages, ...newMessages];
         return {
@@ -632,7 +645,9 @@ async function runAgentStreamInnerCore(
       // Flush assistant + tool messages so recall can find them
       await flush();
     } catch (err: unknown) {
+      console.error(`[agent:stream] Stream error:`, err);
       if (signal?.aborted) {
+        console.log(`[agent:stream] Aborted by signal`);
         // Strip dangling tool_calls that were accumulated before abort
         stripDanglingToolCalls(newMessages);
         if (currentContent && !newMessages.some(

@@ -14,8 +14,14 @@ const g = globalThis as unknown as { __llmClient?: OpenAI };
 
 function getClient(): OpenAI {
   if (!g.__llmClient) {
+    const apiKey = process.env.LLM_API_KEY;
+    if (!apiKey || apiKey.trim() === "") {
+      throw new Error(
+        "LLM_API_KEY is not configured. Please set it in your .env file."
+      );
+    }
     g.__llmClient = new OpenAI({
-      apiKey: process.env.LLM_API_KEY ?? "",
+      apiKey,
       baseURL: process.env.LLM_BASE_URL || undefined,
     });
   }
