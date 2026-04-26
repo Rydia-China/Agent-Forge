@@ -4,7 +4,6 @@ import { Drawer, Button, Alert, Spin, Typography, Space } from "antd";
 import { DeleteOutlined } from "@ant-design/icons";
 import type { UseResourceDetailReturn } from "./hooks/useResourceDetail";
 import { SkillEditor } from "./SkillEditor";
-import { McpEditor } from "./McpEditor";
 
 export interface ResourceDetailDrawerProps {
   detail: UseResourceDetailReturn;
@@ -12,12 +11,9 @@ export interface ResourceDetailDrawerProps {
 
 export function ResourceDetailDrawer({ detail }: ResourceDetailDrawerProps) {
   const showDelete =
-    (detail.selectedResource?.type === "skill" &&
-      detail.skillDetail &&
-      detail.skillDetail.productionVersion > 0) ||
-    (detail.selectedResource?.type === "mcp" &&
-      detail.mcpDetail &&
-      detail.mcpDetail.productionVersion > 0);
+    detail.selectedResource?.type === "skill" &&
+    detail.skillDetail &&
+    detail.skillDetail.productionVersion > 0;
 
   return (
     <Drawer
@@ -66,17 +62,6 @@ export function ResourceDetailDrawer({ detail }: ResourceDetailDrawerProps) {
           isPublishing={detail.isPublishingVersion}
           onSave={() => void detail.saveSkillVersion()}
           onPublish={(v) => void detail.publishSkillVersion(v)}
-        />
-      ) : detail.selectedResource?.type === "mcp" && detail.mcpDetail ? (
-        <McpEditor
-          detail={detail.mcpDetail}
-          versions={detail.mcpVersions}
-          edit={detail.mcpEdit}
-          setEdit={detail.setMcpEdit}
-          isSaving={detail.isSavingResource}
-          isPublishing={detail.isPublishingVersion}
-          onSave={() => void detail.saveMcpVersion()}
-          onPublish={(v) => void detail.publishMcpVersion(v)}
         />
       ) : (
         <Typography.Text type="secondary">No detail loaded.</Typography.Text>
