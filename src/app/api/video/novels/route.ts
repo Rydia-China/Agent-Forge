@@ -1,33 +1,53 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { NovelScriptUploadSchema } from "@/lib/video/script-upload-schema";
+import {
+  listNovels,
+  createNovelWithScript,
+} from "@/lib/services/video-workflow-service";
 
-/** GET /api/video/novels — proxy to remote novel service */
+/** GET /api/video/novels — list all local novels */
 export async function GET() {
-  const base = process.env.NOVEL_SERVICE_URL;
-  if (!base) {
-    return NextResponse.json(
-      { error: "NOVEL_SERVICE_URL not configured" },
-      { status: 500 },
-    );
+
+  try {
+    const novels = await listNovels();
+    return NextResponse.json(novels);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+const CreateNovelSchema = z.object({
+  name: z.string().min(1),
+  script: NovelScriptUploadSchema,
+});
+
+/**
+ * POST /api/video/novels — create novel with JSON script upload.
+ * Body: { name: string, script: { title?, synopsis?, character_arcs?, location_bible?, episodes[] } }
+ */
+export async function POST(req: NextRequest) {
+  let raw: unknown;
+  try {
+    raw = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const parsed = CreateNovelSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
   try {
-    const res = await fetch(`${base}/novels`, {
-      headers: { "Content-Type": "application/json" },
-      next: { revalidate: 0 },
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      return NextResponse.json(
-        { error: `Upstream error ${res.status}: ${text}` },
-        { status: res.status },
-      );
-    }
-
-    const data: unknown = await res.json();
-    return NextResponse.json(data);
+    const result = await createNovelWithScript(
+      parsed.data.name,
+      parsed.data.script,
+    );
+    return NextResponse.json(result, { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

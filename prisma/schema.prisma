@@ -81,6 +81,8 @@ model KeyResource {
   scopeId        String               // novel ID / script DB ID
   key            String
   mediaType      String               // "image" | "video" | "json"
+  category       String?              // UI grouping: 角色立绘, 场景, 换装, 视频
+  title          String?              // Display name: character name, scene name, etc.
   currentVersion Int                  @default(0)
   versions       KeyResourceVersion[]
   createdAt      DateTime             @default(now())
