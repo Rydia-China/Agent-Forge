@@ -1,7 +1,7 @@
 /**
  * Video Processing Service — local ffmpeg-based video operations
  *
- * Handles video cropping and concatenation using ffmpeg CLI.
+ * Uses ffmpeg-static (npm package with precompiled binaries).
  * Videos are downloaded from URLs, processed locally, and uploaded to OSS.
  */
 
@@ -11,11 +11,16 @@ import { writeFile, unlink, mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import ffmpegPath from "ffmpeg-static";
 import { uploadBuffer } from "./oss-service";
 
 const execAsync = promisify(exec);
 
 const TEMP_DIR = path.join(process.cwd(), ".tmp", "video-processing");
+
+if (!ffmpegPath) {
+  throw new Error("ffmpeg-static binary not found");
+}
 
 async function ensureTempDir(): Promise<void> {
   if (!existsSync(TEMP_DIR)) {
@@ -61,7 +66,7 @@ export async function cropVideo(
     // Crop using ffmpeg (-c copy for fast stream copy without re-encoding)
     const duration = endTime - startTime;
     await execAsync(
-      `ffmpeg -i "${inputPath}" -ss ${startTime} -t ${duration} -c copy "${outputPath}"`,
+      `"${ffmpegPath}" -i "${inputPath}" -ss ${startTime} -t ${duration} -c copy "${outputPath}"`,
     );
 
     // Read output file and upload to OSS
@@ -113,7 +118,7 @@ export async function concatClips(clipUrls: string[]): Promise<string> {
 
     // Concatenate using ffmpeg
     await execAsync(
-      `ffmpeg -f concat -safe 0 -i "${concatListPath}" -c copy "${outputPath}"`,
+      `"${ffmpegPath}" -f concat -safe 0 -i "${concatListPath}" -c copy "${outputPath}"`,
     );
 
     // Read output file and upload to OSS
@@ -124,17 +129,5 @@ export async function concatClips(clipUrls: string[]): Promise<string> {
     return url;
   } finally {
     await cleanupFiles([...inputPaths, outputPath, concatListPath]);
-  }
-}
-
-/**
- * Check if ffmpeg is available in the system.
- */
-export async function checkFfmpegAvailable(): Promise<boolean> {
-  try {
-    await execAsync("ffmpeg -version");
-    return true;
-  } catch {
-    return false;
   }
 }
