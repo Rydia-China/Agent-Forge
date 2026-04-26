@@ -7,3 +7,4 @@ export { ossMcp } from "./oss";
 export { skillsMcp } from "./skills-mcp";
 export { subagentMcp } from "./subagent";
 export { videoMgrMcp } from "./video-mgr";
+export { videoWorkflowMcp } from "./video-workflow";
