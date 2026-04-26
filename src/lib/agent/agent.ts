@@ -515,6 +515,11 @@ async function runAgentStreamInnerCore(
     const mcpTools = await registry.listAllTools();
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
 
+    console.log(`[agent:stream] Available tools: ${mcpTools.length}`);
+    if (mcpTools.length === 0) {
+      console.warn(`[agent:stream] WARNING: No tools available! Agent cannot use any tools.`);
+    }
+
     let currentContent = "";
 
     try {
@@ -542,6 +547,8 @@ async function runAgentStreamInnerCore(
         .sort((a, b) => a[0] - b[0])
         .map((entry) => entry[1]);
 
+      console.log(`[agent:stream] LLM response - content length: ${currentContent.length}, tool_calls: ${toolCalls.length}`);
+
       const stored: ChatMessage = {
         role: "assistant",
         content: currentContent ? currentContent : null,
@@ -552,6 +559,7 @@ async function runAgentStreamInnerCore(
       newMessages.push(stored);
 
       if (toolCalls.length === 0) {
+        console.log(`[agent:stream] No tool calls, ending stream with reply: "${currentContent.substring(0, 100)}..."`);
         await flush();
         const allMessages = [...session.messages, ...newMessages];
         return {
