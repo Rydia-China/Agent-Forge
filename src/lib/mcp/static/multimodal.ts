@@ -270,7 +270,7 @@ export const multimodalMcp: McpProvider = {
               const videoUrl = await callFcEndpoint(url, token, {
                 action: "generate",
                 prompt: item.prompt,
-                sourceImageUrl: item.sourceImageUrl,
+                imageUrl: item.sourceImageUrl,
               });
               return { index: i, status: "ok" as const, videoUrl };
             } catch (e) {
