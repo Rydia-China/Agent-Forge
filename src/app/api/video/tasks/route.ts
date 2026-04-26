@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { submitTask } from "@/lib/services/task-service";
+import { submitSubAgent } from "@/lib/services/subagent-service";
 import { VideoContextProvider } from "@/lib/video/context-provider";
 import { ensureVideoSchema } from "@/lib/video/schema";
 import { resolveModel } from "@/lib/agent/models";
@@ -21,7 +21,7 @@ const SubmitSchema = z.object({
   skills: z.array(z.string()).optional(),
 });
 
-/** POST /api/video/tasks — submit a video workflow agent task */
+/** POST /api/video/tasks — submit a video workflow agent subagent */
 export async function POST(req: NextRequest) {
   let raw: unknown;
   try {
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     scriptKey: video_context.scriptKey,
   });
 
-  const result = await submitTask({
+  const result = await submitSubAgent({
     message,
     sessionId: session_id,
     user,
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({
-    task_id: result.taskId,
+    subagent_id: result.subagentId,
     session_id: result.sessionId,
   });
 }
