@@ -51,6 +51,7 @@ class McpTestAgent {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
       },
       body: JSON.stringify(request),
     });
@@ -74,7 +75,10 @@ class McpTestAgent {
     try {
       const response = await fetch(this.baseUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json, text/event-stream",
+        },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: 0,
