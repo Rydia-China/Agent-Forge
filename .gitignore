@@ -38,6 +38,7 @@ FC/**/node_modules/
 FC/**/package-lock.json
 FC/**/.env
 !FC/**/.env.example
+FC/**/.s/
 
 # prisma generated client
 src/generated
