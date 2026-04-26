@@ -1,7 +1,6 @@
 import type { McpProvider } from "./types";
 import { registry } from "./registry";
 import { bizDbMcp } from "./static/biz-db";
-import { apisMcp } from "./static/apis";
 import { videoMgrMcp } from "./static/video-mgr";
 import { langfuseMcp } from "./static/langfuse";
 import { langfuseAdminMcp } from "./static/langfuse-admin";
@@ -26,7 +25,6 @@ export interface McpCatalogEntry {
 
 const CATALOG: readonly McpCatalogEntry[] = [
   { name: "biz_db", provider: bizDbMcp, available: true },
-  { name: "apis", provider: apisMcp, available: true },
   {
     name: "video_mgr",
     provider: videoMgrMcp,
