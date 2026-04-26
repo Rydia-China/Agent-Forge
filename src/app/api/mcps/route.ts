@@ -13,7 +13,6 @@ export async function GET() {
     return {
       name: p.name,
       available: entry?.available ?? true,
-      active: true,
     };
   });
 
