@@ -53,23 +53,23 @@ MCP 初始化是 **惰性** 的——首次 API 请求触发 `initMcp()`。
 8. 若请求传了 `logs=true` → 写 `temp/chat-{sessionId}.{timestamp}.json`
 
 ### Agent Chat Streaming (deprecated)
-`POST /api/chat/stream` 仍可用，但前端已迁移到 Task 架构。
+`POST /api/chat/stream` 仍可用，但前端已迁移到 SubAgent 架构。
 
-### Task 后端驱动架构
-Task 解耦了任务执行与前端连接。agent loop 在后端独立运行，客户端通过 SSE 观察。
+### SubAgent 后端驱动架构
+SubAgent 解耦了任务执行与前端连接。agent loop 在后端独立运行，客户端通过 SSE 观察。
 
 **提交任务**：
 ```
-curl -X POST http://localhost:8001/api/tasks \
+curl -X POST http://localhost:8001/api/subagents \
   -H 'Content-Type: application/json' \
-  -d '{"message": "hello", "user": "test"}'
-# → { "task_id": "...", "session_id": "..." }
+  -d '{"message": "hello", "session_id": "optional"}'
+# → { "subagent_id": "...", "session_id": "..." }
 ```
 返回后任务已在后端开始执行。
 
 **观察事件流**：
 ```
-curl -N http://localhost:8001/api/tasks/{task_id}/events
+curl -N http://localhost:8001/api/subagents/{subagent_id}/events
 ```
 SSE 事件类型：
 - `event: session` → `{ session_id }`
@@ -84,22 +84,22 @@ SSE 事件类型：
 
 **查询任务状态**：
 ```
-curl http://localhost:8001/api/tasks/{task_id}
-# → { "id", "sessionId", "status", "reply", "error", ... }
+curl http://localhost:8001/api/subagents/{subagent_id}
+# → { "id", "sessionId", "status", "output", "error", ... }
 # status: pending | running | completed | failed | cancelled
 ```
 
 **取消任务**：
 ```
-curl -X POST http://localhost:8001/api/tasks/{task_id}/cancel
+curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 ```
 
 **重连流程**：
-1. `GET /api/sessions/{sid}` → 响应包含 `activeTask: { id, status }` （若有活跃任务）
-2. 前端加载 session 时，发现 activeTask → 自动连接 `GET /api/tasks/{taskId}/events`
+1. `GET /api/sessions/{sid}` → 响应包含 `activeSubAgent: { id, status }` （若有活跃任务）
+2. 前端加载 session 时，发现 activeSubAgent → 自动连接 `GET /api/subagents/{subagentId}/events`
 3. EventSource 断线时浏览器自动重连，携带 `Last-Event-ID`
 
-**因果**：Task 状态和事件持久化到 DB，客户端断开不影响执行，重连后从断点继续。
+**因果**：SubAgent 状态和事件持久化到 DB，客户端断开不影响执行，重连后从断点继续。
 
 ## 双入口等价性
 
