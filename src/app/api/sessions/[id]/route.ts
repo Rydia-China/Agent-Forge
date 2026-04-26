@@ -16,9 +16,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Convert null content to empty string for API response
+  const messages = session.messages.map((msg) => ({
+    ...msg,
+    content: msg.content ?? "",
+  }));
+
   const activeSubAgent = await getActiveSubAgentForSession(id);
   return NextResponse.json({
     ...session,
+    messages,
     activeSubAgent: activeSubAgent
       ? { id: activeSubAgent.id, status: activeSubAgent.status }
       : null,
