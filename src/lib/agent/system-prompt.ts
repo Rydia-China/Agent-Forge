@@ -1,7 +1,6 @@
 import { listSkills } from "@/lib/services/skill-service";
 import { getSkill } from "@/lib/services/skill-service";
 import { registry } from "@/lib/mcp/registry";
-import { getCatalogEntries } from "@/lib/mcp/catalog";
 import { appendSchemaDirectiveIfNeeded } from "@/lib/skills/required-schemas";
 
 /* ------------------------------------------------------------------ */
@@ -38,35 +37,32 @@ When a tool call fails, report the error to the user. Do not fabricate results.`
 
 /**
  * Build the full system prompt.
- * Static rules + active MCP list + available MCP catalog + skill index.
+ * Static rules + all MCP list + skill index.
  */
 export async function buildSystemPrompt(
   preloadedSkills?: string[],
-  activeScope?: Set<string>,
 ): Promise<string> {
   const parts: string[] = [RULES];
 
-  // Active MCP descriptions + available MCP catalog
-  const mcpSection = await buildMcpSection(preloadedSkills, activeScope);
+  // All MCP descriptions
+  const mcpSection = await buildMcpSection(preloadedSkills);
   parts.push(mcpSection);
 
   return parts.join("\n\n");
 }
 
 /* ------------------------------------------------------------------ */
-/*  Active MCP description builder                                     */
+/*  All MCP description builder                                        */
 /* ------------------------------------------------------------------ */
 
 async function buildMcpSection(
   preloadedSkills?: string[],
-  activeScope?: Set<string>,
 ): Promise<string> {
-  const activeNames = activeScope ?? new Set(registry.listProviders().map((p) => p.name));
+  const allProviders = registry.listProviders();
   const lines: string[] = ["## Active MCPs"];
 
-  for (const name of activeNames) {
-    const provider = registry.getProvider(name);
-    if (!provider) continue;
+  for (const provider of allProviders) {
+    const name = provider.name;
     const tools = await provider.listTools();
     const toolNames = tools.map((t) => `\`${t.name}\``).join(", ");
 
@@ -80,42 +76,7 @@ async function buildMcpSection(
     }
   }
 
-  // Available MCPs (not in active scope) — listed as catalog for mcp_manager__use
-  await appendAvailableCatalog(lines, activeNames);
-
   return lines.join("\n");
-}
-
-/* ------------------------------------------------------------------ */
-/*  Available MCP catalog (for mcp_manager__use)                       */
-/* ------------------------------------------------------------------ */
-
-async function appendAvailableCatalog(
-  lines: string[],
-  activeNames: Set<string>,
-): Promise<void> {
-  const available: { name: string; tools: string[] }[] = [];
-
-  // Catalog MCPs: can get tool names without loading (TS modules)
-  for (const entry of getCatalogEntries()) {
-    if (!entry.available || activeNames.has(entry.name)) continue;
-    const tools = await entry.provider.listTools();
-    available.push({
-      name: entry.name,
-      tools: tools.map((t) => t.name),
-    });
-  }
-
-  if (available.length === 0) return;
-
-  lines.push("");
-  lines.push("## Available MCPs (call via `mcp_manager__use`)");
-  for (const mcp of available) {
-    const toolInfo = mcp.tools.length > 0
-      ? `: \`${mcp.tools.join("\`, \`")}\``
-      : "";
-    lines.push(`- **${mcp.name}**${toolInfo}`);
-  }
 }
 
 async function appendSkillIndex(lines: string[], preloadedSkills?: string[]): Promise<void> {
