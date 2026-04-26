@@ -190,7 +190,7 @@ interface DbMessageRow {
 function dbMsgToChat(row: DbMessageRow): ChatMessage {
   const msg: ChatMessage = {
     role: row.role as ChatMessage["role"],
-    content: row.content,
+    content: row.content ?? "",
   };
   if (row.images.length > 0) {
     msg.images = row.images;
