@@ -6,7 +6,6 @@ import matter from "gray-matter";
 
 import { raw as skillCreator } from "./skill-creator";
 import { raw as businessDatabase } from "./business-database";
-import { raw as apiBuilder } from "./api-builder";
 import { raw as videoMgr } from "./video-mgr";
 import { raw as langfuse } from "./langfuse";
 import { raw as subagent } from "./subagent";
@@ -17,7 +16,6 @@ import { raw as forgeSync } from "./forge-sync";
 const RAW_SKILLS: readonly string[] = [
   skillCreator,
   businessDatabase,
-  apiBuilder,
   videoMgr,
   langfuse,
   subagent,
