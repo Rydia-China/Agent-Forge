@@ -6,7 +6,7 @@
  */
 export const raw = `---
 name: forge-sync
-description: Sync skills and MCPs between local and remote hubs. Use when you need capabilities not available locally, or want to share local skills/MCPs to the hub.
+description: 在本地和远程 hub 之间同步 skills 和 MCPs。当需要本地不可用的能力，或想要分享本地 skills/MCPs 到 hub 时使用
 tags:
   - meta
   - core

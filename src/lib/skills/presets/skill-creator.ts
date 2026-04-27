@@ -6,7 +6,7 @@
  */
 export const raw = `---
 name: skill-creator
-description: Create high-quality Agent Skills for this system. Use when asked to create, design, or improve a skill.
+description: 为本系统创建高质量的 Agent Skills。当被要求创建、设计或改进 skill 时使用
 tags:
   - meta
   - core

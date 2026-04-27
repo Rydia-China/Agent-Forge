@@ -6,7 +6,7 @@
  */
 export const raw = `---
 name: ep-video-workflow
-description: EP-level video production workflow for storyboard generation, shot images, and video creation. Use for episode-specific content and do not modify novel-level resources.
+description: EP级视频制作工作流，用于分镜生成、镜头图片和视频创建。仅用于剧集级内容，不修改小说级资源
 tags:
   - video
   - episode

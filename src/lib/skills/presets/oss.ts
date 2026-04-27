@@ -6,7 +6,7 @@
  */
 export const raw = `---
 name: oss
-description: Upload files (images, videos, documents) to Alibaba Cloud OSS for permanent storage. Use when you need to persist generated content or external resources.
+description: 上传文件（图片、视频、文档）到阿里云 OSS 进行永久存储。当需要持久化生成的内容或外部资源时使用
 tags:
   - core
   - storage

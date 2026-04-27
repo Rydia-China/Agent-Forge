@@ -6,7 +6,7 @@
  */
 export const raw = `---
 name: subagent
-description: Delegate prompt-driven tasks to smaller models via subagent. Use when you need to execute Langfuse prompts or any task that should not run on the main controller model.
+description: 通过 subagent 将 prompt 驱动的任务委托给小模型。当需要执行 Langfuse prompts 或任何不应在主控制器模型上运行的任务时使用
 tags:
   - core
   - subagent
