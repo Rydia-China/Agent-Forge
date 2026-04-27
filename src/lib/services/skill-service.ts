@@ -185,7 +185,7 @@ export async function createSkill(
   }
 
   const version = 1;
-  const ossKey = `skills/${params.name}/v${version}.md`;
+  const ossKey = `public/skills/${params.name}/v${version}.md`;
 
   // Generate SKILL.md content
   const skillMd = toSkillMd({
@@ -237,7 +237,7 @@ export async function updateSkill(
   }
 
   const nextVersion = latest.version + 1;
-  const ossKey = `skills/${params.name}/v${nextVersion}.md`;
+  const ossKey = `public/skills/${params.name}/v${nextVersion}.md`;
 
   // Generate SKILL.md content
   const skillMd = toSkillMd({
