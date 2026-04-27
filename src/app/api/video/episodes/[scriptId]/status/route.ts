@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getEpisodeStatus } from "@/lib/services/video-workflow-service";
+import { getEpisodeStatus } from "@/lib/services/episode-service";
 
 /** GET /api/video/episodes/[scriptId]/status — get episode workflow status */
 export async function GET(

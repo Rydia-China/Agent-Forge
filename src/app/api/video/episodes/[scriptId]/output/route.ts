@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getEpisodeOutput } from "@/lib/services/video-workflow-service";
+import { getEpisodeOutput } from "@/lib/services/episode-service";
 
 /** GET /api/video/episodes/[scriptId]/output — get full episode output JSON (init_result) */
 export async function GET(

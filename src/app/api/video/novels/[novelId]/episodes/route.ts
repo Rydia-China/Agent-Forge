@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  listEpisodes,
-  createEpisode,
-  runInitWorkflow,
-} from "@/lib/services/video-workflow-service";
+import { listEpisodes, createEpisode } from "@/lib/services/episode-service";
+import { runInitWorkflow } from "@/lib/services/video-workflow-orchestration-service";
 
 /** GET /api/video/novels/[novelId]/episodes — list all episodes for a novel */
 export async function GET(

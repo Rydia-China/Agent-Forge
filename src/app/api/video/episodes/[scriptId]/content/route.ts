@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getEpisodeContent } from "@/lib/services/video-workflow-service";
+import { getEpisodeContent } from "@/lib/services/episode-service";
 
 /** GET /api/video/episodes/[scriptId]/content — get episode script text */
 export async function GET(
