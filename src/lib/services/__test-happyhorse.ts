@@ -5,6 +5,7 @@
  *   tsx src/lib/services/__test-happyhorse.ts
  */
 
+import "dotenv/config";
 import {
   callFcHappyHorseCreate,
   callFcHappyHorseQuery,
