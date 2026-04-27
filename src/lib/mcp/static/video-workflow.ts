@@ -13,8 +13,10 @@
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider, ToolContext } from "../types";
-import * as videoWorkflowService from "@/lib/services/video-workflow-service";
-import { prisma } from "@/lib/db";
+import * as novelService from "@/lib/services/novel-service";
+import * as episodeService from "@/lib/services/episode-service";
+import * as orchestrationService from "@/lib/services/video-workflow-orchestration-service";
+import * as assetGenerationService from "@/lib/services/video-asset-generation-service";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -225,62 +227,59 @@ export const videoWorkflowMcp: McpProvider = {
     try {
       switch (name) {
         case "list_novels": {
-          const novels = await videoWorkflowService.listNovels();
+          const novels = await novelService.listNovels();
           return json(novels);
         }
 
         case "list_episodes": {
           const { novelId } = NovelIdParam.parse(args);
-          const episodes = await videoWorkflowService.listEpisodes(novelId);
+          const episodes = await episodeService.listEpisodes(novelId);
           return json(episodes);
         }
 
         case "get_episode": {
           const { scriptId } = ScriptIdParam.parse(args);
-          const script = await prisma.novelScript.findUnique({
-            where: { id: scriptId },
-            select: { scriptKey: true, initResult: true },
-          });
+          const episode = await episodeService.getEpisode(scriptId);
 
-          if (!script) return text(`Episode not found: ${scriptId}`);
-          if (!script.initResult) return text(`Episode ${scriptId} has no init_result data`);
+          if (!episode) return text(`Episode not found: ${scriptId}`);
+          if (!episode.initResult) return text(`Episode ${scriptId} has no init_result data`);
 
-          return json({ scriptKey: script.scriptKey, ...script.initResult as Record<string, unknown> });
+          return json({ scriptKey: episode.scriptKey, ...episode.initResult as Record<string, unknown> });
         }
 
         case "get_status": {
-          const params = videoWorkflowService.GetStatusParams.parse(args);
-          const result = await videoWorkflowService.getStatus(params);
+          const params = orchestrationService.GetStatusParams.parse(args);
+          const result = await orchestrationService.getStatus(params);
           return json(result);
         }
 
         case "generate_portrait": {
-          const params = videoWorkflowService.GeneratePortraitParams.parse(args);
-          const result = await videoWorkflowService.generatePortrait(params);
+          const params = assetGenerationService.GeneratePortraitParams.parse(args);
+          const result = await assetGenerationService.generatePortrait(params);
           return json(result);
         }
 
         case "update_portrait": {
-          const params = videoWorkflowService.GeneratePortraitParams.parse(args);
-          const result = await videoWorkflowService.updatePortrait(params);
+          const params = assetGenerationService.GeneratePortraitParams.parse(args);
+          const result = await assetGenerationService.updatePortrait(params);
           return json(result);
         }
 
         case "generate_scene": {
-          const params = videoWorkflowService.GenerateSceneParams.parse(args);
-          const result = await videoWorkflowService.generateScene(params);
+          const params = assetGenerationService.GenerateSceneParams.parse(args);
+          const result = await assetGenerationService.generateScene(params);
           return json(result);
         }
 
         case "generate_costume": {
-          const params = videoWorkflowService.GenerateCostumeParams.parse(args);
-          const result = await videoWorkflowService.generateCostume(params);
+          const params = assetGenerationService.GenerateCostumeParams.parse(args);
+          const result = await assetGenerationService.generateCostume(params);
           return json(result);
         }
 
         case "execute_video_shot": {
-          const params = videoWorkflowService.ExecuteVideoShotParams.parse(args);
-          const result = await videoWorkflowService.executeVideoShot(params);
+          const params = assetGenerationService.ExecuteVideoShotParams.parse(args);
+          const result = await assetGenerationService.executeVideoShot(params);
           return json(result);
         }
 
