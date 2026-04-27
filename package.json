@@ -2,10 +2,15 @@
   "name": "agent-forge",
   "version": "0.1.0",
   "private": true,
+  "bin": {
+    "agent-forge": "./dist/bin/agent-forge.js"
+  },
   "scripts": {
     "dev": "bash scripts/dev-all.sh",
     "dev:stop": "bash scripts/dev-stop.sh",
     "build": "next build",
+    "build:cli": "tsc --project tsconfig.cli.json",
+    "cli": "tsx src/bin/agent-forge.ts",
     "start": "next start --port ${PORT:-8001}",
     "lint": "eslint",
     "db:generate": "prisma generate",
@@ -43,6 +48,7 @@
     "eslint-config-next": "16.1.6",
     "prisma": "^6.6.0",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

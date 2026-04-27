@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "noEmit": false
+  },
+  "include": [
+    "src/bin/**/*",
+    "src/lib/cli/**/*",
+    "src/lib/services/**/*",
+    "src/lib/db.ts",
+    "src/lib/biz-db.ts",
+    "src/lib/biz-db-namespace.ts",
+    "src/lib/biz-schema-ddl.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".next"
+  ]
+}
