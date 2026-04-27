@@ -368,13 +368,13 @@ exports.handler = async (event, context) => {
     }
 
     const { action } = body;
-    const apiKey = process.env.DASHSCOPE_API_KEY;
+    const apiKey = process.env.HAPPYHORSE_API_KEY;
 
     if (!apiKey) {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: '请配置 DASHSCOPE_API_KEY 环境变量' })
+        body: JSON.stringify({ error: '请配置 HAPPYHORSE_API_KEY 环境变量' })
       };
     }
 
