@@ -24,6 +24,7 @@ import {
   cancelSchedule,
   listSchedules,
 } from "@/lib/services/subagent-schedule-service";
+import { updateSubAgentStatus } from "@/lib/services/subagent-service";
 
 /* ================================================================== */
 /*  Response helpers                                                   */
@@ -461,11 +462,7 @@ export const subagentMcp: McpProvider = {
 
             // Timeout: promote to async
             const taskId = await createAsyncRecord(task, context);
-            const { prisma } = await import("@/lib/db");
-            await prisma.subAgent.update({
-              where: { id: taskId },
-              data: { status: "running" },
-            });
+            await updateSubAgentStatus(taskId, "running");
             void agentPromise
               .then((result) => persistResult(taskId, result))
               .catch(async (err: unknown) => {

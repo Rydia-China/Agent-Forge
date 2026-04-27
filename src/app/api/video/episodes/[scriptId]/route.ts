@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deleteEpisode } from "@/lib/services/video-workflow-service";
+import { deleteEpisode } from "@/lib/services/episode-service";
 
 /** DELETE /api/video/episodes/[scriptId] — delete an episode and all related data */
 export async function DELETE(

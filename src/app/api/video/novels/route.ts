@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { NovelScriptUploadSchema } from "@/lib/video/script-upload-schema";
-import {
-  listNovels,
-  createNovelWithScript,
-} from "@/lib/services/video-workflow-service";
+import { listNovels } from "@/lib/services/novel-service";
+import { createNovelWithScript } from "@/lib/services/video-coordination-service";
 
 /** GET /api/video/novels — list all local novels */
 export async function GET() {

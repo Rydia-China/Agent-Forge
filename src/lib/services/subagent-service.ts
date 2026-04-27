@@ -510,3 +510,17 @@ export async function* subscribeEvents(
     signal?.removeEventListener("abort", onAbort);
   }
 }
+
+/**
+ * Update subagent status
+ * Used by MCP layer to update status without direct DB access
+ */
+export async function updateSubAgentStatus(
+  id: string,
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'max_iterations'
+): Promise<void> {
+  await prisma.subAgent.update({
+    where: { id },
+    data: { status },
+  });
+}

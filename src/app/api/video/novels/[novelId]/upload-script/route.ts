@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { NovelScriptUploadSchema } from "@/lib/video/script-upload-schema";
-import { replaceNovelScript } from "@/lib/services/video-workflow-service";
+import { replaceNovelScript } from "@/lib/services/video-coordination-service";
 
 /**
  * POST /api/video/novels/[novelId]/upload-script

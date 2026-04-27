@@ -10,8 +10,8 @@
  */
 
 import type { ContextProvider } from "@/lib/agent/context-provider";
-import { getInitResult } from "@/lib/services/video-workflow-service";
-import type { InitWorkflowResult } from "@/lib/services/video-workflow-service";
+import { getInitResult } from "@/lib/services/video-workflow-orchestration-service";
+import type { InitWorkflowResult } from "@/lib/video/workflow-types";
 
 /* ------------------------------------------------------------------ */
 /*  Config                                                             */
