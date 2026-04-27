@@ -115,7 +115,7 @@ async function createTask(apiKey, request) {
   const imageItems = media.filter(item => item.type === 'reference_image');
 
   // Build request format according to new API spec
-  const request = {
+  const apiRequest = {
     prompt,
   };
 
@@ -125,39 +125,39 @@ async function createTask(apiKey, request) {
   // - single image → i2v
   // - no media → t2v
   if (videoItem) {
-    request.genType = 'v2v';
-    request.videoUrl = videoItem.url; // Single videoUrl (not array)
+    apiRequest.genType = 'v2v';
+    apiRequest.videoUrl = videoItem.url; // Single videoUrl (not array)
   }
   
   if (imageItems.length > 0) {
-    request.imageUrls = imageItems.map(item => item.url);
+    apiRequest.imageUrls = imageItems.map(item => item.url);
     // Auto-infer genType if not already set by video
     if (!videoItem) {
-      request.genType = imageItems.length > 1 ? 'r2v' : 'i2v';
+      apiRequest.genType = imageItems.length > 1 ? 'r2v' : 'i2v';
     }
   }
   
   // If no media at all, default to t2v
   if (!videoItem && imageItems.length === 0) {
-    request.genType = 't2v';
+    apiRequest.genType = 't2v';
   }
 
   // Add optional parameters
   if (resolution) {
-    request.resolution = resolution;
+    apiRequest.resolution = resolution;
   }
   if (ratio) {
-    request.ratio = ratio;
+    apiRequest.ratio = ratio;
   }
   if (duration) {
-    request.duration = duration;
+    apiRequest.duration = duration;
   }
 
-  console.log('HappyHorse request:', JSON.stringify(request, null, 2));
+  console.log('HappyHorse request:', JSON.stringify(apiRequest, null, 2));
 
   const response = await axios.post(
     `${HAPPYHORSE_BASE_URL}/api/v2/open/aigc/hh`,
-    request,
+    apiRequest,
     {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
