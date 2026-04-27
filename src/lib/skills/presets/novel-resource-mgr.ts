@@ -6,7 +6,7 @@
  */
 export const raw = `---
 name: novel-resource-mgr
-description: Initialize and manage novel-level shared resources such as character portraits and scene images. Use for novel-wide resource setup, character initialization, and scene location management.
+description: 初始化和管理小说级共享资源，如角色立绘和场景图片。用于小说级资源设置、角色初始化和场景位置管理
 tags:
   - video
   - resource

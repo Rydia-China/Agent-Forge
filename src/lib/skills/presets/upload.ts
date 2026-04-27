@@ -6,7 +6,7 @@
  */
 export const raw = `---
 name: upload
-description: Upload local files (images, videos, documents, novels) to any endpoint — files never pass through LLM context.
+description: 上传本地文件（图片、视频、文档、小说）到任意端点 — 文件内容不经过 LLM 上下文
 tags:
   - core
   - upload

@@ -6,7 +6,7 @@
  */
 export const raw = `---
 name: langfuse
-description: Manage prompt templates via Langfuse. Use when you need to fetch, inspect, or compile prompts for subagent execution.
+description: 通过 Langfuse 管理 prompt 模板。当需要获取、检查或编译 subagent 执行的 prompts 时使用
 tags:
   - core
   - prompt

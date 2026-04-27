@@ -6,7 +6,7 @@
  */
 export const raw = `---
 name: business-database
-description: Manage business data using the PostgreSQL business database via biz_db tools. Use when asked to create tables, store data, query data, or build any business data structure.
+description: 使用 PostgreSQL 业务数据库管理业务数据，通过 biz_db 工具创建表、存储数据、查询数据或构建任何业务数据结构
 tags:
   - core
   - database

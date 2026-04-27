@@ -6,7 +6,7 @@
  */
 export const raw = `---
 name: video-mgr
-description: Generate images and videos via FC (Function Compute) multimodal services. Use when asked to create, generate, or produce images or videos.
+description: 通过 FC（函数计算）多模态服务生成图片和视频。当被要求创建、生成或制作图片或视频时使用
 tags:
   - core
   - multimodal
