@@ -19,19 +19,19 @@ export const ossMcp: McpProvider = {
       {
         name: "upload_from_url",
         description:
-          "Download file(s) from URL(s) and upload to OSS concurrently. Returns an array of results with status (ok/error) and permanent OSS URL for each item. For a single file, pass a one-element array.",
+          "从 URL 下载文件并上传到 OSS。并发处理多个文件，返回每个文件的状态（ok/error）和永久 OSS URL。单个文件也需要用数组格式。",
         inputSchema: {
           type: "object" as const,
           properties: {
             items: {
               type: "array",
-              description: "Array of files to download and upload",
+              description: "要下载并上传的文件数组",
               items: {
                 type: "object",
                 properties: {
-                  url: { type: "string", description: "Source URL to download from" },
-                  folder: { type: "string", description: 'OSS folder name (e.g. "image", "video", "file"). Default: "file"' },
-                  filename: { type: "string", description: "Target filename (auto-generated if omitted)" },
+                  url: { type: "string", description: "源 URL" },
+                  folder: { type: "string", description: 'OSS 文件夹名称（如 "image", "video", "file"）。默认："file"' },
+                  filename: { type: "string", description: "目标文件名（省略则自动生成）" },
                 },
                 required: ["url"],
               },
@@ -43,21 +43,21 @@ export const ossMcp: McpProvider = {
       {
         name: "upload_base64",
         description:
-          "Upload base64-encoded content to OSS. Returns the permanent OSS URL. Useful for uploading agent-generated content directly.",
+          "上传 base64 编码的内容到 OSS。返回永久 OSS URL。适用于直接上传 agent 生成的内容。",
         inputSchema: {
           type: "object" as const,
           properties: {
             data: {
               type: "string",
-              description: "Base64-encoded file content",
+              description: "Base64 编码的文件内容",
             },
             filename: {
               type: "string",
-              description: 'Target filename with extension (e.g. "diagram.png")',
+              description: '目标文件名（含扩展名，如 "diagram.png"）',
             },
             folder: {
               type: "string",
-              description: 'OSS folder name. Default: "file"',
+              description: 'OSS 文件夹名称。默认："file"',
             },
           },
           required: ["data", "filename"],
@@ -66,14 +66,14 @@ export const ossMcp: McpProvider = {
       {
         name: "delete",
         description:
-          "Delete object(s) from OSS concurrently. Pass an array of object names. For a single deletion, pass a one-element array.",
+          "从 OSS 删除对象。并发处理多个对象，传入对象名称数组。单个删除也需要用数组格式。",
         inputSchema: {
           type: "object" as const,
           properties: {
             objectNames: {
               type: "array",
               items: { type: "string" },
-              description: 'Array of full OSS object paths (e.g. ["public/image/1234-abc.png"])',
+              description: 'OSS 对象完整路径数组（如 ["public/image/1234-abc.png"]）',
             },
           },
           required: ["objectNames"],
