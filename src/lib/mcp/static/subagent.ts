@@ -225,17 +225,13 @@ export const subagentMcp: McpProvider = {
       {
         name: "run",
         description:
-          "Run one or more subagent tasks synchronously. Each subagent is an independent " +
-          "lightweight agent. Mode is determined by mcpScope: omit for single-shot (one LLM call), " +
-          "or specify MCP providers for tool-loop mode (multi-iteration agent with tools). " +
-          "All tasks execute concurrently; the call blocks until all complete. " +
-          "Each result includes an agentId for follow-up via `continue` or `get_trace`.",
+          "同步运行一个或多个 subagent 任务。模式由 mcpScope 决定：省略为单次调用模式（一次 LLM 调用），指定 MCP providers 为工具循环模式（多轮迭代）。所有任务并发执行，调用阻塞直到全部完成。",
         inputSchema: {
           type: "object" as const,
           properties: {
             tasks: {
               type: "array",
-              description: "Array of subagent tasks to run concurrently",
+              description: "要并发运行的 subagent 任务数组",
               items: TASK_ITEM_SCHEMA,
             },
           },
@@ -245,15 +241,13 @@ export const subagentMcp: McpProvider = {
       {
         name: "run_async",
         description:
-          "Start one or more subagent tasks asynchronously. Returns task IDs immediately " +
-          "without waiting for completion. Use `subagent__get_result` to check status later. " +
-          "Use this for long-running tasks when you can continue other work in parallel.",
+          "异步启动一个或多个 subagent 任务。立即返回任务 ID，不等待完成。稍后使用 get_result 查询状态。适用于长时间运行的任务。",
         inputSchema: {
           type: "object" as const,
           properties: {
             tasks: {
               type: "array",
-              description: "Array of subagent tasks to start concurrently",
+              description: "要并发启动的 subagent 任务数组",
               items: TASK_ITEM_SCHEMA,
             },
           },
@@ -263,16 +257,15 @@ export const subagentMcp: McpProvider = {
       {
         name: "get_result",
         description:
-          "Get the result of one or more async subagent tasks. Returns status and result " +
-          "for each task. Supports batch queries.",
+          "获取一个或多个异步 subagent 任务的结果。返回每个任务的状态和结果。支持批量查询。",
         inputSchema: {
           type: "object" as const,
           properties: {
-            taskId: { type: "string", description: "Single task ID to query" },
+            taskId: { type: "string", description: "单个任务 ID" },
             taskIds: {
               type: "array",
               items: { type: "string" },
-              description: "Multiple task IDs to query in batch",
+              description: "批量查询的任务 ID 数组",
             },
           },
         },
@@ -280,27 +273,22 @@ export const subagentMcp: McpProvider = {
       {
         name: "get_trace",
         description:
-          "Get the full execution trace of a subagent for debugging. " +
-          "Includes: complete message history, every tool call's input/output, " +
-          "the system prompt used, model, iteration count. " +
-          "Use agentId (from run/continue results) for in-memory agents, " +
-          "or taskId for persisted async tasks.",
+          "获取 subagent 的完整执行追踪（调试用）。包含：完整消息历史、所有工具调用的输入输出、系统 prompt、模型、迭代次数。使用 agentId（来自 run/continue）或 taskId（来自 run_async）。",
         inputSchema: {
           type: "object" as const,
           properties: {
             agentId: {
               type: "string",
-              description: "In-memory agent ID (returned by run/continue)",
+              description: "内存中的 agent ID（由 run/continue 返回）",
             },
             taskId: {
               type: "string",
-              description: "Persisted async task ID returned by run_async or a timed-out run",
+              description: "持久化的异步任务 ID（由 run_async 或超时的 run 返回）",
             },
             tree: {
               type: "boolean",
               description:
-                "When true, recursively collect child subagent traces into a nested tree. " +
-                "Use this to visualize the full subagent call hierarchy.",
+                "设为 true 时递归收集子 subagent 的追踪，形成嵌套树。用于可视化完整的 subagent 调用层次。",
             },
           },
         },
@@ -308,24 +296,21 @@ export const subagentMcp: McpProvider = {
       {
         name: "continue",
         description:
-          "Continue a previous subagent conversation with additional feedback or instructions. " +
-          "The subagent retains its full message history and resumes execution. " +
-          "Use this to correct mistakes, provide missing information, or refine results " +
-          "without restarting from scratch.",
+          "继续之前的 subagent 对话，提供额外的反馈或指令。subagent 保留完整消息历史并恢复执行。用于纠正错误、提供缺失信息或优化结果，无需从头开始。",
         inputSchema: {
           type: "object" as const,
           properties: {
             agentId: {
               type: "string",
-              description: "Agent ID returned by a previous run/continue call",
+              description: "之前 run/continue 调用返回的 agent ID",
             },
             feedback: {
               type: "string",
-              description: "Additional instruction or feedback to send to the subagent",
+              description: "要发送给 subagent 的额外指令或反馈",
             },
             includeTrace: {
               type: "boolean",
-              description: "Include full trace in response. Default false.",
+              description: "在响应中包含完整追踪。默认 false",
             },
           },
           required: ["agentId", "feedback"],
@@ -350,13 +335,13 @@ export const subagentMcp: McpProvider = {
       },
       {
         name: "cancel_schedule",
-        description: "Cancel a scheduled subagent task by its schedule ID.",
+        description: "根据调度 ID 取消已安排的 subagent 任务。",
         inputSchema: {
           type: "object" as const,
           properties: {
             scheduleId: {
               type: "string",
-              description: "The schedule ID returned by `subagent__schedule`",
+              description: "由 schedule 工具返回的调度 ID",
             },
           },
           required: ["scheduleId"],
@@ -364,7 +349,7 @@ export const subagentMcp: McpProvider = {
       },
       {
         name: "list_schedules",
-        description: "List all in-memory scheduled subagent tasks with status and next run time.",
+        description: "列出所有内存中的已安排 subagent 任务，包含状态和下次运行时间。",
         inputSchema: {
           type: "object" as const,
           properties: {},
@@ -373,14 +358,13 @@ export const subagentMcp: McpProvider = {
       {
         name: "wait",
         description:
-          "Wait for the specified number of seconds before continuing. Use this when you " +
-          "need to give async subagents time to complete before checking results. Max 300s.",
+          "等待指定秒数后继续。用于给异步 subagent 留出完成时间，然后再查询结果。最大 300 秒。",
         inputSchema: {
           type: "object" as const,
           properties: {
             seconds: {
               type: "number",
-              description: "Number of seconds to wait (max 300)",
+              description: "等待秒数（最大 300）",
             },
           },
           required: ["seconds"],
