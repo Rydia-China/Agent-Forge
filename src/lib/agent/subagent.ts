@@ -221,11 +221,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function ensureMcpInitialized(): Promise<void> {
-  const { initMcp } = await import("@/lib/mcp/init");
-  await initMcp();
-}
-
 function parseToolArgs(raw: string): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -289,7 +284,6 @@ async function resolveSkillContent(
 /* ================================================================== */
 
 async function resolveAvailableMcpScope(names: string[]): Promise<string[]> {
-  await ensureMcpInitialized();
   const available: string[] = [];
   const seen = new Set<string>();
   for (const name of names) {
@@ -477,7 +471,6 @@ export class SubAgent {
     if (this.initialized) return;
     this.initialized = true;
 
-    await ensureMcpInitialized();
     this.skillContent = await resolveSkillContent(this.config.skills);
 
     if (this.isToolLoop) {

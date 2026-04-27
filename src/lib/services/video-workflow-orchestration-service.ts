@@ -10,7 +10,6 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
 import type { InitWorkflowResult, GetStatusResult } from "@/lib/video/workflow-types";
-import { initMcp } from "@/lib/mcp/init";
 import { registry } from "@/lib/mcp/registry";
 
 /* ------------------------------------------------------------------ */
@@ -22,8 +21,6 @@ export async function runInitWorkflow(
   scriptDbId: string,
   scriptContent: string,
 ): Promise<InitWorkflowResult> {
-  await initMcp();
-
   const result = await registry.callTool(
     "novel-video-workflow__init_workflow",
     { novelId, scriptContent, scriptDbId },
