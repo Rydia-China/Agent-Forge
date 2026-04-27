@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listResourcesByScope } from "@/lib/services/key-resource-listing";
-import { ensureExpectedNovelResources } from "@/lib/services/video-resource-service";
+import { ensureExpectedNovelResources } from "@/lib/services/resource-inference-service";
 
 /** GET /api/video/novel/[novelId]/resources — get novel-level resources from KeyResource */
 export async function GET(
