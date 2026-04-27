@@ -1,5 +1,4 @@
 import { registry } from "@/lib/mcp/registry";
-import { initMcp } from "@/lib/mcp/init";
 import { type ToolContext, parseToolName } from "@/lib/mcp/types";
 import { getSkill } from "@/lib/services/skill-service";
 import {
@@ -188,8 +187,6 @@ export async function runAgent(
   images?: string[],
   config?: AgentConfig,
 ): Promise<AgentResponse> {
-  await initMcp();
-
   const session = await getOrCreateSession(sessionId, userName);
   return withSessionLock(session.id, () => runAgentInner(userMessage, session, userName, images, config));
 }
@@ -203,8 +200,6 @@ export async function runAgentStream(
   images?: string[],
   config?: AgentConfig,
 ): Promise<AgentResponse> {
-  await initMcp();
-
   const session = await getOrCreateSession(sessionId, userName);
   callbacks.onSession?.(session.id);
   return withSessionLock(session.id, () =>
