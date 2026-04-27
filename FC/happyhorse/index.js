@@ -5,7 +5,7 @@ const axios = require('axios');
  * Wraps DashScope HappyHorse API for Function Compute deployment
  */
 
-const DASHSCOPE_BASE_URL = 'https://dashscope.aliyuncs.com';
+const HAPPYHORSE_BASE_URL = 'https://mm-internal-cn.leonecloud.com';
 
 /**
  * Validate video URL
@@ -108,59 +108,69 @@ async function createTask(apiKey, request) {
   // Validate media
   validateMedia(media);
 
-  // Build DashScope API request
-  const dashscopeRequest = {
-    model: model || 'happyhorse-1.0-r2v',
-    input: {
-      prompt,
-      media,
-    },
-    parameters: {},
+  // Convert new DashScope format to old HappyHorse format
+  // Extract video and images from media array
+  const videoItem = media.find(item => item.type === 'video');
+  const imageItems = media.filter(item => item.type === 'reference_image');
+
+  // Build old-style flat request format
+  const legacyRequest = {
+    prompt,
+    genType: videoItem ? 'v2v' : 't2v', // v2v if video present, otherwise t2v
   };
+
+  // Add video URL if present
+  if (videoItem) {
+    legacyRequest.videoUrl = videoItem.url;
+  }
+
+  // Add image URLs if present
+  if (imageItems.length > 0) {
+    legacyRequest.imageUrls = imageItems.map(item => item.url);
+  }
 
   // Add optional parameters
   if (resolution) {
-    dashscopeRequest.parameters.resolution = resolution;
+    legacyRequest.resolution = resolution;
   }
   if (ratio) {
-    dashscopeRequest.parameters.ratio = ratio;
+    legacyRequest.ratio = ratio;
   }
   if (duration) {
-    dashscopeRequest.parameters.duration = duration;
+    legacyRequest.duration = duration;
   }
 
-  console.log('DashScope request:', JSON.stringify(dashscopeRequest, null, 2));
+  console.log('HappyHorse request (legacy format):', JSON.stringify(legacyRequest, null, 2));
 
   const response = await axios.post(
-    `${DASHSCOPE_BASE_URL}/api/v1/services/aigc/video-generation/video-synthesis`,
-    dashscopeRequest,
+    `${HAPPYHORSE_BASE_URL}/api/v2/open/aigc/hh`,
+    legacyRequest,
     {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'X-DashScope-Async': 'enable',
       },
       timeout: 30000,
     }
   );
 
-  console.log('DashScope response:', JSON.stringify(response.data, null, 2));
+  console.log('HappyHorse response:', JSON.stringify(response.data, null, 2));
 
-  // DashScope response format
-  if (response.data.code && response.data.code !== '200') {
-    throw new Error(response.data.message || 'Create task failed');
+  // Old HappyHorse response format
+  if (response.data.code !== 0) {
+    throw new Error(response.data.msg || 'Create task failed');
   }
 
-  const output = response.data.output || {};
-  const taskId = output.task_id;
+  const data = response.data.data || {};
+  const taskId = data.taskId;
 
   if (!taskId) {
-    throw new Error('No task_id in response');
+    throw new Error('No taskId in response');
   }
 
   return {
     taskId,
-    status: output.task_status || 'PENDING',
+    status: data.status || 'PENDING',
     requestId: response.data.request_id,
   };
 }
@@ -170,7 +180,7 @@ async function createTask(apiKey, request) {
  */
 async function queryTask(apiKey, taskId) {
   const response = await axios.get(
-    `${DASHSCOPE_BASE_URL}/api/v1/tasks/${taskId}`,
+    `${HAPPYHORSE_BASE_URL}/api/v2/open/aigc/${taskId}`,
     {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -182,17 +192,17 @@ async function queryTask(apiKey, taskId) {
 
   console.log('Query response:', JSON.stringify(response.data, null, 2));
 
-  if (response.data.code && response.data.code !== '200') {
-    throw new Error(response.data.message || 'Query task failed');
+  if (response.data.code !== 0) {
+    throw new Error(response.data.msg || 'Query task failed');
   }
 
-  const output = response.data.output || {};
+  const data = response.data.data || {};
   
   return {
-    taskId: output.task_id || taskId,
-    status: output.task_status,
-    videoUrl: output.video_url,
-    errorMessage: output.message || output.code,
+    taskId: data.taskId || taskId,
+    status: data.status,
+    videoUrl: data.result?.[0],
+    errorMessage: data.errorMsg,
     requestId: response.data.request_id,
   };
 }
