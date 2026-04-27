@@ -39,3 +39,58 @@ export interface GetStatusResult {
     instruction: string;
   }>;
 }
+
+/**
+ * Video shot planning types
+ */
+
+export interface VideoShotAssets {
+  images: string[];
+  videos: string[];
+}
+
+export interface VideoShotPlan {
+  shotId: string;
+  duration: number;
+  mode: string;
+  scene: string;
+  shotFunction: string;
+  prevShotRecap: string;
+  nextShotSetup: string;
+  emotionArc: string;
+  assets: VideoShotAssets;
+  shotPrompt: string;
+  definition: string;
+  title: string;
+}
+
+export interface PlanVideoShotsResult {
+  scriptId: string;
+  episodeKey: string;
+  shots: VideoShotPlan[];
+  totalShots: number;
+}
+
+export interface ReviewResult {
+  passed: boolean;
+  issues: Array<{
+    shotId: string;
+    category: string;
+    description: string;
+    severity: "error" | "warning";
+  }>;
+  suggestions: string[];
+}
+
+export interface GenerateVideoShotsResult {
+  scriptId: string;
+  episodeKey: string;
+  shots: Array<{
+    shotId: string;
+    status: "planned" | "reviewed" | "generating" | "completed" | "failed";
+    videoUrl?: string;
+    prompt: string;
+    reviewIterations: number;
+  }>;
+  totalIterations: number;
+}
