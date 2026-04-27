@@ -117,19 +117,17 @@ async function createTask(apiKey, request) {
   // Build old-style flat request format
   const legacyRequest = {
     prompt,
-    genType: (videoItem || imageItems.length > 0) ? 'i2v' : 't2v', // i2v if any media, otherwise t2v
+    genType: videoItem ? 'v2v' : (imageItems.length > 0 ? 'i2v' : 't2v'),
   };
 
-  // Add image URLs array (video goes first if present)
-  const imageUrls = [];
+  // Add video URLs if video present
   if (videoItem) {
-    imageUrls.push(videoItem.url);
+    legacyRequest.videoUrls = [videoItem.url];
   }
+
+  // Add image URLs if images present
   if (imageItems.length > 0) {
-    imageUrls.push(...imageItems.map(item => item.url));
-  }
-  if (imageUrls.length > 0) {
-    legacyRequest.imageUrls = imageUrls;
+    legacyRequest.imageUrls = imageItems.map(item => item.url);
   }
 
   // Add optional parameters
