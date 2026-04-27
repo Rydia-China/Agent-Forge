@@ -219,8 +219,8 @@ async function waitForCompletion(apiKey, taskId, maxWaitTime = 300000) {
   while (Date.now() - startTime < maxWaitTime) {
     const result = await queryTask(apiKey, taskId);
 
-    // DashScope task status: PENDING, RUNNING, SUCCEEDED, FAILED
-    if (result.status === 'SUCCEEDED' || result.status === 'FAILED') {
+    // HappyHorse task status: processing, success, failed
+    if (result.status === 'success' || result.status === 'failed') {
       return result;
     }
 
@@ -280,7 +280,7 @@ async function generateVideo(apiKey, request) {
   console.log('Waiting for task completion...');
   const result = await waitForCompletion(apiKey, taskId);
 
-  if (result.status === 'FAILED') {
+  if (result.status === 'failed') {
     throw new Error(result.errorMessage || 'Video generation failed');
   }
 
