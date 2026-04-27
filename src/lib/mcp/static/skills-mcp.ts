@@ -1,7 +1,7 @@
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
 import * as svc from "@/lib/services/skill-service";
-import { appendSchemaDirectiveIfNeeded } from "@/lib/skills/required-schemas";
+import { appendSchemaDirectiveIfNeeded } from "@/lib/required-schemas";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };

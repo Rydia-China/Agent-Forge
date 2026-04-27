@@ -1,7 +1,7 @@
 import { listSkills } from "@/lib/services/skill-service";
 import { getSkill } from "@/lib/services/skill-service";
 import { registry } from "@/lib/mcp/registry";
-import { appendSchemaDirectiveIfNeeded } from "@/lib/skills/required-schemas";
+import { appendSchemaDirectiveIfNeeded } from "@/lib/required-schemas";
 
 /* ------------------------------------------------------------------ */
 /*  Static behavioural rules                                           */
