@@ -18,14 +18,14 @@ export const skillsMcp: McpProvider = {
     return [
       {
         name: "get",
-        description: "Get the full content of skill(s) by name (returns production version). Pass an array of names. For a single skill, pass a one-element array.",
+        description: "根据名称获取 skill 的完整内容（返回生产版本）。传入名称数组，单个 skill 也需要用数组格式。",
         inputSchema: {
           type: "object" as const,
           properties: {
             names: {
               type: "array",
               items: { type: "string" },
-              description: "Array of skill names to fetch",
+              description: "要获取的 skill 名称数组",
             },
           },
           required: ["names"],
@@ -33,13 +33,13 @@ export const skillsMcp: McpProvider = {
       },
       {
         name: "create",
-        description: "Create a new skill (v1). Only use when the user EXPLICITLY asks to create a skill. NEVER call this to save notes, summaries, or information on your own initiative.",
+        description: "创建新 skill（v1）。仅在用户明确要求创建 skill 时使用。禁止主动调用此工具保存笔记、摘要或信息。",
         inputSchema: {
           type: "object" as const,
           properties: {
             name: { type: "string" },
             description: { type: "string" },
-            content: { type: "string", description: "Markdown body (skill instructions)" },
+            content: { type: "string", description: "Markdown 正文（skill 指令）" },
             tags: { type: "array", items: { type: "string" } },
           },
           required: ["name", "description", "content"],
@@ -47,22 +47,22 @@ export const skillsMcp: McpProvider = {
       },
       {
         name: "update",
-        description: "Push a new version of an existing skill. Auto-promotes to production by default. Only use when the user EXPLICITLY asks to update a skill. NEVER call this to save notes, summaries, or information on your own initiative.",
+        description: "推送现有 skill 的新版本。默认自动提升为生产版本。仅在用户明确要求更新 skill 时使用。禁止主动调用此工具保存笔记、摘要或信息。",
         inputSchema: {
           type: "object" as const,
           properties: {
-            name: { type: "string", description: "Skill to update" },
+            name: { type: "string", description: "要更新的 skill 名称" },
             description: { type: "string" },
             content: { type: "string" },
             tags: { type: "array", items: { type: "string" } },
-            promote: { type: "boolean", description: "Set new version as production (default: true)" },
+            promote: { type: "boolean", description: "将新版本设为生产版本（默认：true）" },
           },
           required: ["name", "description", "content"],
         },
       },
       {
         name: "delete",
-        description: "Delete a skill and all its versions.",
+        description: "删除 skill 及其所有版本。",
         inputSchema: {
           type: "object" as const,
           properties: { name: { type: "string" } },
@@ -71,11 +71,11 @@ export const skillsMcp: McpProvider = {
       },
       {
         name: "import",
-        description: "Import a skill from standard SKILL.md content. Creates v1 if new, pushes new version if exists. Only use when the user EXPLICITLY asks to import a skill.",
+        description: "从标准 SKILL.md 内容导入 skill。如果是新 skill 则创建 v1，如果已存在则推送新版本。仅在用户明确要求导入 skill 时使用。",
         inputSchema: {
           type: "object" as const,
           properties: {
-            skillMd: { type: "string", description: "Full SKILL.md file content" },
+            skillMd: { type: "string", description: "完整的 SKILL.md 文件内容" },
             tags: { type: "array", items: { type: "string" } },
           },
           required: ["skillMd"],
@@ -83,7 +83,7 @@ export const skillsMcp: McpProvider = {
       },
       {
         name: "export",
-        description: "Export a skill as standard SKILL.md format (production version).",
+        description: "将 skill 导出为标准 SKILL.md 格式（生产版本）。",
         inputSchema: {
           type: "object" as const,
           properties: { name: { type: "string" } },
@@ -92,7 +92,7 @@ export const skillsMcp: McpProvider = {
       },
       {
         name: "list_versions",
-        description: "List all versions of a skill, showing which is production.",
+        description: "列出 skill 的所有版本，显示哪个是生产版本。",
         inputSchema: {
           type: "object" as const,
           properties: { name: { type: "string" } },
@@ -101,12 +101,12 @@ export const skillsMcp: McpProvider = {
       },
       {
         name: "set_production",
-        description: "Set a specific version as the production version (rollback/promote).",
+        description: "将指定版本设为生产版本（回滚/提升）。",
         inputSchema: {
           type: "object" as const,
           properties: {
             name: { type: "string" },
-            version: { type: "number", description: "Version number to set as production" },
+            version: { type: "number", description: "要设为生产版本的版本号" },
           },
           required: ["name", "version"],
         },
