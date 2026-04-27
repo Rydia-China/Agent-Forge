@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import type {
   ChatCompletionTool,
   ChatCompletionChunk,
+  ChatCompletion,
 } from "openai/resources/chat/completions";
 import type { Tool } from "@modelcontextprotocol/sdk/types";
 import { DEFAULT_MODEL } from "./models";
@@ -111,7 +112,7 @@ export async function generateTitle(userMessage: string): Promise<string> {
   });
   
   try {
-    const res = await client.chat.completions.create({
+    const rawRes: unknown = await client.chat.completions.create({
       model,
       messages: [
         {
@@ -126,31 +127,39 @@ export async function generateTitle(userMessage: string): Promise<string> {
       ],
     });
     
+    // Handle case where OpenAI SDK returns a string instead of object
+    // This can happen with some OpenAI-compatible APIs
+    let res: ChatCompletion;
+    if (typeof rawRes === "string") {
+      console.log("[generateTitle] Response is string, parsing JSON", {
+        resPreview: rawRes.slice(0, 100),
+      });
+      try {
+        res = JSON.parse(rawRes) as ChatCompletion;
+      } catch (parseErr) {
+        console.error("[generateTitle] Failed to parse string response", { 
+          error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+        });
+        return "New Chat";
+      }
+    } else {
+      res = rawRes as ChatCompletion;
+    }
+    
     console.log("[generateTitle] LLM response received", {
       model,
-      responseType: typeof res,
-      responseConstructor: res?.constructor?.name,
-      choicesType: typeof res.choices,
-      choicesIsArray: Array.isArray(res.choices),
       choicesCount: res.choices?.length ?? 0,
-      firstChoice: res.choices?.[0],
       hasContent: !!res.choices?.[0]?.message?.content,
-      rawRes: JSON.stringify(res).slice(0, 200),
     });
     
     if (!res.choices || res.choices.length === 0) {
-      console.error("[generateTitle] No choices returned from LLM", { 
-        model, 
-        resKeys: Object.keys(res),
-        resChoices: res.choices,
-        fullRes: JSON.stringify(res),
-      });
+      console.error("[generateTitle] No choices returned from LLM", { model });
       return "New Chat";
     }
     
     const content = res.choices[0]?.message?.content;
     if (!content) {
-      console.error("[generateTitle] No content in first choice", { model, choice: res.choices[0] });
+      console.error("[generateTitle] No content in first choice", { model });
       return "New Chat";
     }
     
