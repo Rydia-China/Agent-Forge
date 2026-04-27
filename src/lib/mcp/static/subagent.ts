@@ -121,8 +121,7 @@ const ContinueParams = z.object({
 
 const ScheduleParams = z.object({
   task: TaskSchema,
-  cron: z.string().optional(),
-  runAt: z.string().optional(),
+  runAt: z.string().min(1),
 });
 
 const CancelScheduleParams = z.object({
@@ -335,26 +334,18 @@ export const subagentMcp: McpProvider = {
       {
         name: "schedule",
         description:
-          "Schedule a subagent task to run at a future time. This restored provider supports " +
-          "one-time runAt schedules in memory; cron expressions return an explicit unsupported response.",
+          "安排 subagent 任务在指定时间执行（一次性调度）。仅支持 runAt 参数指定未来时间点。",
         inputSchema: {
           type: "object" as const,
           properties: {
             task: TASK_ITEM_SCHEMA,
-            cron: {
-              type: "string",
-              description:
-                'Cron expression for recurring execution (e.g. "0 9 * * *" = daily at 9am). ' +
-                "Currently unsupported because the historical scheduler service no longer exists.",
-            },
             runAt: {
               type: "string",
               description:
-                'ISO 8601 datetime for one-time execution (e.g. "2026-03-16T09:00:00Z"). ' +
-                "Mutually exclusive with cron.",
+                'ISO 8601 格式的日期时间，用于一次性执行（例如 "2026-03-16T09:00:00Z"）',
             },
           },
-          required: ["task"],
+          required: ["task", "runAt"],
         },
       },
       {
@@ -611,21 +602,8 @@ export const subagentMcp: McpProvider = {
       /* ------------------------------------------------------------ */
       case "schedule": {
         const parsed = ScheduleParams.parse(args);
-        const hasCron = typeof parsed.cron === "string" && parsed.cron.trim().length > 0;
-        const hasRunAt = typeof parsed.runAt === "string" && parsed.runAt.trim().length > 0;
-
-        if (hasCron === hasRunAt) {
-          return text("Provide exactly one of cron or runAt.");
-        }
-        if (hasCron) {
-          return json({
-            status: "unsupported",
-            error:
-              "Cron scheduling was part of the removed scheduler service and is not available in the current codebase. Use runAt for one-time schedules or run_async for manual async execution.",
-          });
-        }
-
-        const runAt = new Date(parsed.runAt ?? "");
+        const runAt = new Date(parsed.runAt);
+        
         if (Number.isNaN(runAt.getTime())) {
           return text(`Invalid runAt datetime: ${parsed.runAt}`);
         }
