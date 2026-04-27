@@ -1,5 +1,6 @@
 export { agentForgeMcp } from "./agent-forge";
 export { bizDbMcp } from "./biz-db";
+export { happyhorseMcp } from "./happyhorse";
 export { langfuseAdminMcp } from "./langfuse-admin";
 export { langfuseMcp } from "./langfuse";
 export { multimodalMcp } from "./multimodal";
