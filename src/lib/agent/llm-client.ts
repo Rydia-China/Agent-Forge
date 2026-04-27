@@ -128,12 +128,23 @@ export async function generateTitle(userMessage: string): Promise<string> {
     
     console.log("[generateTitle] LLM response received", {
       model,
+      responseType: typeof res,
+      responseConstructor: res?.constructor?.name,
+      choicesType: typeof res.choices,
+      choicesIsArray: Array.isArray(res.choices),
       choicesCount: res.choices?.length ?? 0,
+      firstChoice: res.choices?.[0],
       hasContent: !!res.choices?.[0]?.message?.content,
+      rawRes: JSON.stringify(res).slice(0, 200),
     });
     
     if (!res.choices || res.choices.length === 0) {
-      console.error("[generateTitle] No choices returned from LLM", { model, res });
+      console.error("[generateTitle] No choices returned from LLM", { 
+        model, 
+        resKeys: Object.keys(res),
+        resChoices: res.choices,
+        fullRes: JSON.stringify(res),
+      });
       return "New Chat";
     }
     
