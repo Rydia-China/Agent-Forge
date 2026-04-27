@@ -2,13 +2,14 @@
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Button, Collapse, Drawer, Empty, Input, Spin, Typography, Image, Tag, App } from "antd";
-import { DeleteOutlined, EditOutlined, EyeOutlined, FormatPainterOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, EyeOutlined, FormatPainterOutlined, SkinOutlined } from "@ant-design/icons";
 import type { DomainResources, DomainResource, VideoResourceData } from "../types";
 import { fetchJson } from "@/app/components/client-utils";
 import { ImageDetailDrawer } from "./ImageDetailDrawer";
 import { VideoDetailDrawer } from "./VideoDetailDrawer";
 import { StylePresetDrawer } from "./StylePresetDrawer";
 import { PromptPreviewDrawer } from "./PromptPreviewDrawer";
+import { CostumePreviewDrawer } from "./CostumePreviewDrawer";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -49,6 +50,9 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
 
   /* ---- Prompt preview drawer state ---- */
   const [promptPreviewOpen, setPromptPreviewOpen] = useState(false);
+
+  /* ---- Costume preview drawer state ---- */
+  const [costumePreviewOpen, setCostumePreviewOpen] = useState(false);
 
   /* ---- Collapse expand state (controlled) ---- */
   const [activeKeys, setActiveKeys] = useState<string[]>([]);
@@ -330,6 +334,17 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
                   style={{ width: 28, height: 28, minWidth: 28 }}
                 />
               )}
+              {!isNovelLevel && scriptId && (
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<SkinOutlined />}
+                  onClick={() => setCostumePreviewOpen(true)}
+                  className="!text-slate-400 hover:!text-slate-200"
+                  title="Costume Preview"
+                  style={{ width: 28, height: 28, minWidth: 28 }}
+                />
+              )}
               <Button
                 type="text"
                 size="small"
@@ -365,6 +380,15 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
           open={promptPreviewOpen}
           onClose={() => setPromptPreviewOpen(false)}
           novelId={novelId}
+        />
+      )}
+
+      {!isNovelLevel && (
+        <CostumePreviewDrawer
+          open={costumePreviewOpen}
+          onClose={() => setCostumePreviewOpen(false)}
+          novelId={novelId}
+          scriptId={scriptId}
         />
       )}
 
