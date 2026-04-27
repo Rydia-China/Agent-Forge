@@ -13,7 +13,7 @@
  * LLM never sees physical names. MCP layer translates transparently.
  */
 
-import crypto from "node:crypto";
+import { v4 as uuidv4 } from "uuid";
 import { prisma } from "./db";
 import { replaceInCode, codeOnly } from "./sql-segments";
 
@@ -66,7 +66,7 @@ export async function resolveTable(
 // ---------------------------------------------------------------------------
 
 function generatePhysicalName(): string {
-  return `t_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  return `t_${uuidv4().replace(/-/g, "").slice(0, 16)}`;
 }
 
 /**
