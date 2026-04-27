@@ -1,0 +1,44 @@
+edition: 3.0.0
+name: crop-video
+access: default
+resources:
+  cropVideo:
+    component: fc3
+    props:
+      region: cn-hangzhou
+      handler: index.handler
+      role: ''
+      disableOndemand: false
+      description: '视频裁剪函数'
+      timeout: 300
+      diskSize: 512
+      internetAccess: true
+      functionName: crop-video
+      runtime: custom.debian10
+      customRuntimeConfig:
+        command:
+          - node
+        args:
+          - index.js
+      cpu: 0.1
+      memorySize: 512
+      layers:
+        - acs:fc:cn-hangzhou:official:ffmpeg/latest
+      environmentVariables:
+        OSS_ACCESS_KEY_ID: ${env(OSS_ACCESS_KEY_ID)}
+        OSS_BUCKET: ${env(OSS_BUCKET)}
+        OSS_REGION: ${env(OSS_REGION)}
+        OSS_ACCESS_KEY_SECRET: ${env(OSS_ACCESS_KEY_SECRET)}
+        OSS_ENDPOINT: ${env(OSS_ENDPOINT)}
+      code: ./
+      triggers:
+        - triggerConfig:
+            methods:
+              - POST
+              - OPTIONS
+            authType: bearer
+            disableURLInternet: false
+          triggerName: defaultTrigger
+          description: ''
+          qualifier: LATEST
+          triggerType: http

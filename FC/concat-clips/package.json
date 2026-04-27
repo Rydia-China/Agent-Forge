@@ -1,0 +1,9 @@
+{
+  "name": "fc-concat-clips",
+  "version": "1.0.0",
+  "description": "阿里云FC函数 - 视频拼接",
+  "main": "index.js",
+  "dependencies": {
+    "ali-oss": "^6.23.0"
+  }
+}
