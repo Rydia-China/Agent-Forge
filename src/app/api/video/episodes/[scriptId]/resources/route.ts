@@ -7,7 +7,7 @@ import {
   getById,
   updateData,
 } from "@/lib/services/key-resource-service";
-import { ensureExpectedEpisodeResources } from "@/lib/services/video-resource-service";
+import { ensureExpectedEpisodeResources } from "@/lib/services/resource-inference-service";
 
 /** GET /api/video/episodes/[scriptId]/resources?novelId=xxx — get episode + novel resources */
 export async function GET(

@@ -14,7 +14,7 @@ import type { EpisodeSummary } from "@/lib/video/episode-types";
 import type { ResourceDiff } from "@/lib/video/resource-types";
 import * as novelService from "./novel-service";
 import * as episodeService from "./episode-service";
-import * as resourceService from "./video-resource-service";
+import * as resourceService from "./resource-inference-service";
 
 /**
  * Helper: Generate script key from episode metadata
