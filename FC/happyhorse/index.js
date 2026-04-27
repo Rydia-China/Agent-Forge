@@ -1,4 +1,5 @@
 const axios = require('axios');
+const OSS = require('ali-oss');
 
 /**
  * HappyHorse Video Generation FC Wrapper
@@ -116,17 +117,19 @@ async function createTask(apiKey, request) {
   // Build old-style flat request format
   const legacyRequest = {
     prompt,
-    genType: videoItem ? 'v2v' : 't2v', // v2v if video present, otherwise t2v
+    genType: (videoItem || imageItems.length > 0) ? 'i2v' : 't2v', // i2v if any media, otherwise t2v
   };
 
-  // Add video URL if present
+  // Add image URLs array (video goes first if present)
+  const imageUrls = [];
   if (videoItem) {
-    legacyRequest.videoUrl = videoItem.url;
+    imageUrls.push(videoItem.url);
   }
-
-  // Add image URLs if present
   if (imageItems.length > 0) {
-    legacyRequest.imageUrls = imageItems.map(item => item.url);
+    imageUrls.push(...imageItems.map(item => item.url));
+  }
+  if (imageUrls.length > 0) {
+    legacyRequest.imageUrls = imageUrls;
   }
 
   // Add optional parameters
@@ -238,6 +241,81 @@ async function waitForCompletion(apiKey, taskId, maxWaitTime = 300000) {
   throw new Error('Task timeout: exceeded maximum wait time');
 }
 
+/**
+ * Upload buffer to OSS
+ */
+async function uploadToOSS(buffer, filename, folder = 'video') {
+  const client = new OSS({
+    region: process.env.OSS_REGION,
+    accessKeyId: process.env.OSS_ACCESS_KEY_ID,
+    accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET,
+    bucket: process.env.OSS_BUCKET,
+    endpoint: process.env.OSS_ENDPOINT || `oss-${process.env.OSS_REGION}.aliyuncs.com`,
+    secure: true,
+    timeout: 300000,
+  });
+
+  const objectName = `public/${folder}/${filename}`;
+  await client.put(objectName, buffer);
+
+  const bucket = process.env.OSS_BUCKET;
+  const region = process.env.OSS_REGION;
+  const url = `https://${bucket}.oss-${region}.aliyuncs.com/${objectName}`;
+
+  return url;
+}
+
+/**
+ * Generate video with complete workflow: create + poll + download + upload to OSS
+ */
+async function generateVideo(apiKey, request) {
+  console.log('Starting complete video generation workflow...');
+  
+  // Step 1: Create task
+  const createResult = await createTask(apiKey, request);
+  const taskId = createResult.taskId;
+  console.log('Task created:', taskId);
+
+  // Step 2: Wait for completion
+  console.log('Waiting for task completion...');
+  const result = await waitForCompletion(apiKey, taskId);
+
+  if (result.status === 'FAILED') {
+    throw new Error(result.errorMessage || 'Video generation failed');
+  }
+
+  if (!result.videoUrl) {
+    throw new Error('No video URL in completed task');
+  }
+
+  console.log('Video generated, downloading from:', result.videoUrl);
+
+  // Step 3: Download video
+  const videoResponse = await axios.get(result.videoUrl, {
+    responseType: 'arraybuffer',
+    timeout: 120000,
+  });
+
+  if (videoResponse.status !== 200) {
+    throw new Error('Failed to download video');
+  }
+
+  const videoBuffer = Buffer.from(videoResponse.data);
+  const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
+
+  // Step 4: Upload to OSS
+  console.log('Uploading video to OSS...');
+  const ossUrl = await uploadToOSS(videoBuffer, filename);
+  console.log('Video uploaded to OSS:', ossUrl);
+
+  return {
+    taskId,
+    status: result.status,
+    videoUrl: ossUrl,
+    originalVideoUrl: result.videoUrl,
+  };
+}
+
 // 阿里云FC HTTP触发器入口
 exports.handler = async (event, context) => {
   // 设置CORS响应头
@@ -301,6 +379,50 @@ exports.handler = async (event, context) => {
     }
 
     switch (action) {
+      case 'generate': {
+        // Complete workflow: create + poll + download + upload to OSS
+        const { prompt, media, resolution, ratio, duration, model } = body;
+
+        if (!prompt) {
+          return {
+            statusCode: 400,
+            headers: corsHeaders,
+            body: JSON.stringify({ error: 'Missing prompt' })
+          };
+        }
+
+        if (!media || !Array.isArray(media) || media.length === 0) {
+          return {
+            statusCode: 400,
+            headers: corsHeaders,
+            body: JSON.stringify({ error: 'Missing media array (must contain video or reference_image items)' })
+          };
+        }
+
+        console.log('Generating HappyHorse video (complete workflow):', { 
+          prompt: prompt.substring(0, 100), 
+          mediaCount: media.length,
+          resolution,
+          ratio,
+          duration 
+        });
+
+        const result = await generateVideo(apiKey, {
+          prompt,
+          media,
+          resolution,
+          ratio,
+          duration,
+          model,
+        });
+
+        return {
+          statusCode: 200,
+          headers: corsHeaders,
+          body: JSON.stringify(result)
+        };
+      }
+
       case 'create': {
         const { prompt, media, resolution, ratio, duration, model } = body;
 
@@ -392,7 +514,7 @@ exports.handler = async (event, context) => {
         return {
           statusCode: 400,
           headers: corsHeaders,
-          body: JSON.stringify({ error: 'Invalid action. Use "create", "query", or "wait"' })
+          body: JSON.stringify({ error: 'Invalid action. Use "generate", "create", "query", or "wait"' })
         };
     }
   } catch (error) {
