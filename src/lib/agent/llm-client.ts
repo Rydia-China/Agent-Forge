@@ -103,31 +103,55 @@ function getTitleModel(): string {
 export async function generateTitle(userMessage: string): Promise<string> {
   const client = getClient();
   const model = getTitleModel();
-  const res = await client.chat.completions.create({
+  
+  console.log("[generateTitle] Starting title generation", {
     model,
-    messages: [
-      {
-        role: "system",
-        content:
-          "You generate short titles for chat conversations. Max 20 chars. Output the title only. No quotes. No trailing punctuation.",
-      },
-      {
-        role: "user",
-        content: `Generate a title for this message:\n${userMessage}`,
-      },
-    ],
+    messageLength: userMessage.length,
+    messagePreview: userMessage.slice(0, 50),
   });
   
-  if (!res.choices || res.choices.length === 0) {
-    console.error("[generateTitle] No choices returned from LLM", { model, res });
+  try {
+    const res = await client.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You generate short titles for chat conversations. Max 20 chars. Output the title only. No quotes. No trailing punctuation.",
+        },
+        {
+          role: "user",
+          content: `Generate a title for this message:\n${userMessage}`,
+        },
+      ],
+    });
+    
+    console.log("[generateTitle] LLM response received", {
+      model,
+      choicesCount: res.choices?.length ?? 0,
+      hasContent: !!res.choices?.[0]?.message?.content,
+    });
+    
+    if (!res.choices || res.choices.length === 0) {
+      console.error("[generateTitle] No choices returned from LLM", { model, res });
+      return "New Chat";
+    }
+    
+    const content = res.choices[0]?.message?.content;
+    if (!content) {
+      console.error("[generateTitle] No content in first choice", { model, choice: res.choices[0] });
+      return "New Chat";
+    }
+    
+    const title = content.trim() || "New Chat";
+    console.log("[generateTitle] Title generated successfully", { title });
+    return title;
+  } catch (err: unknown) {
+    console.error("[generateTitle] Error calling LLM", {
+      model,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return "New Chat";
   }
-  
-  const content = res.choices[0]?.message?.content;
-  if (!content) {
-    console.error("[generateTitle] No content in first choice", { model, choice: res.choices[0] });
-    return "New Chat";
-  }
-  
-  return content.trim() || "New Chat";
 }
