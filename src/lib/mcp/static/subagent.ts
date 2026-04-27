@@ -1,18 +1,33 @@
-import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider, ToolContext } from "../types";
-import {
-  runSubAgent,
-  getActiveSubAgent,
-  getTraceTree,
-  MAX_SUBAGENT_DEPTH,
-  type ModelUsageType,
-  type SubAgentResult,
-  type SubAgentProgressCallbacks,
-} from "@/lib/agent/subagent";
+import { MAX_SUBAGENT_DEPTH, type ModelUsageType } from "@/lib/agent/subagent";
 import { resolveModel } from "@/lib/agent/models";
-import type { PrismaClient } from "@/generated/prisma";
+import {
+  runSubAgentTask,
+  continueSubAgent,
+  getSubAgentTrace,
+  getTaskResults,
+  describeTask,
+  createProgressCallbacks,
+  formatResult,
+  type TaskInput,
+} from "@/lib/services/subagent-task-service";
+import { launchAsyncTask } from "@/lib/services/subagent-async-service";
+import {
+  createAsyncRecord,
+  persistResult,
+  persistFailure,
+} from "@/lib/services/subagent-persistence-service";
+import {
+  scheduleTask,
+  cancelSchedule,
+  listSchedules,
+} from "@/lib/services/subagent-schedule-service";
+
+/* ================================================================== */
+/*  Response helpers                                                   */
+/* ================================================================== */
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -22,61 +37,42 @@ function json(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
 
-/* ------------------------------------------------------------------ */
-/*  JSON helpers                                                       */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
+/*  Timeout racing helper                                              */
+/* ================================================================== */
 
-type JsonPrimitive = string | number | boolean | null;
-type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
-type JsonObject = { [key: string]: JsonValue };
-
-function isJsonValue(value: unknown): value is JsonValue {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
-    return true;
-  }
-  if (Array.isArray(value)) {
-    return value.every(isJsonValue);
-  }
-  if (typeof value === "object") {
-    return Object.values(value).every(isJsonValue);
-  }
-  return false;
+interface RaceOk<T> {
+  timedOut: false;
+  value: T;
+}
+interface RaceTimeout {
+  timedOut: true;
 }
 
-function isJsonObject(value: unknown): value is JsonObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value) && isJsonValue(value);
+function raceTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+): Promise<RaceOk<T> | RaceTimeout> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<RaceTimeout>((resolve) => {
+    timer = setTimeout(() => resolve({ timedOut: true }), ms);
+  });
+  const wrapped = promise.then(
+    (value): RaceOk<T> => {
+      if (timer) clearTimeout(timer);
+      return { timedOut: false, value };
+    },
+    (err: unknown) => {
+      if (timer) clearTimeout(timer);
+      throw err;
+    },
+  );
+  return Promise.race([wrapped, timeout]);
 }
 
-function normalizeJsonObject(value: unknown): JsonObject {
-  const normalized: unknown = JSON.parse(JSON.stringify(value));
-  return isJsonObject(normalized) ? normalized : {};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-type GetOrCreateSessionFn =
-  typeof import("@/lib/services/chat-session-service").getOrCreateSession;
-
-async function getPrisma(): Promise<PrismaClient> {
-  const db = await import("@/lib/db");
-  return db.prisma;
-}
-
-async function getSessionResolver(): Promise<GetOrCreateSessionFn> {
-  const service = await import("@/lib/services/chat-session-service");
-  return service.getOrCreateSession;
-}
-
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 /*  Zod schemas                                                        */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 
 const USAGE_TYPES: [ModelUsageType, ...ModelUsageType[]] = [
   "task-execution",
@@ -100,8 +96,6 @@ const TaskSchema = z.object({
   keyJsonTitle: z.string().min(1).optional(),
   includeTrace: z.boolean().optional(),
 });
-
-type TaskInput = z.infer<typeof TaskSchema>;
 
 const RunParams = z.object({
   tasks: z.array(TaskSchema).min(1, "tasks array must not be empty"),
@@ -138,306 +132,9 @@ const WaitParams = z.object({
   seconds: z.number().positive().max(300),
 });
 
-/* ------------------------------------------------------------------ */
-/*  Timeout racing helper                                              */
-/* ------------------------------------------------------------------ */
-
-interface RaceOk<T> { timedOut: false; value: T }
-interface RaceTimeout { timedOut: true }
-
-function raceTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-): Promise<RaceOk<T> | RaceTimeout> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<RaceTimeout>((resolve) => {
-    timer = setTimeout(() => resolve({ timedOut: true }), ms);
-  });
-  const wrapped = promise.then(
-    (value): RaceOk<T> => {
-      if (timer) clearTimeout(timer);
-      return { timedOut: false, value };
-    },
-    (err: unknown) => {
-      if (timer) clearTimeout(timer);
-      throw err;
-    },
-  );
-  return Promise.race([wrapped, timeout]);
-}
-
-/* ------------------------------------------------------------------ */
-/*  Async persistence                                                  */
-/* ------------------------------------------------------------------ */
-
-function dbStatusFromResult(status: SubAgentResult["status"]): string {
-  return status;
-}
-
-function publicStatus(status: string): string {
-  return status === "completed" ? "ok" : status;
-}
-
-function formatResult(
-  result: SubAgentResult & { agentId: string },
-  includeTrace?: boolean,
-): Record<string, unknown> {
-  const base: Record<string, unknown> = {
-    status: result.status === "completed" ? "ok" : result.status,
-    result: result.output,
-    agentId: result.agentId,
-    model: result.model,
-    durationMs: result.durationMs,
-    toolCallCount: result.toolCallCount,
-  };
-  if (result.error) base.error = result.error;
-  if (result.validated !== undefined) base.validated = result.validated;
-  if (result.attempts !== undefined) base.attempts = result.attempts;
-  if (result.keyJsonTitle) base.keyJsonTitle = result.keyJsonTitle;
-  if (includeTrace) base.trace = result.trace;
-  return base;
-}
-
-async function createAsyncRecord(
-  task: TaskInput,
-  context?: ToolContext,
-): Promise<string> {
-  const getOrCreateSession = await getSessionResolver();
-  const prisma = await getPrisma();
-  const session = await getOrCreateSession(context?.sessionId, context?.userName);
-  const row = await prisma.subAgent.create({
-    data: {
-      sessionId: session.id,
-      depth: context?.agentDepth ?? 0,
-      status: "pending",
-      config: normalizeJsonObject({ source: "mcp.subagent", task }),
-    },
-    select: { id: true },
-  });
-  return row.id;
-}
-
-async function persistResult(
-  taskId: string,
-  result: SubAgentResult & { agentId: string },
-): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.subAgent.update({
-    where: { id: taskId },
-    data: {
-      status: dbStatusFromResult(result.status),
-      output: result.output || null,
-      error: result.error ?? null,
-      trace: normalizeJsonObject(formatResult(result, true)),
-    },
-  });
-}
-
-async function persistFailure(
-  taskId: string,
-  error: string,
-  model: string,
-  durationMs: number,
-): Promise<void> {
-  const prisma = await getPrisma();
-  await prisma.subAgent.update({
-    where: { id: taskId },
-    data: {
-      status: "failed",
-      output: null,
-      error,
-      trace: normalizeJsonObject({
-        status: "failed",
-        result: "",
-        error,
-        model,
-        durationMs,
-        toolCallCount: 0,
-      }),
-    },
-  });
-}
-
-async function runAsyncSubAgent(
-  taskId: string,
-  task: TaskInput,
-  taskIndex: number,
-  toolContext?: ToolContext,
-): Promise<void> {
-  const t0 = Date.now();
-  try {
-    const prisma = await getPrisma();
-    await prisma.subAgent.update({
-      where: { id: taskId },
-      data: { status: "running" },
-    });
-
-    const progressCbs: SubAgentProgressCallbacks = {
-      onToolStart: (toolName, iteration) => {
-        toolContext?.onProgress?.({
-          type: "subagent_step",
-          data: { taskIndex, tool: toolName, iteration, action: "start" },
-        });
-      },
-      onToolEnd: (toolName, durationMs, error) => {
-        toolContext?.onProgress?.({
-          type: "subagent_step",
-          data: { taskIndex, tool: toolName, durationMs, action: "end", error },
-        });
-      },
-    };
-
-    const result = await runSubAgent(task, toolContext, progressCbs);
-    await persistResult(taskId, result);
-
-    toolContext?.onProgress?.({
-      type: "subagent_task_done",
-      data: {
-        index: taskIndex,
-        status: result.status === "completed" ? "ok" : result.status,
-        durationMs: result.durationMs,
-        toolCallCount: result.toolCallCount,
-        agentId: result.agentId,
-        taskId,
-      },
-    });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(`[subagent:${taskId}]`, err);
-
-    toolContext?.onProgress?.({
-      type: "subagent_task_done",
-      data: {
-        index: taskIndex,
-        status: "failed",
-        durationMs: Date.now() - t0,
-        toolCallCount: 0,
-        taskId,
-      },
-    });
-
-    await persistFailure(taskId, message, resolveModel(task.model), Date.now() - t0)
-      .catch(() => { /* best effort */ });
-  }
-}
-
-async function launchAsyncTask(
-  task: TaskInput,
-  taskIndex: number,
-  context?: ToolContext,
-  onDone?: (taskId: string) => void,
-): Promise<string> {
-  const taskId = await createAsyncRecord(task, context);
-  void runAsyncSubAgent(taskId, task, taskIndex, context)
-    .then(() => onDone?.(taskId))
-    .catch((err: unknown) => {
-      console.error(`[subagent:${taskId}] async launcher failed`, err);
-    });
-  return taskId;
-}
-
-/* ------------------------------------------------------------------ */
-/*  In-memory schedules                                                */
-/* ------------------------------------------------------------------ */
-
-type ScheduleStatus = "scheduled" | "running" | "completed" | "failed" | "cancelled";
-
-interface ScheduleRecord {
-  id: string;
-  task: TaskInput;
-  status: ScheduleStatus;
-  runAt: string;
-  createdAt: string;
-  sessionId?: string;
-  taskId?: string;
-  error?: string;
-  timer: ReturnType<typeof setTimeout>;
-}
-
-declare global {
-  var __agentForgeSubagentSchedules: Map<string, ScheduleRecord> | undefined;
-}
-
-const schedules = globalThis.__agentForgeSubagentSchedules ?? new Map<string, ScheduleRecord>();
-globalThis.__agentForgeSubagentSchedules = schedules;
-
-function serializeSchedule(record: ScheduleRecord): Record<string, unknown> {
-  return {
-    scheduleId: record.id,
-    status: record.status,
-    runAt: record.runAt,
-    createdAt: record.createdAt,
-    sessionId: record.sessionId,
-    taskId: record.taskId,
-    error: record.error,
-    task: {
-      instruction: record.task.instruction,
-      mcpScope: record.task.mcpScope ?? [],
-      model: resolveModel(record.task.model),
-    },
-  };
-}
-
-/* ------------------------------------------------------------------ */
-/*  Task display helpers                                               */
-/* ------------------------------------------------------------------ */
-
-function taskMode(task: TaskInput): string {
-  return task.mcpScope?.length ? "tool-loop" : "single-shot";
-}
-
-function describeTask(task: TaskInput, index: number): Record<string, unknown> {
-  const usageType = task.usageType ?? (task.mcpScope?.length ? "task-execution" : "prompt-execution");
-  return {
-    index,
-    instruction: task.instruction.slice(0, 80),
-    model: resolveModel(task.model),
-    usageType,
-    mcpScope: task.mcpScope ?? [],
-    mode: taskMode(task),
-  };
-}
-
-function progressCallbacks(
-  context: ToolContext | undefined,
-  taskIndex: number,
-): SubAgentProgressCallbacks {
-  return {
-    onToolStart: (toolName, iteration) => {
-      context?.onProgress?.({
-        type: "subagent_step",
-        data: { taskIndex, tool: toolName, iteration, action: "start" },
-      });
-    },
-    onToolEnd: (toolName, durationMs, error) => {
-      context?.onProgress?.({
-        type: "subagent_step",
-        data: { taskIndex, tool: toolName, durationMs, action: "end", error },
-      });
-    },
-  };
-}
-
-function emitDone(
-  context: ToolContext | undefined,
-  taskIndex: number,
-  result: SubAgentResult & { agentId: string },
-): void {
-  context?.onProgress?.({
-    type: "subagent_task_done",
-    data: {
-      index: taskIndex,
-      status: result.status === "completed" ? "ok" : result.status,
-      durationMs: result.durationMs,
-      toolCallCount: result.toolCallCount,
-      agentId: result.agentId,
-    },
-  });
-}
-
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 /*  Task input schema (shared across tools)                            */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 
 const TASK_ITEM_SCHEMA = {
   type: "object" as const,
@@ -516,9 +213,9 @@ const TASK_ITEM_SCHEMA = {
   required: ["instruction"],
 };
 
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 /*  Provider                                                           */
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 
 export const subagentMcp: McpProvider = {
   name: "subagent",
@@ -716,7 +413,7 @@ export const subagentMcp: McpProvider = {
         if (currentDepth >= MAX_SUBAGENT_DEPTH) {
           return text(
             `SubAgent nesting depth limit reached (max ${MAX_SUBAGENT_DEPTH}). ` +
-            `Current depth: ${currentDepth}. Simplify your task decomposition.`,
+              `Current depth: ${currentDepth}. Simplify your task decomposition.`,
           );
         }
 
@@ -728,24 +425,43 @@ export const subagentMcp: McpProvider = {
         const results = await Promise.allSettled(
           tasks.map(async (task, taskIndex) => {
             const timeoutSec = task.timeout;
-            const callbacks = progressCallbacks(context, taskIndex);
+            const callbacks = createProgressCallbacks(context, taskIndex);
 
             if (!timeoutSec) {
-              const result = await runSubAgent(task, context, callbacks);
-              emitDone(context, taskIndex, result);
+              const result = await runSubAgentTask(task, context, callbacks);
+              context?.onProgress?.({
+                type: "subagent_task_done",
+                data: {
+                  index: taskIndex,
+                  status: result.status === "completed" ? "ok" : result.status,
+                  durationMs: result.durationMs,
+                  toolCallCount: result.toolCallCount,
+                  agentId: result.agentId,
+                },
+              });
               return { ...formatResult(result, task.includeTrace), promoted: false as const };
             }
 
-            const agentPromise = runSubAgent(task, context, callbacks);
+            const agentPromise = runSubAgentTask(task, context, callbacks);
             const race = await raceTimeout(agentPromise, timeoutSec * 1000);
 
             if (!race.timedOut) {
-              emitDone(context, taskIndex, race.value);
+              context?.onProgress?.({
+                type: "subagent_task_done",
+                data: {
+                  index: taskIndex,
+                  status: race.value.status === "completed" ? "ok" : race.value.status,
+                  durationMs: race.value.durationMs,
+                  toolCallCount: race.value.toolCallCount,
+                  agentId: race.value.agentId,
+                },
+              });
               return { ...formatResult(race.value, task.includeTrace), promoted: false as const };
             }
 
+            // Timeout: promote to async
             const taskId = await createAsyncRecord(task, context);
-            const prisma = await getPrisma();
+            const { prisma } = await import("@/lib/db");
             await prisma.subAgent.update({
               where: { id: taskId },
               data: { status: "running" },
@@ -754,8 +470,11 @@ export const subagentMcp: McpProvider = {
               .then((result) => persistResult(taskId, result))
               .catch(async (err: unknown) => {
                 const msg = err instanceof Error ? err.message : String(err);
-                await persistFailure(taskId, msg, resolveModel(task.model), timeoutSec * 1000)
-                  .catch(() => { /* best effort */ });
+                await persistFailure(taskId, msg, resolveModel(task.model), timeoutSec * 1000).catch(
+                  () => {
+                    /* best effort */
+                  },
+                );
               });
 
             return {
@@ -776,8 +495,7 @@ export const subagentMcp: McpProvider = {
             index: i,
             status: "error" as const,
             result: "",
-            error:
-              r.reason instanceof Error ? r.reason.message : String(r.reason),
+            error: r.reason instanceof Error ? r.reason.message : String(r.reason),
           };
         });
 
@@ -815,39 +533,8 @@ export const subagentMcp: McpProvider = {
         if (parsed.taskId) ids.push(parsed.taskId);
         if (parsed.taskIds) ids.push(...parsed.taskIds);
         if (ids.length === 0) return text("No task IDs provided");
-        const prisma = await getPrisma();
 
-        const rows = await prisma.subAgent.findMany({
-          where: { id: { in: ids } },
-          select: {
-            id: true,
-            status: true,
-            output: true,
-            error: true,
-            trace: true,
-            updatedAt: true,
-          },
-        });
-
-        const byId = new Map(rows.map((r) => [r.id, r]));
-        const results = ids.map((id) => {
-          const row = byId.get(id);
-          if (!row) return { taskId: id, status: "not_found" };
-          if (row.status === "completed" || row.status === "failed" || row.status === "max_iterations") {
-            if (isRecord(row.trace)) {
-              return { taskId: id, ...row.trace };
-            }
-            return {
-              taskId: id,
-              status: publicStatus(row.status),
-              result: row.output ?? "",
-              error: row.error ?? undefined,
-              updatedAt: row.updatedAt.toISOString(),
-            };
-          }
-          return { taskId: id, status: row.status, updatedAt: row.updatedAt.toISOString() };
-        });
-
+        const results = await getTaskResults(ids);
         return json(results);
       }
 
@@ -856,36 +543,13 @@ export const subagentMcp: McpProvider = {
       /* ------------------------------------------------------------ */
       case "get_trace": {
         const parsed = GetTraceParams.parse(args);
-
-        if (parsed.agentId) {
-          if (parsed.tree) {
-            const tree = getTraceTree(parsed.agentId);
-            if (tree) return json(tree);
-            return text(`SubAgent "${parsed.agentId}" not found in memory`);
-          }
-          const agent = getActiveSubAgent(parsed.agentId);
-          if (agent) return json(agent.getTrace());
-          return text(`SubAgent "${parsed.agentId}" not found in memory (may have been garbage collected)`);
+        try {
+          const trace = await getSubAgentTrace(parsed.agentId, parsed.taskId, parsed.tree);
+          return json(trace);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          return text(message);
         }
-
-        if (parsed.taskId) {
-          const prisma = await getPrisma();
-          const row = await prisma.subAgent.findUnique({
-            where: { id: parsed.taskId },
-            select: { trace: true, status: true, error: true },
-          });
-          if (!row) return text(`Task "${parsed.taskId}" not found`);
-          if (row.status === "running" || row.status === "pending") {
-            return json({ taskId: parsed.taskId, status: row.status, note: "trace not available until completion" });
-          }
-          if (isRecord(row.trace)) {
-            const trace = row.trace.trace;
-            return json(trace ?? row.trace);
-          }
-          return json({ taskId: parsed.taskId, status: row.status, error: row.error ?? undefined, trace: null });
-        }
-
-        return text("Provide either agentId or taskId");
       }
 
       /* ------------------------------------------------------------ */
@@ -894,51 +558,55 @@ export const subagentMcp: McpProvider = {
       case "continue": {
         const { agentId, feedback, includeTrace } = ContinueParams.parse(args);
 
-        const agent = getActiveSubAgent(agentId);
-        if (!agent) {
-          return text(
-            `SubAgent "${agentId}" not found. It may have been garbage collected. ` +
-            "Create a new subagent with `subagent__run` instead.",
+        try {
+          context?.onProgress?.({
+            type: "subagent_tasks",
+            data: {
+              tasks: [
+                {
+                  index: 0,
+                  instruction: `[continue] ${feedback.slice(0, 60)}`,
+                  model: "unknown",
+                  mcpScope: [],
+                  mode: "continue",
+                },
+              ],
+            },
+          });
+
+          const result = await continueSubAgent(
+            agentId,
+            feedback,
+            context,
+            createProgressCallbacks(context, 0),
           );
-        }
 
-        context?.onProgress?.({
-          type: "subagent_tasks",
-          data: {
-            tasks: [{
+          context?.onProgress?.({
+            type: "subagent_task_done",
+            data: {
               index: 0,
-              instruction: `[continue] ${feedback.slice(0, 60)}`,
-              model: agent.getTrace().model,
-              mcpScope: [],
-              mode: "continue",
-            }],
-          },
-        });
+              status: result.status === "completed" ? "ok" : result.status,
+              durationMs: result.durationMs,
+              toolCallCount: result.toolCallCount,
+              agentId,
+            },
+          });
 
-        const result = await agent.continue(feedback, context, progressCallbacks(context, 0));
-
-        context?.onProgress?.({
-          type: "subagent_task_done",
-          data: {
-            index: 0,
+          const base: Record<string, unknown> = {
             status: result.status === "completed" ? "ok" : result.status,
+            result: result.output,
+            agentId,
+            model: result.model,
             durationMs: result.durationMs,
             toolCallCount: result.toolCallCount,
-            agentId,
-          },
-        });
-
-        const base: Record<string, unknown> = {
-          status: result.status === "completed" ? "ok" : result.status,
-          result: result.output,
-          agentId,
-          model: result.model,
-          durationMs: result.durationMs,
-          toolCallCount: result.toolCallCount,
-        };
-        if (result.error) base.error = result.error;
-        if (includeTrace) base.trace = result.trace;
-        return json(base);
+          };
+          if (result.error) base.error = result.error;
+          if (includeTrace) base.trace = result.trace;
+          return json(base);
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          return text(message);
+        }
       }
 
       /* ------------------------------------------------------------ */
@@ -955,7 +623,8 @@ export const subagentMcp: McpProvider = {
         if (hasCron) {
           return json({
             status: "unsupported",
-            error: "Cron scheduling was part of the removed scheduler service and is not available in the current codebase. Use runAt for one-time schedules or run_async for manual async execution.",
+            error:
+              "Cron scheduling was part of the removed scheduler service and is not available in the current codebase. Use runAt for one-time schedules or run_async for manual async execution.",
           });
         }
 
@@ -963,64 +632,26 @@ export const subagentMcp: McpProvider = {
         if (Number.isNaN(runAt.getTime())) {
           return text(`Invalid runAt datetime: ${parsed.runAt}`);
         }
-        const delayMs = runAt.getTime() - Date.now();
-        if (delayMs <= 0) {
-          return text("runAt must be in the future.");
+
+        try {
+          const scheduleId = await scheduleTask(parsed.task, runAt, context);
+          const schedule = listSchedules().find((s) => s.scheduleId === scheduleId);
+          return json(schedule ?? { scheduleId, status: "scheduled" });
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          return text(message);
         }
-
-        const getOrCreateSession = await getSessionResolver();
-        const session = await getOrCreateSession(context?.sessionId, context?.userName);
-        const scheduleId = `sched_${randomUUID()}`;
-        const scheduledContext: ToolContext = {
-          ...context,
-          sessionId: session.id,
-        };
-        const timer = setTimeout(() => {
-          const record = schedules.get(scheduleId);
-          if (!record || record.status === "cancelled") return;
-          record.status = "running";
-          void launchAsyncTask(parsed.task, 0, scheduledContext, (taskId) => {
-            const doneRecord = schedules.get(scheduleId);
-            if (!doneRecord || doneRecord.status === "cancelled") return;
-            doneRecord.taskId = taskId;
-            doneRecord.status = "completed";
-          })
-            .then((taskId) => {
-              const runningRecord = schedules.get(scheduleId);
-              if (runningRecord) runningRecord.taskId = taskId;
-            })
-            .catch((err: unknown) => {
-              const failedRecord = schedules.get(scheduleId);
-              if (!failedRecord) return;
-              failedRecord.status = "failed";
-              failedRecord.error = err instanceof Error ? err.message : String(err);
-            });
-        }, delayMs);
-
-        const record: ScheduleRecord = {
-          id: scheduleId,
-          task: parsed.task,
-          status: "scheduled",
-          runAt: runAt.toISOString(),
-          createdAt: new Date().toISOString(),
-          sessionId: session.id,
-          timer,
-        };
-        schedules.set(scheduleId, record);
-        return json(serializeSchedule(record));
       }
 
       case "cancel_schedule": {
         const { scheduleId } = CancelScheduleParams.parse(args);
-        const record = schedules.get(scheduleId);
-        if (!record) return text(`Schedule not found: ${scheduleId}`);
-        if (record.status === "scheduled") clearTimeout(record.timer);
-        record.status = "cancelled";
-        return json(serializeSchedule(record));
+        const result = cancelSchedule(scheduleId);
+        if (!result) return text(`Schedule not found: ${scheduleId}`);
+        return json(result);
       }
 
       case "list_schedules": {
-        return json([...schedules.values()].map(serializeSchedule));
+        return json(listSchedules());
       }
 
       case "wait": {
