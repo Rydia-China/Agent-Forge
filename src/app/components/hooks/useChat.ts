@@ -87,6 +87,7 @@ export function useChat(
   /* ---- generateTitle ---- */
 
   const generateTitle = useCallback(async (sid: string, seed: string) => {
+    console.log("[useChat] Generating title", { sessionId: sid, messagePreview: seed.slice(0, 50) });
     try {
       const result = await fetchJson<{ id: string; title: string }>(
         `/api/sessions/${sid}/title`,
@@ -96,10 +97,14 @@ export function useChat(
           body: JSON.stringify({ message: seed }),
         },
       );
+      console.log("[useChat] Title generated successfully", { title: result.title });
       setTitle(result.title);
       onTitleChangeRef.current(result.title);
-    } catch {
-      /* best effort */
+    } catch (err: unknown) {
+      console.error("[useChat] Failed to generate title", {
+        sessionId: sid,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }, []);
 
