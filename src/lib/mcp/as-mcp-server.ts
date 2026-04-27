@@ -7,7 +7,6 @@ import {
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types";
 import { registry } from "./registry";
-import { initMcp } from "./init";
 import { runAgent } from "@/lib/agent/agent";
 import { writeChatLog } from "@/lib/agent/chat-log";
 import { prisma } from "@/lib/db";
@@ -22,10 +21,11 @@ const AgentChatArgs = z.object({
  * Create a low-level MCP Server instance wired to our MCP Registry.
  * Uses setRequestHandler for full control over JSON Schema tools.
  * Called per-request (stateless mode).
+ * 
+ * Note: MCP providers are initialized at server startup via instrumentation.ts,
+ * not on-demand during requests.
  */
 export async function createAsMcpServer(): Promise<Server> {
-  await initMcp();
-
   const server = new Server(
     { name: "agent-forge", version: "1.0.0" },
     {
@@ -91,7 +91,7 @@ export async function createAsMcpServer(): Promise<Server> {
       orderBy: { name: "asc" },
     });
     return {
-      resources: skills.map((s) => ({
+      resources: skills.map((s: { name: string; description: string }) => ({
         uri: `skill://${s.name}`,
         name: s.name,
         description: s.description,
@@ -136,12 +136,13 @@ export async function createAsMcpServer(): Promise<Server> {
 /**
  * Create a scoped MCP Server that only exposes a single provider's tools.
  * Tool names are unqualified (no provider prefix) since the server IS the provider.
+ * 
+ * Note: MCP providers are initialized at server startup via instrumentation.ts,
+ * not on-demand during requests.
  */
 export async function createScopedMcpServer(
   providerName: string,
 ): Promise<Server | null> {
-  await initMcp();
-
   const provider = registry.getProvider(providerName);
   if (!provider) return null;
 
