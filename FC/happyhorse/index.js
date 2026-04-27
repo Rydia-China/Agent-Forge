@@ -114,40 +114,50 @@ async function createTask(apiKey, request) {
   const videoItem = media.find(item => item.type === 'video');
   const imageItems = media.filter(item => item.type === 'reference_image');
 
-  // Build old-style flat request format
-  const legacyRequest = {
+  // Build request format according to new API spec
+  const request = {
     prompt,
-    genType: (videoItem || imageItems.length > 0) ? 'i2v' : 't2v', // i2v if any media, otherwise t2v
   };
 
-  // Add image URLs array (video goes first if present)
-  const imageUrls = [];
+  // Auto-infer genType based on media:
+  // - has videoUrl → v2v
+  // - multiple images → r2v
+  // - single image → i2v
+  // - no media → t2v
   if (videoItem) {
-    imageUrls.push(videoItem.url);
+    request.genType = 'v2v';
+    request.videoUrl = videoItem.url; // Single videoUrl (not array)
   }
+  
   if (imageItems.length > 0) {
-    imageUrls.push(...imageItems.map(item => item.url));
+    request.imageUrls = imageItems.map(item => item.url);
+    // Auto-infer genType if not already set by video
+    if (!videoItem) {
+      request.genType = imageItems.length > 1 ? 'r2v' : 'i2v';
+    }
   }
-  if (imageUrls.length > 0) {
-    legacyRequest.imageUrls = imageUrls;
+  
+  // If no media at all, default to t2v
+  if (!videoItem && imageItems.length === 0) {
+    request.genType = 't2v';
   }
 
   // Add optional parameters
   if (resolution) {
-    legacyRequest.resolution = resolution;
+    request.resolution = resolution;
   }
   if (ratio) {
-    legacyRequest.ratio = ratio;
+    request.ratio = ratio;
   }
   if (duration) {
-    legacyRequest.duration = duration;
+    request.duration = duration;
   }
 
-  console.log('HappyHorse request (legacy format):', JSON.stringify(legacyRequest, null, 2));
+  console.log('HappyHorse request:', JSON.stringify(request, null, 2));
 
   const response = await axios.post(
     `${HAPPYHORSE_BASE_URL}/api/v2/open/aigc/hh`,
-    legacyRequest,
+    request,
     {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
