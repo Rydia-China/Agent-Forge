@@ -1,6 +1,27 @@
 import OSS from "ali-oss";
 import { z } from "zod";
-import path from "path";
+
+/* ------------------------------------------------------------------ */
+/*  Path utilities (pure string operations)                           */
+/* ------------------------------------------------------------------ */
+
+function getExtname(filename: string): string {
+  const lastDot = filename.lastIndexOf(".");
+  const lastSlash = Math.max(filename.lastIndexOf("/"), filename.lastIndexOf("\\"));
+  if (lastDot > lastSlash && lastDot > 0) {
+    return filename.slice(lastDot);
+  }
+  return "";
+}
+
+function getBasename(filename: string, ext?: string): string {
+  const lastSlash = Math.max(filename.lastIndexOf("/"), filename.lastIndexOf("\\"));
+  let base = lastSlash >= 0 ? filename.slice(lastSlash + 1) : filename;
+  if (ext && base.endsWith(ext)) {
+    base = base.slice(0, -ext.length);
+  }
+  return base;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Zod schemas                                                       */
@@ -54,8 +75,8 @@ function buildPublicUrl(objectName: string): string {
  * - Short: ~20 chars total
  */
 export function generateFilename(originalName: string, semanticPrefix?: string): string {
-  const ext = path.extname(originalName) || "";
-  const basename = path.basename(originalName, ext);
+  const ext = getExtname(originalName) || "";
+  const basename = getBasename(originalName, ext);
 
   // Extract semantic prefix: use provided or first meaningful word from filename
   let prefix = semanticPrefix || basename.toLowerCase()
@@ -122,7 +143,7 @@ export async function uploadFromUrl(
   const resolvedName =
     filename ??
     generateFilename(
-      path.basename(new URL(sourceUrl).pathname) ||
+      getBasename(new URL(sourceUrl).pathname) ||
         `upload${extFromContentType(res.headers.get("content-type"))}`,
     );
 
