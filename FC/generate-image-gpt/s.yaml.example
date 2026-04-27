@@ -31,10 +31,9 @@ resources:
         OSS_BUCKET: your-bucket-name
         OSS_REGION: us-west-1
         OSS_ACCESS_KEY_SECRET: YOUR_OSS_ACCESS_KEY_SECRET
-        GPT_IMAGE_API_KEY: YOUR_GPT_IMAGE_API_KEY
-        GPT_IMAGE_MODEL: gpt-image-2
         OSS_ENDPOINT: https://oss-us-west-1.aliyuncs.com
-        GPT_IMAGE_BASE_URL: https://zenmux.ai/api/v1
+        GPT_IMAGE2_BASE_URL: https://mm-internal-cn.leonecloud.com
+        GPT_IMAGE2_TOKEN: YOUR_GPT_IMAGE2_TOKEN
       code: .
       triggers:
         - triggerConfig:
