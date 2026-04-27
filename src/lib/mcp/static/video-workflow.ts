@@ -5,7 +5,7 @@
  * Data queries (2): get_episode, get_status
  * Novel-level image gen (2): generate_portrait, generate_scene (single/grid/hd)
  * EP-level image gen (1): generate_costume
- * Video gen (3): generate_video, extract_tail, concat_clips
+ * Video gen (1): execute_video_shot
  *
  * All generate_* tools auto-handle key/scope/category/KeyResource/domain_resources.
  */
@@ -13,12 +13,8 @@
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider, ToolContext } from "../types";
-import * as keyResourceService from "@/lib/services/key-resource-service";
+import * as videoWorkflowService from "@/lib/services/video-workflow-service";
 import { prisma } from "@/lib/db";
-import { getNovelLevelData } from "@/lib/services/video-workflow-service";
-import { compileTemplate } from "@/lib/mcp/static/langfuse-helpers";
-import { callFcGenerateVideo, callFcCropVideo } from "@/lib/services/fc-video-client";
-import type { Prisma } from "@/generated/prisma";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -32,213 +28,12 @@ function json(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-interface AnalyzedSubLocation {
-  id: string;
-  name: string;
-  visualPrompt: string;
-}
-
-interface AnalyzedLocation {
-  id: string;
-  name: string;
-  visualPrompt: string;
-  mode: "single" | "grid";
-  realSubs: AnalyzedSubLocation[];
-  gridSize: number;
-}
-
-interface RunningTaskSummary {
-  id: string;
-  status: string;
-  instructionPreview: string;
-}
-
-function analyzeLocations(locationBible: Array<Record<string, unknown>>): AnalyzedLocation[] {
-  return locationBible
-    .map((location): AnalyzedLocation | null => {
-      const name = typeof location.name === "string" ? location.name : null;
-      if (!name) return null;
-
-      const id = typeof location.id === "string" ? location.id : name;
-      const visualPrompt = typeof location.visual_prompt === "string" ? location.visual_prompt : "";
-      const rawSubs = Array.isArray(location.sub_locations) ? location.sub_locations : [];
-      const realSubs = rawSubs
-        .filter(isRecord)
-        .filter((sub) => sub.id !== id)
-        .map((sub): AnalyzedSubLocation | null => {
-          const subName = typeof sub.name === "string" ? sub.name : null;
-          if (!subName) return null;
-          return {
-            id: typeof sub.id === "string" ? sub.id : subName,
-            name: subName,
-            visualPrompt: typeof sub.visual_prompt === "string" ? sub.visual_prompt : "",
-          };
-        })
-        .filter((sub): sub is AnalyzedSubLocation => sub !== null);
-
-      return {
-        id,
-        name,
-        visualPrompt,
-        mode: realSubs.length >= 2 ? "grid" : "single",
-        realSubs,
-        gridSize: realSubs.length + 1,
-      };
-    })
-    .filter((location): location is AnalyzedLocation => location !== null);
-}
-
-async function getRunningEpExecutorTasks(
-  novelId: string,
-  scriptKey: string,
-): Promise<RunningTaskSummary[]> {
-  void novelId;
-  void scriptKey;
-  return [];
-}
-
-async function getRunningExecutorTasks(novelId: string): Promise<RunningTaskSummary[]> {
-  void novelId;
-  return [];
-}
-
-async function setKeyResourceMetadata(
-  id: string,
-  category: string,
-  title: string,
-): Promise<void> {
-  await prisma.$executeRaw`
-    UPDATE "KeyResource"
-    SET category = ${category},
-        title = ${title},
-        "updatedAt" = NOW()
-    WHERE id = ${id}
-  `;
-}
-
-async function runRestoredSingleShotSubAgent(
-  input: { instruction: string; model: string; outputSchema: unknown },
-  context?: ToolContext,
-): Promise<{ status: "completed" | "failed"; output: string; error?: string; attempts: number }> {
-  void input;
-  void context;
-  return {
-    status: "failed",
-    output: "",
-    error: "video_workflow MCP restored; historical synchronous subagent runner is not restored",
-    attempts: 0,
-  };
-}
-
-/* ---- Scene structure analysis: restored locally for video_workflow ---- */
-
-/**
- * Resolve style prompt from DB style preset by unique name.
- * styleName is required — style presets live exclusively in DB.
- */
-async function resolveStyle(
-  styleName: string | undefined,
-): Promise<{ stylePrompt: string; styleRefUrl: string | null }> {
-  if (!styleName) throw new Error("styleName is required — style presets are managed in DB, looked up by name");
-  const preset = await prisma.stylePreset.findUnique({ where: { name: styleName } });
-  if (!preset) throw new Error(`Style preset not found: ${styleName}`);
-  return { stylePrompt: preset.prompt, styleRefUrl: preset.referenceImageUrl };
-}
-
-/** Generate an image, persist to KeyResource (single source of truth). */
-async function generateAndPersistImage(
-  scopeType: string,
-  scopeId: string,
-  key: string,
-  category: string,
-  prompt: string,
-  title: string,
-  refUrls?: string[],
-  model?: string,
-): Promise<{ status: string; key: string; keyResourceId: string; imageUrl: string; version: number }> {
-  void model;
-  const gen = await keyResourceService.generateImage({
-    scopeType,
-    scopeId,
-    key,
-    prompt,
-    refUrls,
-  });
-
-  // Set category + title on KeyResource (single source for UI grouping)
-  await setKeyResourceMetadata(gen.id, category, title);
-
-  return {
-    status: "ok",
-    key: gen.key,
-    keyResourceId: gen.id,
-    imageUrl: gen.imageUrl,
-    version: gen.version,
-  };
-}
-
 /* ------------------------------------------------------------------ */
 /*  Zod Schemas                                                        */
 /* ------------------------------------------------------------------ */
 
 const NovelIdParam = z.object({ novelId: z.string().min(1) });
 const ScriptIdParam = z.object({ scriptId: z.string().min(1) });
-
-const GeneratePortraitParams = z.object({
-  novelId: z.string().min(1),
-  characterName: z.string().min(1),
-  prompt: z.string().optional(),
-  referenceUrls: z.array(z.string().url()).optional(),
-  styleName: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
-});
-
-const GenerateSceneParams = z.object({
-  novelId: z.string().min(1),
-  sceneName: z.string().min(1),
-  referenceUrls: z.array(z.string().url()).optional(),
-  model: z.string().min(1).optional(),
-  mode: z.enum(["single", "grid", "hd"]).default("single"),
-});
-
-const GenerateCostumeParams = z.object({
-  scriptId: z.string().min(1),
-  characterName: z.string().min(1),
-  referenceUrls: z.array(z.string().url()).optional(),
-  styleName: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
-});
-
-const PlanVideoShotsParams = z.object({
-  scriptId: z.string().min(1),
-  scriptContent: z.string().min(1),
-  shotType: z.string().min(1),
-  model: z.string().optional(),
-});
-
-const ExecuteVideoShotParams = z.object({
-  scriptId: z.string().min(1),
-  key: z.string().min(1),
-  shotPrompt: z.string().min(1),
-  definition: z.string().min(1),
-  duration: z.number().min(4).max(15),
-  previousVideoUrl: z.string().url().optional(),
-  title: z.string().optional(),
-});
-
-const GetStatusParams = z.object({
-  scriptId: z.string().min(1).optional(),
-  novelId: z.string().min(1).optional(),
-  mediaType: z.enum(["video", "image", "json"]).optional(),
-  keyPattern: z.string().optional(),
-}).refine(
-  (d) => d.scriptId || d.novelId,
-  { message: "At least one of scriptId or novelId is required" },
-);
 
 /* ------------------------------------------------------------------ */
 /*  Tool Definitions                                                   */
@@ -387,32 +182,13 @@ const TOOLS: Tool[] = [
     },
   },
 
-  // --- Video Planning ---
-  {
-    name: "plan_video_shots",
-    description:
-      "Generate video shot plan for a script segment using the video_prompt_generator template from Langfuse. " +
-      "The tool fetches the template programmatically (no LLM relay), runs a single-shot subagent (GLM-5-turbo by default), " +
-      "and returns structured JSON with scenes/shots. Call once per script segment (pre_choice / each outcome). " +
-      "Multiple calls can run in parallel.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        scriptId: { type: "string", description: "Episode script DB ID — used to persist the plan as a keyResource" },
-        scriptContent: { type: "string", description: "Raw script content for this segment" },
-        shotType: { type: "string", description: "Shot type label: 'public' for pre_choice, 'branch_1'/'branch_2'/... for outcomes" },
-        model: { type: "string", description: "LLM model override (default: z-ai/glm-5-turbo)" },
-      },
-      required: ["scriptId", "scriptContent", "shotType"],
-    },
-  },
-
+  // --- Video Execution ---
   {
     name: "execute_video_shot",
     description:
       "Execute a single video shot end-to-end: auto-resolves reference images from definition, " +
       "always uses video_style, handles extract_tail for continuation shots. " +
-      "Pass the shot data from plan_video_shots output. For continuation shots (definition has @视飑1), " +
+      "Pass the shot data from plan_video_shots output. For continuation shots (definition has @视频1), " +
       "pass previousVideoUrl. The tool does everything else.",
     inputSchema: {
       type: "object" as const,
@@ -422,7 +198,7 @@ const TOOLS: Tool[] = [
         shotPrompt: { type: "string", description: "Shot prompt from plan_video_shots output" },
         definition: { type: "string", description: "Definition from plan_video_shots (e.g. '@图1 是 [场景X空镜]，@图2 是 [人物A立绘]')" },
         duration: { type: "number", description: "Duration in seconds (4-15)" },
-        previousVideoUrl: { type: "string", description: "Previous shot's video URL (for continuation shots with @视飑1). Tool auto-calls extract_tail." },
+        previousVideoUrl: { type: "string", description: "Previous shot's video URL (for continuation shots with @视频1). Tool auto-calls extract_tail." },
         title: { type: "string", description: "Human-readable label" },
       },
       required: ["scriptId", "key", "shotPrompt", "definition", "duration"],
@@ -446,652 +222,74 @@ export const videoWorkflowMcp: McpProvider = {
     args: Record<string, unknown>,
     _context?: ToolContext,
   ): Promise<CallToolResult> {
-    switch (name) {
-      /* ------------------------------------------------------------ */
-      /*  list_novels                                                  */
-      /* ------------------------------------------------------------ */
-      case "list_novels": {
-        const novels = await prisma.novel.findMany({
-          orderBy: { createdAt: "desc" },
-        });
-        return json(
-          novels.map((n: { id: string; name: string; episodeCount: number; createdAt: Date }) => ({
-            id: n.id,
-            name: n.name,
-            episodeCount: n.episodeCount,
-            createdAt: n.createdAt,
-          })),
-        );
-      }
+    try {
+      switch (name) {
+        case "list_novels": {
+          const novels = await videoWorkflowService.listNovels();
+          return json(novels);
+        }
 
-      /* ------------------------------------------------------------ */
-      /*  list_episodes                                                */
-      /* ------------------------------------------------------------ */
-      case "list_episodes": {
-        const { novelId } = NovelIdParam.parse(args);
-        const scripts = await prisma.novelScript.findMany({
-          where: { novelId },
-          orderBy: { scriptKey: "asc" },
-        });
-        return json(
-          scripts.map((s: { id: string; scriptKey: string; scriptName: string; createdAt: Date }) => ({
-            scriptId: s.id,
-            scriptKey: s.scriptKey,
-            scriptName: s.scriptName,
-            createdAt: s.createdAt,
-          })),
-        );
-      }
+        case "list_episodes": {
+          const { novelId } = NovelIdParam.parse(args);
+          const episodes = await videoWorkflowService.listEpisodes(novelId);
+          return json(episodes);
+        }
 
-      /* ------------------------------------------------------------ */
-      /*  get_episode                                                  */
-      /* ------------------------------------------------------------ */
-      case "get_episode": {
-        const { scriptId } = ScriptIdParam.parse(args);
-        const script = await prisma.novelScript.findUnique({
-          where: { id: scriptId },
-          select: { scriptKey: true, initResult: true },
-        });
-
-        if (!script) return text(`Episode not found: ${scriptId}`);
-        if (!script.initResult) return text(`Episode ${scriptId} has no init_result data`);
-
-        return json({ scriptKey: script.scriptKey, ...script.initResult as Record<string, unknown> });
-      }
-
-      /* ------------------------------------------------------------ */
-      /*  get_status (unified)                                         */
-      /* ------------------------------------------------------------ */
-      case "get_status": {
-        const { scriptId, novelId: explicitNovelId, mediaType, keyPattern } =
-          GetStatusParams.parse(args);
-
-        // 1. Resolve identity
-        let novelId = explicitNovelId;
-        let scriptKey: string | undefined;
-
-        if (scriptId) {
+        case "get_episode": {
+          const { scriptId } = ScriptIdParam.parse(args);
           const script = await prisma.novelScript.findUnique({
             where: { id: scriptId },
-            select: { novelId: true, scriptKey: true },
+            select: { scriptKey: true, initResult: true },
           });
+
           if (!script) return text(`Episode not found: ${scriptId}`);
-          if (!novelId) novelId = script.novelId;
-          scriptKey = script.scriptKey;
+          if (!script.initResult) return text(`Episode ${scriptId} has no init_result data`);
+
+          return json({ scriptKey: script.scriptKey, ...script.initResult as Record<string, unknown> });
         }
 
-        if (!novelId) return text("At least one of scriptId or novelId is required");
-
-        // 2. Query KeyResources across scopes
-        const mediaFilter = mediaType ? { mediaType } : {};
-        const includeOpts = {
-          versions: { orderBy: { version: "asc" as const } },
-        };
-
-        // Novel scope (portraits, scenes)
-        const novelResources = await prisma.keyResource.findMany({
-          where: { scopeType: "novel", scopeId: novelId, ...mediaFilter },
-          include: includeOpts,
-          orderBy: { createdAt: "asc" },
-        });
-
-        // Script scope (costumes, videos, session JSON)
-        let scriptResources: typeof novelResources = [];
-        if (scriptId) {
-          scriptResources = await prisma.keyResource.findMany({
-            where: {
-              scopeType: { in: ["script", "session"] },
-              scopeId: scriptId,
-              ...mediaFilter,
-            },
-            include: includeOpts,
-            orderBy: { createdAt: "asc" },
-          });
-        } else {
-          // Novel-wide: include ALL EPs' resources
-          const scripts = await prisma.novelScript.findMany({
-            where: { novelId },
-            select: { id: true },
-          });
-          const epIds = scripts.map((s: { id: string }) => s.id);
-          if (epIds.length > 0) {
-            scriptResources = await prisma.keyResource.findMany({
-              where: { scopeType: "script", scopeId: { in: epIds }, ...mediaFilter },
-              include: includeOpts,
-              orderBy: { createdAt: "asc" },
-            });
-          }
-        }
-
-        const allResources = [...novelResources, ...scriptResources];
-        const currentVersionRow = (
-          resource: (typeof allResources)[number],
-        ) => resource.versions.find((v: { version: number }) => v.version === resource.currentVersion) ?? null;
-
-        // 3. Map to output
-        let resources = allResources.map((r) => {
-          const currentVer = currentVersionRow(r);
-          return {
-            key: r.key,
-            mediaType: r.mediaType,
-            url: currentVer?.url ?? null,
-            ...(r.mediaType === "json" ? { data: currentVer?.data ?? null } : {}),
-            version: r.currentVersion,
-            title: r.title,
-            category: r.category,
-          };
-        });
-
-        if (keyPattern) {
-          resources = resources.filter((r) => r.key.includes(keyPattern));
-        }
-
-        // 4. Progress (computed from ALL resources, before keyPattern filter)
-        const byCategory = (cat: string) => {
-          const items = allResources.filter((r) => r.category === cat);
-          return {
-            done: items.filter((r) => {
-              const currentVer = currentVersionRow(r);
-              if (r.mediaType === "json") return r.currentVersion > 0 && currentVer?.data != null;
-              return r.currentVersion > 0 && !!currentVer?.url;
-            }).length,
-            total: items.length,
-          };
-        };
-        const progress = {
-          portraits: byCategory("角色立绘"),
-          scenes: byCategory("场景"),
-          costumes: byCategory("换装"),
-          videos: byCategory("视频"),
-        };
-
-        // 5. Running tasks
-        const runningTasks = scriptId && scriptKey
-          ? await getRunningEpExecutorTasks(novelId, scriptKey)
-          : await getRunningExecutorTasks(novelId);
-
-        return json({
-          identity: {
-            novelId,
-            ...(scriptId ? { scriptId, scriptKey } : {}),
-          },
-          resources,
-          progress,
-          runningTasks: runningTasks.map((t) => ({
-            id: t.id,
-            status: t.status,
-            instruction: t.instructionPreview,
-          })),
-        });
-      }
-
-      /* ------------------------------------------------------------ */
-      /*  generate_portrait                                            */
-      /* ------------------------------------------------------------ */
-      case "generate_portrait": {
-        const { novelId, characterName, prompt: explicitPrompt, referenceUrls, styleName, model } =
-          GeneratePortraitParams.parse(args);
-
-        let prompt = explicitPrompt;
-        let styleRefUrl: string | null = null;
-        if (!prompt) {
-          // Auto-read from novel-level character_arcs
-          const { characterArcs } = await getNovelLevelData(novelId);
-          const arc = characterArcs.find((a) => String(a.name) === characterName);
-          if (!arc) return text(`No character arc found for "${characterName}" in novel ${novelId}`);
-
-          // 1. Resolve style words from DB preset (by name)
-          const style = await resolveStyle(styleName);
-          styleRefUrl = style.styleRefUrl;
-
-          // 2. Build demographics from character arc appearance (contains gender etc.)
-          const demographics = arc.appearance ? String(arc.appearance) : "";
-          if (!demographics) return text(`Character arc for "${characterName}" has no appearance description`);
-
-          // 3. Style preset IS the full prompt template — just replace variables
-          prompt = compileTemplate(style.stylePrompt, { demographics });
-        }
-
-        // Prepend style reference image if present
-        const finalRefUrls = styleRefUrl
-          ? [styleRefUrl, ...(referenceUrls ?? [])]
-          : referenceUrls;
-
-        const key = `char_${characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
-        const result = await generateAndPersistImage(
-          "novel", novelId, key, "角色立绘", prompt, characterName, finalRefUrls, model,
-        );
-        return json(result);
-      }
-
-      /* ------------------------------------------------------------ */
-      /*  update_portrait                                               */
-      /* ------------------------------------------------------------ */
-      case "update_portrait": {
-        // Update portrait uses update_portrait_style — template expects {{appearance_desc}}
-        const { novelId, characterName, prompt: explicitPrompt, referenceUrls, styleName, model } =
-          GeneratePortraitParams.parse(args);
-
-        let prompt = explicitPrompt;
-        let styleRefUrl: string | null = null;
-        if (!prompt) {
-          const { characterArcs } = await getNovelLevelData(novelId);
-          const arc = characterArcs.find((a) => String(a.name) === characterName);
-          if (!arc) return text(`No character arc found for "${characterName}" in novel ${novelId}`);
-
-          const style = await resolveStyle(styleName);
-          styleRefUrl = style.styleRefUrl;
-
-          const appearance_desc = arc.appearance ? String(arc.appearance) : "";
-          if (!appearance_desc) return text(`Character arc for "${characterName}" has no appearance description`);
-
-          prompt = compileTemplate(style.stylePrompt, { appearance_desc });
-        }
-
-        const finalRefUrls = styleRefUrl
-          ? [styleRefUrl, ...(referenceUrls ?? [])]
-          : referenceUrls;
-
-        const key = `char_${characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
-        const result = await generateAndPersistImage(
-          "novel", novelId, key, "角色立绘", prompt, characterName, finalRefUrls, model,
-        );
-        return json(result);
-      }
-
-      /* ------------------------------------------------------------ */
-      /*  generate_scene                                               */
-      /* ------------------------------------------------------------ */
-      case "generate_scene": {
-        const { novelId, sceneName, referenceUrls, model, mode } =
-          GenerateSceneParams.parse(args);
-
-        // Style is fixed per mode — not configurable
-        const styleByMode: Record<string, string> = {
-          single: "location_style",
-          grid: "location_grid_style",
-          hd: "sub_location_style",
-        };
-        const style = await resolveStyle(styleByMode[mode]);
-        const styleRefUrl = style.styleRefUrl;
-
-        if (mode === "grid") {
-          // --- Grid mode: unified grid image for parent + all sub-locations ---
-          const { locationBible } = await getNovelLevelData(novelId);
-          const analyzed = analyzeLocations(locationBible);
-          const parent = analyzed.find((loc) => loc.name === sceneName);
-          if (!parent) return text(`Parent location "${sceneName}" not found in location_bible`);
-          if (parent.mode !== "grid") {
-            return text(
-              `Location "${sceneName}" has fewer than 2 real sub-locations — ` +
-              `not eligible for grid mode (need ≥2). Use mode="single" instead.`,
-            );
-          }
-
-          // Build gridSlots: 【格 1】parent、【格 2】sub1 ...
-          const slots: string[] = [
-            `【格 1】${parent.name}：${parent.visualPrompt}`,
-          ];
-          parent.realSubs.forEach((sub, i) => {
-            slots.push(`【格 ${i + 2}】${sub.name}：${sub.visualPrompt}`);
-          });
-
-          const prompt = compileTemplate(style.stylePrompt, {
-            name: sceneName,
-            gridSize: String(parent.gridSize),
-            gridSlots: slots.join("\n"),
-          });
-
-          const gridRefs = styleRefUrl
-            ? [styleRefUrl, ...(referenceUrls ?? [])]
-            : referenceUrls;
-
-          const key = `scene_${sceneName.replace(/\s+/g, "_")}_grid`;
-          const result = await generateAndPersistImage(
-            "novel", novelId, key, "场景", prompt, `${sceneName} (grid)`, gridRefs, model,
-          );
-          return json(result);
-
-        } else if (mode === "hd") {
-          // --- HD mode: enlarge sub-scene using parent's grid image as reference ---
-          const { locationBible } = await getNovelLevelData(novelId);
-          const analyzed = analyzeLocations(locationBible);
-
-          // Find which parent contains this sceneName as a sub
-          let parentLoc: AnalyzedLocation | undefined;
-          for (const loc of analyzed) {
-            if (loc.realSubs.some((s) => s.name === sceneName)) {
-              parentLoc = loc;
-              break;
-            }
-          }
-          if (!parentLoc) {
-            return text(`Scene "${sceneName}" not found as a sub-location of any grid parent`);
-          }
-
-          // Look up parent's grid image from KeyResource
-          const gridKey = `scene_${parentLoc.name.replace(/\s+/g, "_")}_grid`;
-          const gridResource = await prisma.keyResource.findFirst({
-            where: { scopeType: "novel", scopeId: novelId, key: gridKey, currentVersion: { gt: 0 } },
-            include: { versions: { orderBy: { version: "desc" }, take: 1 } },
-          });
-          const gridUrl = gridResource?.versions[0]?.url ?? null;
-          if (!gridUrl) {
-            return text(
-              `Grid image for parent "${parentLoc.name}" not yet generated. ` +
-              `Run generate_scene with mode="grid" first.`,
-            );
-          }
-
-          const prompt = compileTemplate(style.stylePrompt, { name: sceneName, sceneName });
-
-          // Grid image as primary reference, then style ref, then user refs
-          const hdRefs: string[] = [gridUrl];
-          if (styleRefUrl) hdRefs.push(styleRefUrl);
-          if (referenceUrls) hdRefs.push(...referenceUrls);
-
-          const key = `scene_${sceneName.replace(/\s+/g, "_")}`;
-          const result = await generateAndPersistImage(
-            "novel", novelId, key, "场景", prompt, sceneName, hdRefs, model,
-          );
-          return json(result);
-
-        } else {
-          // --- Single mode (default): existing behavior ---
-          const { locationBible } = await getNovelLevelData(novelId);
-          let visualPrompt: string | undefined;
-          for (const loc of locationBible) {
-            if (String(loc.name) === sceneName && loc.visual_prompt) {
-              visualPrompt = String(loc.visual_prompt);
-              break;
-            }
-            const subs = loc.sub_locations as Array<Record<string, unknown>> | undefined;
-            if (subs) {
-              const sub = subs.find((s) => String(s.name) === sceneName);
-              if (sub?.visual_prompt) {
-                visualPrompt = String(sub.visual_prompt);
-                break;
-              }
-            }
-          }
-          if (!visualPrompt) {
-            return text(`No visual_prompt found for scene "${sceneName}" in novel ${novelId}`);
-          }
-
-          const prompt = compileTemplate(style.stylePrompt, { name: sceneName, scenePrompt: visualPrompt });
-
-          const singleRefs = styleRefUrl
-            ? [styleRefUrl, ...(referenceUrls ?? [])]
-            : referenceUrls;
-
-          const key = `scene_${sceneName.replace(/\s+/g, "_")}`;
-          const result = await generateAndPersistImage(
-            "novel", novelId, key, "场景", prompt, sceneName, singleRefs, model,
-          );
+        case "get_status": {
+          const params = videoWorkflowService.GetStatusParams.parse(args);
+          const result = await videoWorkflowService.getStatus(params);
           return json(result);
         }
+
+        case "generate_portrait": {
+          const params = videoWorkflowService.GeneratePortraitParams.parse(args);
+          const result = await videoWorkflowService.generatePortrait(params);
+          return json(result);
+        }
+
+        case "update_portrait": {
+          const params = videoWorkflowService.GeneratePortraitParams.parse(args);
+          const result = await videoWorkflowService.updatePortrait(params);
+          return json(result);
+        }
+
+        case "generate_scene": {
+          const params = videoWorkflowService.GenerateSceneParams.parse(args);
+          const result = await videoWorkflowService.generateScene(params);
+          return json(result);
+        }
+
+        case "generate_costume": {
+          const params = videoWorkflowService.GenerateCostumeParams.parse(args);
+          const result = await videoWorkflowService.generateCostume(params);
+          return json(result);
+        }
+
+        case "execute_video_shot": {
+          const params = videoWorkflowService.ExecuteVideoShotParams.parse(args);
+          const result = await videoWorkflowService.executeVideoShot(params);
+          return json(result);
+        }
+
+        default:
+          return text(`Unknown tool: ${name}`);
       }
-
-      /* ------------------------------------------------------------ */
-      /*  plan_video_shots                                              */
-      /* ------------------------------------------------------------ */
-      case "plan_video_shots": {
-        const { scriptId: planScriptId, scriptContent, shotType, model } = PlanVideoShotsParams.parse(args);
-
-        // 1. Fetch video_prompt_generator template from Langfuse (deterministic, no LLM)
-        const template = "video_prompt_generator template placeholder restored with video_workflow MCP";
-
-        // 2. Build instruction = template + user message
-        const userMessage = `请为以下剧本生成视频镜头脚本：\n---\n${scriptContent}\n---\n所有镜头 type 填 "${shotType}"，index 从 "1" 开始。`;
-        const instruction = `${template}\n\n${userMessage}`;
-
-        // 3. Output schema for structured result
-        const outputSchema = {
-          type: "object",
-          properties: {
-            scenes: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  scene_title: { type: "string" },
-                  scene_desc: { type: "string" },
-                  shots: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        index: { type: "string" },
-                        type: { type: "string" },
-                        duration: { type: "string" },
-                        definition: { type: "string" },
-                        prompt: { type: "string" },
-                      },
-                      required: ["index", "type", "duration", "definition", "prompt"],
-                    },
-                  },
-                },
-                required: ["scene_title", "scene_desc", "shots"],
-              },
-            },
-          },
-          required: ["scenes"],
-        };
-
-        // 4. Run single-shot subagent
-        const result = await runRestoredSingleShotSubAgent({
-          instruction,
-          model: model ?? "z-ai/glm-5-turbo",
-          outputSchema,
-        }, _context);
-
-        if (result.status !== "completed") {
-          return json({
-            status: "error",
-            shotType,
-            error: result.error ?? "Subagent did not complete",
-            attempts: result.attempts,
-          });
-        }
-
-        // 5. Parse and persist to keyResource
-        try {
-          const parsed = JSON.parse(result.output) as Record<string, unknown>;
-          const planKey = `shot_plan_${shotType}`;
-          const kr = await keyResourceService.upsertResource(
-            "script", planScriptId, planKey, "json",
-            { data: parsed as Prisma.InputJsonValue },
-          );
-          await setKeyResourceMetadata(kr.id, "视频规划", `${shotType} 分镜`);
-
-          return json({
-            status: "ok",
-            shotType,
-            keyResourceId: kr.id,
-            key: planKey,
-            version: kr.version,
-            ...parsed,
-          });
-        } catch {
-          return json({
-            status: "ok",
-            shotType,
-            raw: result.output,
-            warning: "Failed to parse JSON — result not persisted to keyResource",
-          });
-        }
-      }
-
-      /* ------------------------------------------------------------ */
-      /*  execute_video_shot                                            */
-      /* ------------------------------------------------------------ */
-      case "execute_video_shot": {
-        const shotParams = ExecuteVideoShotParams.parse(args);
-
-        // 1. Resolve novelId from scriptId
-        const script = await prisma.novelScript.findUnique({
-          where: { id: shotParams.scriptId },
-          select: { novelId: true },
-        });
-        if (!script) return text(`Episode not found: ${shotParams.scriptId}`);
-        const shotNovelId = script.novelId;
-
-        // 2. Get all resources for reference matching
-        const allResources = await prisma.keyResource.findMany({
-          where: {
-            OR: [
-              { scopeType: "novel", scopeId: shotNovelId },
-              { scopeType: "script", scopeId: shotParams.scriptId },
-            ],
-            currentVersion: { gt: 0 },
-          },
-          include: { versions: { orderBy: { version: "desc" }, take: 1 } },
-        });
-
-        // 3. Parse definition and resolve @图N to URLs
-        const refImageUrls: string[] = [];
-        const imgRefs = shotParams.definition.match(/@图\d+\s*是\s*\[([^\]]+)\]/g) ?? [];
-        for (const ref of imgRefs) {
-          const nameMatch = ref.match(/\[([^\]]+)\]/);
-          if (!nameMatch) continue;
-          const refName = nameMatch[1]!;
-
-          // Match: resource title appears in refName, or refName appears in title
-          let matched: string | null = null;
-          for (const r of allResources) {
-            const url = r.versions[0]?.url;
-            if (!url) continue;
-            const title = r.title ?? "";
-            if (!title) continue;
-            if (refName.includes(title) || title.includes(refName)) {
-              // Prefer 换装 over 角色立绘 for character references
-              if (matched && r.category === "角色立绘") continue;
-              matched = url;
-              if (r.category === "换装") break;
-            }
-          }
-          if (matched) refImageUrls.push(matched);
-        }
-
-        // 4. Resolve style (always video_style)
-        const shotStyle = await resolveStyle("video_style");
-        if (shotStyle.styleRefUrl) refImageUrls.unshift(shotStyle.styleRefUrl);
-
-        // 5. Handle continuation: crop_video if previousVideoUrl provided
-        let sourceVideoUrls: string[] | undefined;
-        if (shotParams.previousVideoUrl) {
-          try {
-            // Extract last 5 seconds using FC crop_video service
-            const tailUrl = await callFcCropVideo({
-              videoUrl: shotParams.previousVideoUrl,
-              startTime: Math.max(0, shotParams.duration - 5),
-              endTime: shotParams.duration,
-            });
-            sourceVideoUrls = [tailUrl];
-          } catch (err) {
-            // If crop fails, continue without continuation
-            void err;
-          }
-        }
-
-        // 6. Compile prompt via style template
-        const shotPromptCompiled = compileTemplate(shotStyle.stylePrompt, {
-          definition: shotParams.definition,
-          prompt: shotParams.shotPrompt,
-        });
-
-        // 7. Call FC generate_video service
-        let videoUrl: string;
-        try {
-          videoUrl = await callFcGenerateVideo({
-            prompt: shotPromptCompiled,
-            referenceImageUrls: refImageUrls.length > 0 ? refImageUrls : undefined,
-            sourceVideoUrls,
-          });
-        } catch (err) {
-          return json({
-            status: "error",
-            key: shotParams.key,
-            error: err instanceof Error ? err.message : String(err),
-            prompt: shotPromptCompiled,
-            referenceImageUrls: refImageUrls,
-          });
-        }
-
-        // 8. Persist to KeyResource
-        const kr = await keyResourceService.upsertResource(
-          "script", shotParams.scriptId, shotParams.key, "video",
-          {
-            prompt: shotPromptCompiled,
-            url: videoUrl,
-            refUrls: [...refImageUrls, ...(sourceVideoUrls ?? [])],
-            data: { duration: shotParams.duration },
-          },
-        );
-        await setKeyResourceMetadata(kr.id, "视频", shotParams.title ?? shotParams.key);
-
-        return json({
-          status: "ok",
-          key: shotParams.key,
-          keyResourceId: kr.id,
-          version: kr.version,
-          videoUrl,
-          referenceImageCount: refImageUrls.length,
-          prompt: shotPromptCompiled,
-        });
-      }
-
-      /* ------------------------------------------------------------ */
-      /*  generate_costume                                             */
-      /* ------------------------------------------------------------ */
-      case "generate_costume": {
-        const { scriptId, characterName, referenceUrls, styleName, model } =
-          GenerateCostumeParams.parse(args);
-
-        const script = await prisma.novelScript.findUnique({
-          where: { id: scriptId },
-          select: { novelId: true, initResult: true },
-        });
-        if (!script) return text(`Episode not found: ${scriptId}`);
-
-        // Auto-read outfit description from this episode's character_outfits
-        const ir = script.initResult as Record<string, unknown> | null;
-        const outfits = ir?.character_outfits as Record<string, string> | undefined;
-        const demographics = outfits?.[characterName];
-        if (!demographics) return text(`No outfit for "${characterName}" in episode ${scriptId}`);
-
-        // 1. Resolve style words from DB preset (by name)
-        const style = await resolveStyle(styleName);
-        const styleRefUrl = style.styleRefUrl;
-
-        // 2. Style preset IS the full prompt template — just replace variables
-        const prompt = compileTemplate(style.stylePrompt, { appearance_desc: demographics });
-
-        // Auto-fetch character portrait as reference (换装基于原立绘修改)
-        const portraitKey = `char_${characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
-        const portrait = await prisma.keyResource.findFirst({
-          where: { scopeType: "novel", scopeId: script.novelId, key: portraitKey },
-          include: { versions: { orderBy: { version: "desc" }, take: 1 } },
-        });
-        const portraitUrl = portrait?.versions[0]?.url ?? null;
-
-        // Collect reference images: style ref + portrait + user-supplied
-        const refParts: string[] = [];
-        if (styleRefUrl) refParts.push(styleRefUrl);
-        if (portraitUrl) refParts.push(portraitUrl);
-        const finalRefUrls = refParts.length > 0 || referenceUrls
-          ? [...refParts, ...(referenceUrls ?? [])]
-          : undefined;
-
-        const key = `costume_${characterName.toLowerCase().replace(/\s+/g, "_")}`;
-        const result = await generateAndPersistImage(
-          "script", scriptId, key, "换装", prompt, characterName, finalRefUrls, model,
-        );
-        return json(result);
-      }
-
-      default:
-        return text(`Unknown tool: ${name}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return json({ status: "error", error: message });
     }
   },
 };

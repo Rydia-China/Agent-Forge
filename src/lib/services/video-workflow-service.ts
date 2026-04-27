@@ -86,7 +86,7 @@ export async function listNovels(): Promise<NovelSummary[]> {
   const novels = await prisma.novel.findMany({
     orderBy: { createdAt: "desc" },
   });
-  return novels.map((novel) => ({
+  return novels.map((novel: { id: string; name: string; episodeCount: number; createdAt: Date }) => ({
     id: novel.id,
     name: novel.name,
     episodeCount: novel.episodeCount,
@@ -1059,4 +1059,692 @@ export async function getEpisodeStatus(scriptId: string): Promise<EpStatus> {
     where: { scopeType: "script", scopeId: scriptId, currentVersion: { gt: 0 } },
   });
   return keyResourceCount > 0 ? "has_resources" : "uploaded";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Video workflow business logic (migrated from MCP layer)           */
+/* ------------------------------------------------------------------ */
+
+import { z } from "zod";
+import * as keyResourceService from "./key-resource-service";
+import { callFcGenerateVideo, callFcCropVideo } from "./fc-video-client";
+import { compileTemplate } from "@/lib/mcp/static/langfuse-helpers";
+
+/* ---- Style resolution ---- */
+
+export interface StylePreset {
+  stylePrompt: string;
+  styleRefUrl: string | null;
+}
+
+export async function resolveStyle(styleName: string): Promise<StylePreset> {
+  const preset = await prisma.stylePreset.findUnique({ where: { name: styleName } });
+  if (!preset) throw new Error(`Style preset not found: ${styleName}`);
+  return { stylePrompt: preset.prompt, styleRefUrl: preset.referenceImageUrl };
+}
+
+/* ---- Scene structure analysis ---- */
+
+export interface AnalyzedSubLocation {
+  id: string;
+  name: string;
+  visualPrompt: string;
+}
+
+export interface AnalyzedLocation {
+  id: string;
+  name: string;
+  visualPrompt: string;
+  mode: "single" | "grid";
+  realSubs: AnalyzedSubLocation[];
+  gridSize: number;
+}
+
+export function analyzeLocations(locationBible: Array<Record<string, unknown>>): AnalyzedLocation[] {
+  return locationBible
+    .map((location): AnalyzedLocation | null => {
+      const name = typeof location.name === "string" ? location.name : null;
+      if (!name) return null;
+
+      const id = typeof location.id === "string" ? location.id : name;
+      const visualPrompt = typeof location.visual_prompt === "string" ? location.visual_prompt : "";
+      const rawSubs = Array.isArray(location.sub_locations) ? location.sub_locations : [];
+      const realSubs = rawSubs
+        .filter(isRecord)
+        .filter((sub) => sub.id !== id)
+        .map((sub): AnalyzedSubLocation | null => {
+          const subName = typeof sub.name === "string" ? sub.name : null;
+          if (!subName) return null;
+          return {
+            id: typeof sub.id === "string" ? sub.id : subName,
+            name: subName,
+            visualPrompt: typeof sub.visual_prompt === "string" ? sub.visual_prompt : "",
+          };
+        })
+        .filter((sub): sub is AnalyzedSubLocation => sub !== null);
+
+      return {
+        id,
+        name,
+        visualPrompt,
+        mode: realSubs.length >= 2 ? "grid" : "single",
+        realSubs,
+        gridSize: realSubs.length + 1,
+      };
+    })
+    .filter((location): location is AnalyzedLocation => location !== null);
+}
+
+/* ---- KeyResource metadata update ---- */
+
+export async function setKeyResourceMetadata(
+  id: string,
+  category: string,
+  title: string,
+): Promise<void> {
+  await prisma.$executeRaw`
+    UPDATE "KeyResource"
+    SET category = ${category},
+        title = ${title},
+        "updatedAt" = NOW()
+    WHERE id = ${id}
+  `;
+}
+
+/* ---- Image generation with persistence ---- */
+
+export interface GenerateAndPersistImageInput {
+  scopeType: string;
+  scopeId: string;
+  key: string;
+  category: string;
+  prompt: string;
+  title: string;
+  refUrls?: string[];
+  model?: string;
+}
+
+export interface GenerateAndPersistImageResult {
+  status: string;
+  key: string;
+  keyResourceId: string;
+  imageUrl: string;
+  version: number;
+}
+
+export async function generateAndPersistImage(
+  input: GenerateAndPersistImageInput,
+): Promise<GenerateAndPersistImageResult> {
+  const gen = await keyResourceService.generateImage({
+    scopeType: input.scopeType,
+    scopeId: input.scopeId,
+    key: input.key,
+    prompt: input.prompt,
+    refUrls: input.refUrls,
+  });
+
+  await setKeyResourceMetadata(gen.id, input.category, input.title);
+
+  return {
+    status: "ok",
+    key: gen.key,
+    keyResourceId: gen.id,
+    imageUrl: gen.imageUrl,
+    version: gen.version,
+  };
+}
+
+/* ---- Portrait generation ---- */
+
+export const GeneratePortraitParams = z.object({
+  novelId: z.string().min(1),
+  characterName: z.string().min(1),
+  prompt: z.string().optional(),
+  referenceUrls: z.array(z.string().url()).optional(),
+  styleName: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+});
+
+export type GeneratePortraitInput = z.infer<typeof GeneratePortraitParams>;
+
+export async function generatePortrait(
+  input: GeneratePortraitInput,
+): Promise<GenerateAndPersistImageResult> {
+  let prompt = input.prompt;
+  let styleRefUrl: string | null = null;
+
+  if (!prompt) {
+    const { characterArcs } = await getNovelLevelData(input.novelId);
+    const arc = characterArcs.find((a) => String(a.name) === input.characterName);
+    if (!arc) throw new Error(`No character arc found for "${input.characterName}"`);
+
+    const style = await resolveStyle(input.styleName ?? "portrait-style");
+    styleRefUrl = style.styleRefUrl;
+
+    const demographics = arc.appearance ? String(arc.appearance) : "";
+    if (!demographics) throw new Error(`Character arc for "${input.characterName}" has no appearance`);
+
+    prompt = compileTemplate(style.stylePrompt, { demographics });
+  }
+
+  const finalRefUrls = styleRefUrl
+    ? [styleRefUrl, ...(input.referenceUrls ?? [])]
+    : input.referenceUrls;
+
+  const key = `char_${input.characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
+  return generateAndPersistImage({
+    scopeType: "novel",
+    scopeId: input.novelId,
+    key,
+    category: "角色立绘",
+    prompt,
+    title: input.characterName,
+    refUrls: finalRefUrls,
+    model: input.model,
+  });
+}
+
+/* ---- Update portrait ---- */
+
+export async function updatePortrait(
+  input: GeneratePortraitInput,
+): Promise<GenerateAndPersistImageResult> {
+  let prompt = input.prompt;
+  let styleRefUrl: string | null = null;
+
+  if (!prompt) {
+    const { characterArcs } = await getNovelLevelData(input.novelId);
+    const arc = characterArcs.find((a) => String(a.name) === input.characterName);
+    if (!arc) throw new Error(`No character arc found for "${input.characterName}"`);
+
+    const style = await resolveStyle(input.styleName ?? "update_portrait_style");
+    styleRefUrl = style.styleRefUrl;
+
+    const appearance_desc = arc.appearance ? String(arc.appearance) : "";
+    if (!appearance_desc) throw new Error(`Character arc for "${input.characterName}" has no appearance`);
+
+    prompt = compileTemplate(style.stylePrompt, { appearance_desc });
+  }
+
+  const finalRefUrls = styleRefUrl
+    ? [styleRefUrl, ...(input.referenceUrls ?? [])]
+    : input.referenceUrls;
+
+  const key = `char_${input.characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
+  return generateAndPersistImage({
+    scopeType: "novel",
+    scopeId: input.novelId,
+    key,
+    category: "角色立绘",
+    prompt,
+    title: input.characterName,
+    refUrls: finalRefUrls,
+    model: input.model,
+  });
+}
+
+/* ---- Scene generation ---- */
+
+export const GenerateSceneParams = z.object({
+  novelId: z.string().min(1),
+  sceneName: z.string().min(1),
+  referenceUrls: z.array(z.string().url()).optional(),
+  model: z.string().min(1).optional(),
+  mode: z.enum(["single", "grid", "hd"]).default("single"),
+});
+
+export type GenerateSceneInput = z.infer<typeof GenerateSceneParams>;
+
+export async function generateScene(
+  input: GenerateSceneInput,
+): Promise<GenerateAndPersistImageResult> {
+  const styleByMode: Record<string, string> = {
+    single: "location_style",
+    grid: "location_grid_style",
+    hd: "sub_location_style",
+  };
+  const style = await resolveStyle(styleByMode[input.mode]!);
+  const styleRefUrl = style.styleRefUrl;
+
+  if (input.mode === "grid") {
+    const { locationBible } = await getNovelLevelData(input.novelId);
+    const analyzed = analyzeLocations(locationBible);
+    const parent = analyzed.find((loc) => loc.name === input.sceneName);
+    if (!parent) throw new Error(`Parent location "${input.sceneName}" not found`);
+    if (parent.mode !== "grid") {
+      throw new Error(`Location "${input.sceneName}" not eligible for grid mode (need ≥2 sub-locations)`);
+    }
+
+    const slots: string[] = [`【格 1】${parent.name}：${parent.visualPrompt}`];
+    parent.realSubs.forEach((sub, i) => {
+      slots.push(`【格 ${i + 2}】${sub.name}：${sub.visualPrompt}`);
+    });
+
+    const prompt = compileTemplate(style.stylePrompt, {
+      name: input.sceneName,
+      gridSize: String(parent.gridSize),
+      gridSlots: slots.join("\n"),
+    });
+
+    const gridRefs = styleRefUrl
+      ? [styleRefUrl, ...(input.referenceUrls ?? [])]
+      : input.referenceUrls;
+
+    const key = `scene_${input.sceneName.replace(/\s+/g, "_")}_grid`;
+    return generateAndPersistImage({
+      scopeType: "novel",
+      scopeId: input.novelId,
+      key,
+      category: "场景",
+      prompt,
+      title: `${input.sceneName} (grid)`,
+      refUrls: gridRefs,
+      model: input.model,
+    });
+  } else if (input.mode === "hd") {
+    const { locationBible } = await getNovelLevelData(input.novelId);
+    const analyzed = analyzeLocations(locationBible);
+
+    let parentLoc: AnalyzedLocation | undefined;
+    for (const loc of analyzed) {
+      if (loc.realSubs.some((s) => s.name === input.sceneName)) {
+        parentLoc = loc;
+        break;
+      }
+    }
+    if (!parentLoc) {
+      throw new Error(`Scene "${input.sceneName}" not found as a sub-location`);
+    }
+
+    const gridKey = `scene_${parentLoc.name.replace(/\s+/g, "_")}_grid`;
+    const gridResource = await prisma.keyResource.findFirst({
+      where: { scopeType: "novel", scopeId: input.novelId, key: gridKey, currentVersion: { gt: 0 } },
+      include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+    });
+    const gridUrl = gridResource?.versions[0]?.url ?? null;
+    if (!gridUrl) {
+      throw new Error(`Grid image for parent "${parentLoc.name}" not yet generated`);
+    }
+
+    const prompt = compileTemplate(style.stylePrompt, { name: input.sceneName, sceneName: input.sceneName });
+
+    const hdRefs: string[] = [gridUrl];
+    if (styleRefUrl) hdRefs.push(styleRefUrl);
+    if (input.referenceUrls) hdRefs.push(...input.referenceUrls);
+
+    const key = `scene_${input.sceneName.replace(/\s+/g, "_")}`;
+    return generateAndPersistImage({
+      scopeType: "novel",
+      scopeId: input.novelId,
+      key,
+      category: "场景",
+      prompt,
+      title: input.sceneName,
+      refUrls: hdRefs,
+      model: input.model,
+    });
+  } else {
+    const { locationBible } = await getNovelLevelData(input.novelId);
+    let visualPrompt: string | undefined;
+    for (const loc of locationBible) {
+      if (String(loc.name) === input.sceneName && loc.visual_prompt) {
+        visualPrompt = String(loc.visual_prompt);
+        break;
+      }
+      const subs = loc.sub_locations as Array<Record<string, unknown>> | undefined;
+      if (subs) {
+        const sub = subs.find((s) => String(s.name) === input.sceneName);
+        if (sub?.visual_prompt) {
+          visualPrompt = String(sub.visual_prompt);
+          break;
+        }
+      }
+    }
+    if (!visualPrompt) {
+      throw new Error(`No visual_prompt found for scene "${input.sceneName}"`);
+    }
+
+    const prompt = compileTemplate(style.stylePrompt, { name: input.sceneName, scenePrompt: visualPrompt });
+
+    const singleRefs = styleRefUrl
+      ? [styleRefUrl, ...(input.referenceUrls ?? [])]
+      : input.referenceUrls;
+
+    const key = `scene_${input.sceneName.replace(/\s+/g, "_")}`;
+    return generateAndPersistImage({
+      scopeType: "novel",
+      scopeId: input.novelId,
+      key,
+      category: "场景",
+      prompt,
+      title: input.sceneName,
+      refUrls: singleRefs,
+      model: input.model,
+    });
+  }
+}
+
+/* ---- Costume generation ---- */
+
+export const GenerateCostumeParams = z.object({
+  scriptId: z.string().min(1),
+  characterName: z.string().min(1),
+  referenceUrls: z.array(z.string().url()).optional(),
+  styleName: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+});
+
+export type GenerateCostumeInput = z.infer<typeof GenerateCostumeParams>;
+
+export async function generateCostume(
+  input: GenerateCostumeInput,
+): Promise<GenerateAndPersistImageResult> {
+  const script = await prisma.novelScript.findUnique({
+    where: { id: input.scriptId },
+    select: { novelId: true, initResult: true },
+  });
+  if (!script) throw new Error(`Episode not found: ${input.scriptId}`);
+
+  const ir = script.initResult as Record<string, unknown> | null;
+  const outfits = ir?.character_outfits as Record<string, string> | undefined;
+  const demographics = outfits?.[input.characterName];
+  if (!demographics) throw new Error(`No outfit for "${input.characterName}"`);
+
+  const style = await resolveStyle(input.styleName ?? "costume_style");
+  const styleRefUrl = style.styleRefUrl;
+
+  const prompt = compileTemplate(style.stylePrompt, { appearance_desc: demographics });
+
+  const portraitKey = `char_${input.characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
+  const portrait = await prisma.keyResource.findFirst({
+    where: { scopeType: "novel", scopeId: script.novelId, key: portraitKey },
+    include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+  });
+  const portraitUrl = portrait?.versions[0]?.url ?? null;
+
+  const refParts: string[] = [];
+  if (styleRefUrl) refParts.push(styleRefUrl);
+  if (portraitUrl) refParts.push(portraitUrl);
+  const finalRefUrls = refParts.length > 0 || input.referenceUrls
+    ? [...refParts, ...(input.referenceUrls ?? [])]
+    : undefined;
+
+  const key = `costume_${input.characterName.toLowerCase().replace(/\s+/g, "_")}`;
+  return generateAndPersistImage({
+    scopeType: "script",
+    scopeId: input.scriptId,
+    key,
+    category: "换装",
+    prompt,
+    title: input.characterName,
+    refUrls: finalRefUrls,
+    model: input.model,
+  });
+}
+
+/* ---- Video shot execution ---- */
+
+export const ExecuteVideoShotParams = z.object({
+  scriptId: z.string().min(1),
+  key: z.string().min(1),
+  shotPrompt: z.string().min(1),
+  definition: z.string().min(1),
+  duration: z.number().min(4).max(15),
+  previousVideoUrl: z.string().url().optional(),
+  title: z.string().optional(),
+});
+
+export type ExecuteVideoShotInput = z.infer<typeof ExecuteVideoShotParams>;
+
+export interface ExecuteVideoShotResult {
+  status: string;
+  key: string;
+  keyResourceId: string;
+  version: number;
+  videoUrl: string;
+  referenceImageCount: number;
+  prompt: string;
+}
+
+export async function executeVideoShot(
+  input: ExecuteVideoShotInput,
+): Promise<ExecuteVideoShotResult> {
+  const script = await prisma.novelScript.findUnique({
+    where: { id: input.scriptId },
+    select: { novelId: true },
+  });
+  if (!script) throw new Error(`Episode not found: ${input.scriptId}`);
+
+  const allResources = await prisma.keyResource.findMany({
+    where: {
+      OR: [
+        { scopeType: "novel", scopeId: script.novelId },
+        { scopeType: "script", scopeId: input.scriptId },
+      ],
+      currentVersion: { gt: 0 },
+    },
+    include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+  });
+
+  const refImageUrls: string[] = [];
+  const imgRefs = input.definition.match(/@图\d+\s*是\s*\[([^\]]+)\]/g) ?? [];
+  for (const ref of imgRefs) {
+    const nameMatch = ref.match(/\[([^\]]+)\]/);
+    if (!nameMatch) continue;
+    const refName = nameMatch[1]!;
+
+    let matched: string | null = null;
+    for (const r of allResources) {
+      const url = r.versions[0]?.url;
+      if (!url) continue;
+      const title = r.title ?? "";
+      if (!title) continue;
+      if (refName.includes(title) || title.includes(refName)) {
+        if (matched && r.category === "角色立绘") continue;
+        matched = url;
+        if (r.category === "换装") break;
+      }
+    }
+    if (matched) refImageUrls.push(matched);
+  }
+
+  const shotStyle = await resolveStyle("video_style");
+  if (shotStyle.styleRefUrl) refImageUrls.unshift(shotStyle.styleRefUrl);
+
+  let sourceVideoUrls: string[] | undefined;
+  if (input.previousVideoUrl) {
+    try {
+      const tailUrl = await callFcCropVideo({
+        videoUrl: input.previousVideoUrl,
+        startTime: Math.max(0, input.duration - 5),
+        endTime: input.duration,
+      });
+      sourceVideoUrls = [tailUrl];
+    } catch {
+      // Continue without continuation
+    }
+  }
+
+  const shotPromptCompiled = compileTemplate(shotStyle.stylePrompt, {
+    definition: input.definition,
+    prompt: input.shotPrompt,
+  });
+
+  const videoUrl = await callFcGenerateVideo({
+    prompt: shotPromptCompiled,
+    referenceImageUrls: refImageUrls.length > 0 ? refImageUrls : undefined,
+    sourceVideoUrls,
+  });
+
+  const kr = await keyResourceService.upsertResource(
+    "script",
+    input.scriptId,
+    input.key,
+    "video",
+    {
+      prompt: shotPromptCompiled,
+      url: videoUrl,
+      refUrls: [...refImageUrls, ...(sourceVideoUrls ?? [])],
+      data: { duration: input.duration } as Prisma.InputJsonValue,
+    },
+  );
+  await setKeyResourceMetadata(kr.id, "视频", input.title ?? input.key);
+
+  return {
+    status: "ok",
+    key: input.key,
+    keyResourceId: kr.id,
+    version: kr.version,
+    videoUrl,
+    referenceImageCount: refImageUrls.length,
+    prompt: shotPromptCompiled,
+  };
+}
+
+/* ---- Get status (unified query) ---- */
+
+export const GetStatusParams = z.object({
+  scriptId: z.string().min(1).optional(),
+  novelId: z.string().min(1).optional(),
+  mediaType: z.enum(["video", "image", "json"]).optional(),
+  keyPattern: z.string().optional(),
+}).refine(
+  (d) => d.scriptId || d.novelId,
+  { message: "At least one of scriptId or novelId is required" },
+);
+
+export type GetStatusInput = z.infer<typeof GetStatusParams>;
+
+export interface GetStatusResult {
+  identity: {
+    novelId: string;
+    scriptId?: string;
+    scriptKey?: string;
+  };
+  resources: Array<{
+    key: string;
+    mediaType: string;
+    url: string | null;
+    data?: unknown;
+    version: number;
+    title: string | null;
+    category: string | null;
+  }>;
+  progress: {
+    portraits: { done: number; total: number };
+    scenes: { done: number; total: number };
+    costumes: { done: number; total: number };
+    videos: { done: number; total: number };
+  };
+  runningTasks: Array<{
+    id: string;
+    status: string;
+    instruction: string;
+  }>;
+}
+
+export async function getStatus(input: GetStatusInput): Promise<GetStatusResult> {
+  let novelId = input.novelId;
+  let scriptKey: string | undefined;
+
+  if (input.scriptId) {
+    const script = await prisma.novelScript.findUnique({
+      where: { id: input.scriptId },
+      select: { novelId: true, scriptKey: true },
+    });
+    if (!script) throw new Error(`Episode not found: ${input.scriptId}`);
+    if (!novelId) novelId = script.novelId;
+    scriptKey = script.scriptKey;
+  }
+
+  if (!novelId) throw new Error("At least one of scriptId or novelId is required");
+
+  const mediaFilter = input.mediaType ? { mediaType: input.mediaType } : {};
+  const includeOpts = {
+    versions: { orderBy: { version: "asc" as const } },
+  };
+
+  const novelResources = await prisma.keyResource.findMany({
+    where: { scopeType: "novel", scopeId: novelId, ...mediaFilter },
+    include: includeOpts,
+    orderBy: { createdAt: "asc" },
+  });
+
+  let scriptResources: typeof novelResources = [];
+  if (input.scriptId) {
+    scriptResources = await prisma.keyResource.findMany({
+      where: {
+        scopeType: { in: ["script", "session"] },
+        scopeId: input.scriptId,
+        ...mediaFilter,
+      },
+      include: includeOpts,
+      orderBy: { createdAt: "asc" },
+    });
+  } else {
+    const scripts = await prisma.novelScript.findMany({
+      where: { novelId },
+      select: { id: true },
+    });
+    const epIds = scripts.map((s) => s.id);
+    if (epIds.length > 0) {
+      scriptResources = await prisma.keyResource.findMany({
+        where: { scopeType: "script", scopeId: { in: epIds }, ...mediaFilter },
+        include: includeOpts,
+        orderBy: { createdAt: "asc" },
+      });
+    }
+  }
+
+  const allResources = [...novelResources, ...scriptResources];
+  const currentVersionRow = (resource: (typeof allResources)[number]) =>
+    resource.versions.find((v) => v.version === resource.currentVersion) ?? null;
+
+  let resources = allResources.map((r) => {
+    const currentVer = currentVersionRow(r);
+    return {
+      key: r.key,
+      mediaType: r.mediaType,
+      url: currentVer?.url ?? null,
+      ...(r.mediaType === "json" ? { data: currentVer?.data ?? null } : {}),
+      version: r.currentVersion,
+      title: r.title,
+      category: r.category,
+    };
+  });
+
+  if (input.keyPattern) {
+    resources = resources.filter((r) => r.key.includes(input.keyPattern!));
+  }
+
+  const byCategory = (cat: string) => {
+    const items = allResources.filter((r) => r.category === cat);
+    return {
+      done: items.filter((r) => {
+        const currentVer = currentVersionRow(r);
+        if (r.mediaType === "json") return r.currentVersion > 0 && currentVer?.data != null;
+        return r.currentVersion > 0 && !!currentVer?.url;
+      }).length,
+      total: items.length,
+    };
+  };
+
+  const progress = {
+    portraits: byCategory("角色立绘"),
+    scenes: byCategory("场景"),
+    costumes: byCategory("换装"),
+    videos: byCategory("视频"),
+  };
+
+  const runningTasks: Array<{ id: string; status: string; instruction: string }> = [];
+
+  return {
+    identity: {
+      novelId,
+      ...(input.scriptId ? { scriptId: input.scriptId, scriptKey } : {}),
+    },
+    resources,
+    progress,
+    runningTasks,
+  };
 }
