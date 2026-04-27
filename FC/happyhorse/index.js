@@ -2,18 +2,149 @@ const axios = require('axios');
 
 /**
  * HappyHorse Video Generation FC Wrapper
- * Wraps HappyHorse API for Function Compute deployment
+ * Wraps DashScope HappyHorse API for Function Compute deployment
  */
 
 const HAPPYHORSE_BASE_URL = 'https://mm-internal-cn.leonecloud.com';
 
 /**
+ * Validate video URL
+ * @param {string} url - Video URL
+ * @throws {Error} If validation fails
+ */
+function validateVideoUrl(url) {
+  if (!url || typeof url !== 'string') {
+    throw new Error('Video URL is required and must be a string');
+  }
+
+  // Check protocol
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    throw new Error('Video URL must use HTTP or HTTPS protocol');
+  }
+
+  // Check file extension (must be .mp4)
+  if (!url.toLowerCase().endsWith('.mp4')) {
+    throw new Error('Video must be in MP4 format');
+  }
+}
+
+/**
+ * Validate reference image URL
+ * @param {string} url - Image URL
+ * @throws {Error} If validation fails
+ */
+function validateImageUrl(url) {
+  if (!url || typeof url !== 'string') {
+    throw new Error('Image URL is required and must be a string');
+  }
+
+  // Check protocol
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    throw new Error('Image URL must use HTTP or HTTPS protocol');
+  }
+
+  // Check file extension (common image formats)
+  const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+  const hasValidExtension = validExtensions.some(ext => url.toLowerCase().endsWith(ext));
+  
+  if (!hasValidExtension) {
+    throw new Error(`Image must be in one of these formats: ${validExtensions.join(', ')}`);
+  }
+}
+
+/**
+ * Validate media array
+ * @param {Array} media - Media array
+ * @throws {Error} If validation fails
+ */
+function validateMedia(media) {
+  if (!Array.isArray(media)) {
+    throw new Error('Media must be an array');
+  }
+
+  let hasVideo = false;
+  let imageCount = 0;
+
+  for (const item of media) {
+    if (!item.type || !item.url) {
+      throw new Error('Each media item must have "type" and "url" fields');
+    }
+
+    if (item.type === 'video') {
+      if (hasVideo) {
+        throw new Error('Only one video is allowed in media array');
+      }
+      validateVideoUrl(item.url);
+      hasVideo = true;
+    } else if (item.type === 'reference_image') {
+      validateImageUrl(item.url);
+      imageCount++;
+    } else {
+      throw new Error(`Invalid media type: ${item.type}. Must be "video" or "reference_image"`);
+    }
+  }
+
+  // At least one media item is required
+  if (media.length === 0) {
+    throw new Error('At least one media item (video or reference_image) is required');
+  }
+}
+
+/**
  * Create a HappyHorse video generation task
  */
 async function createTask(apiKey, request) {
+  const { prompt, media, resolution, ratio, duration, model } = request;
+
+  // Validate required fields
+  if (!prompt) {
+    throw new Error('Prompt is required');
+  }
+
+  if (!media || !Array.isArray(media) || media.length === 0) {
+    throw new Error('Media array is required and must not be empty');
+  }
+
+  // Validate media
+  validateMedia(media);
+
+  // Convert new DashScope format to old HappyHorse format
+  // Extract video and images from media array
+  const videoItem = media.find(item => item.type === 'video');
+  const imageItems = media.filter(item => item.type === 'reference_image');
+
+  // Build old-style flat request format
+  const legacyRequest = {
+    prompt,
+    genType: videoItem ? 'v2v' : 't2v', // v2v if video present, otherwise t2v
+  };
+
+  // Add video URL if present
+  if (videoItem) {
+    legacyRequest.videoUrl = videoItem.url;
+  }
+
+  // Add image URLs if present
+  if (imageItems.length > 0) {
+    legacyRequest.imageUrls = imageItems.map(item => item.url);
+  }
+
+  // Add optional parameters
+  if (resolution) {
+    legacyRequest.resolution = resolution;
+  }
+  if (ratio) {
+    legacyRequest.ratio = ratio;
+  }
+  if (duration) {
+    legacyRequest.duration = duration;
+  }
+
+  console.log('HappyHorse request (legacy format):', JSON.stringify(legacyRequest, null, 2));
+
   const response = await axios.post(
     `${HAPPYHORSE_BASE_URL}/api/v2/open/aigc/hh`,
-    request,
+    legacyRequest,
     {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -23,14 +154,24 @@ async function createTask(apiKey, request) {
     }
   );
 
+  console.log('HappyHorse response:', JSON.stringify(response.data, null, 2));
+
+  // Old HappyHorse response format
   if (response.data.code !== 0) {
     throw new Error(response.data.msg || 'Create task failed');
   }
 
+  const data = response.data.data || {};
+  const taskId = data.taskId;
+
+  if (!taskId) {
+    throw new Error('No taskId in response');
+  }
+
   return {
-    taskId: response.data.data.taskId,
-    status: response.data.data.status,
-    createdAt: response.data.data.createdAt,
+    taskId,
+    status: data.status || 'PENDING',
+    requestId: response.data.request_id,
   };
 }
 
@@ -49,17 +190,20 @@ async function queryTask(apiKey, taskId) {
     }
   );
 
+  console.log('Query response:', JSON.stringify(response.data, null, 2));
+
   if (response.data.code !== 0) {
     throw new Error(response.data.msg || 'Query task failed');
   }
 
+  const data = response.data.data || {};
+  
   return {
-    taskId: response.data.data.taskId,
-    status: response.data.data.status,
-    result: response.data.data.result,
-    errorMsg: response.data.data.errorMsg,
-    createdAt: response.data.data.createdAt,
-    updatedAt: response.data.data.updatedAt,
+    taskId: data.taskId || taskId,
+    status: data.status,
+    videoUrl: data.result?.[0],
+    errorMessage: data.errorMsg,
+    requestId: response.data.request_id,
   };
 }
 
@@ -72,7 +216,8 @@ async function waitForCompletion(apiKey, taskId, maxWaitTime = 300000) {
   while (Date.now() - startTime < maxWaitTime) {
     const result = await queryTask(apiKey, taskId);
 
-    if (result.status === 'success' || result.status === 'failed') {
+    // DashScope task status: PENDING, RUNNING, SUCCEEDED, FAILED
+    if (result.status === 'SUCCEEDED' || result.status === 'FAILED') {
       return result;
     }
 
@@ -145,19 +290,19 @@ exports.handler = async (event, context) => {
     }
 
     const { action } = body;
-    const apiKey = process.env.HAPPYHORSE_API_KEY;
+    const apiKey = process.env.DASHSCOPE_API_KEY;
 
     if (!apiKey) {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: '请配置 HAPPYHORSE_API_KEY 环境变量' })
+        body: JSON.stringify({ error: '请配置 DASHSCOPE_API_KEY 环境变量' })
       };
     }
 
     switch (action) {
       case 'create': {
-        const { prompt, genType, imageUrls, resolution, ratio, duration, seed, watermark } = body;
+        const { prompt, media, resolution, ratio, duration, model } = body;
 
         if (!prompt) {
           return {
@@ -167,17 +312,29 @@ exports.handler = async (event, context) => {
           };
         }
 
-        console.log('Creating HappyHorse task:', { prompt, genType, imageUrlsCount: imageUrls?.length });
+        if (!media || !Array.isArray(media) || media.length === 0) {
+          return {
+            statusCode: 400,
+            headers: corsHeaders,
+            body: JSON.stringify({ error: 'Missing media array (must contain video or reference_image items)' })
+          };
+        }
+
+        console.log('Creating HappyHorse task:', { 
+          prompt: prompt.substring(0, 100), 
+          mediaCount: media.length,
+          resolution,
+          ratio,
+          duration 
+        });
 
         const result = await createTask(apiKey, {
           prompt,
-          genType,
-          imageUrls,
+          media,
           resolution,
           ratio,
           duration,
-          seed,
-          watermark,
+          model,
         });
 
         return {

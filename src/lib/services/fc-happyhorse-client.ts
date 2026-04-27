@@ -1,37 +1,38 @@
 /**
  * FC HappyHorse Video Generation Client
- * Wraps HappyHorse API as Function Compute endpoint.
+ * Wraps DashScope HappyHorse API as Function Compute endpoint.
  */
 
-export type GenType = 't2v' | 'i2v';
 export type Resolution = '1080P' | '720P';
 export type Ratio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4';
-export type TaskStatus = 'processing' | 'success' | 'failed';
+export type TaskStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+
+export interface MediaItem {
+  type: 'video' | 'reference_image';
+  url: string;
+}
 
 export interface CreateTaskRequest {
   prompt: string;
-  genType?: GenType;
-  imageUrls?: string[];
+  media: MediaItem[];
   resolution?: Resolution;
   ratio?: Ratio;
   duration?: number;
-  seed?: number;
-  watermark?: boolean;
+  model?: string;
 }
 
 export interface CreateTaskResponse {
   taskId: string;
   status: TaskStatus;
-  createdAt: string;
+  requestId?: string;
 }
 
 export interface QueryTaskResponse {
   taskId: string;
   status: TaskStatus;
-  result?: string[];
-  errorMsg?: string;
-  createdAt: string;
-  updatedAt: string;
+  videoUrl?: string;
+  errorMessage?: string;
+  requestId?: string;
 }
 
 /**
@@ -76,9 +77,7 @@ export async function callFcHappyHorseCreate(
     "taskId" in result &&
     typeof result.taskId === "string" &&
     "status" in result &&
-    typeof result.status === "string" &&
-    "createdAt" in result &&
-    typeof result.createdAt === "string"
+    typeof result.status === "string"
   ) {
     return result as CreateTaskResponse;
   }
@@ -130,11 +129,7 @@ export async function callFcHappyHorseQuery(
     "taskId" in result &&
     typeof result.taskId === "string" &&
     "status" in result &&
-    typeof result.status === "string" &&
-    "createdAt" in result &&
-    typeof result.createdAt === "string" &&
-    "updatedAt" in result &&
-    typeof result.updatedAt === "string"
+    typeof result.status === "string"
   ) {
     return result as QueryTaskResponse;
   }
@@ -165,7 +160,7 @@ export async function callFcHappyHorseWait(
       options.onProgress(result.status);
     }
 
-    if (result.status === "success" || result.status === "failed") {
+    if (result.status === "SUCCEEDED" || result.status === "FAILED") {
       return result;
     }
 

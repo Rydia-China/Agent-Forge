@@ -17,15 +17,18 @@ function json(data: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
 }
 
+const MediaItemSchema = z.object({
+  type: z.enum(["video", "reference_image"]),
+  url: z.string().url(),
+});
+
 const CreateTaskParams = z.object({
   prompt: z.string().min(1).max(2500),
-  genType: z.enum(["t2v", "i2v"]).optional(),
-  imageUrls: z.array(z.string().url()).optional(),
+  media: z.array(MediaItemSchema).min(1),
   resolution: z.enum(["1080P", "720P"]).optional(),
   ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional(),
   duration: z.number().min(3).max(15).optional(),
-  seed: z.number().min(0).max(2147483647).optional(),
-  watermark: z.boolean().optional(),
+  model: z.string().optional(),
 });
 
 const QueryTaskParams = z.object({
@@ -46,7 +49,7 @@ export const happyhorseMcp: McpProvider = {
       {
         name: "happyhorse_create_task",
         description:
-          "Create a HappyHorse video generation task. Supports text-to-video (t2v) and image-to-video (i2v) with multiple reference images. Returns taskId for status tracking.",
+          "Create a HappyHorse video generation task using DashScope API. Supports video editing with reference images. Returns taskId for status tracking.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -54,15 +57,24 @@ export const happyhorseMcp: McpProvider = {
               type: "string",
               description: "Video description prompt (max 2500 characters)",
             },
-            genType: {
-              type: "string",
-              enum: ["t2v", "i2v"],
-              description: "Generation type: t2v (text-to-video, default) or i2v (image-to-video)",
-            },
-            imageUrls: {
+            media: {
               type: "array",
-              items: { type: "string" },
-              description: "Reference image URLs for i2v mode (supports multiple images)",
+              items: {
+                type: "object",
+                properties: {
+                  type: {
+                    type: "string",
+                    enum: ["video", "reference_image"],
+                    description: "Media type: video (source video to edit) or reference_image (style reference)",
+                  },
+                  url: {
+                    type: "string",
+                    description: "Public URL of the media file. Video must be MP4 format.",
+                  },
+                },
+                required: ["type", "url"],
+              },
+              description: "Media array containing video and/or reference images. At least one item required.",
             },
             resolution: {
               type: "string",
@@ -78,22 +90,18 @@ export const happyhorseMcp: McpProvider = {
               type: "number",
               description: "Video duration in seconds (3-15, default: 5)",
             },
-            seed: {
-              type: "number",
-              description: "Random seed for reproducibility (0-2147483647)",
-            },
-            watermark: {
-              type: "boolean",
-              description: "Whether to add watermark (default: true)",
+            model: {
+              type: "string",
+              description: "Model name (default: happyhorse-1.0-r2v)",
             },
           },
-          required: ["prompt"],
+          required: ["prompt", "media"],
         },
       },
       {
         name: "happyhorse_query_task",
         description:
-          "Query the status of a HappyHorse video generation task. Returns status (processing/success/failed) and video URL when complete.",
+          "Query the status of a HappyHorse video generation task. Returns status (PENDING/RUNNING/SUCCEEDED/FAILED) and video URL when complete.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -142,13 +150,11 @@ export const happyhorseMcp: McpProvider = {
           const params = CreateTaskParams.parse(args);
           const request: CreateTaskRequest = {
             prompt: params.prompt,
-            genType: params.genType,
-            imageUrls: params.imageUrls,
+            media: params.media,
             resolution: params.resolution,
             ratio: params.ratio,
             duration: params.duration,
-            seed: params.seed,
-            watermark: params.watermark,
+            model: params.model,
           };
 
           const result = await callFcHappyHorseCreate(request);
@@ -156,7 +162,7 @@ export const happyhorseMcp: McpProvider = {
             success: true,
             taskId: result.taskId,
             status: result.status,
-            createdAt: result.createdAt,
+            requestId: result.requestId,
           });
         }
 
@@ -167,10 +173,9 @@ export const happyhorseMcp: McpProvider = {
             success: true,
             taskId: result.taskId,
             status: result.status,
-            result: result.result,
-            errorMsg: result.errorMsg,
-            createdAt: result.createdAt,
-            updatedAt: result.updatedAt,
+            videoUrl: result.videoUrl,
+            errorMessage: result.errorMessage,
+            requestId: result.requestId,
           });
         }
 
@@ -190,10 +195,9 @@ export const happyhorseMcp: McpProvider = {
             success: true,
             taskId: result.taskId,
             status: result.status,
-            result: result.result,
-            errorMsg: result.errorMsg,
-            createdAt: result.createdAt,
-            updatedAt: result.updatedAt,
+            videoUrl: result.videoUrl,
+            errorMessage: result.errorMessage,
+            requestId: result.requestId,
             statusUpdates,
           });
         }
