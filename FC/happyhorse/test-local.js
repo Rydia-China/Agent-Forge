@@ -108,18 +108,62 @@ async function testVideoEdit() {
   }
 }
 
+async function testGenerate() {
+  console.log('\n=== Test 4: Generate video (complete workflow) ===');
+  const event = {
+    body: JSON.stringify({
+      action: 'generate',
+      prompt: '身着红色旗袍的女性，镜头先以侧面中景勾勒旗袍修身剪裁与S型曲线',
+      media: [
+        {
+          type: 'reference_image',
+          url: 'https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20260424/mvzfud/hh-v2v-girl.jpg'
+        },
+        {
+          type: 'reference_image',
+          url: 'https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20260424/fvuihk/hh-v2v2-folding-fan.jpg'
+        }
+      ],
+      resolution: '720P',
+      ratio: '16:9',
+      duration: 5
+    }),
+    headers: {
+      authorization: 'Bearer test-token'
+    }
+  };
+
+  const context = {
+    requestId: 'test-request-id',
+    credentials: {}
+  };
+
+  try {
+    console.log('Starting complete video generation workflow...');
+    const result = await handler(event, context);
+    console.log('Result:', JSON.stringify(result, null, 2));
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
+
 async function runTests() {
+  // Uncomment the test you want to run:
+  
   // Test 1: Create with reference images
-  const taskId = await testCreate();
+  // const taskId = await testCreate();
   
   // Test 2: Query task status
-  if (taskId) {
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    await testQuery(taskId);
-  }
+  // if (taskId) {
+  //   await new Promise(resolve => setTimeout(resolve, 2000));
+  //   await testQuery(taskId);
+  // }
   
   // Test 3: Video editing
-  await testVideoEdit();
+  // await testVideoEdit();
+  
+  // Test 4: Complete workflow (generate)
+  await testGenerate();
 }
 
 runTests();
