@@ -23,13 +23,14 @@ export interface AnalyzedLocation {
 }
 
 export interface GenerateAndPersistImageInput {
-  keyResourceId: string;
+  scopeType: string;
+  scopeId: string;
+  key: string;
   category: string;
-  title: string;
   prompt: string;
-  stylePrompt: string;
-  styleRefUrl: string | null;
-  aspectRatio?: string;
+  title: string;
+  refUrls?: string[];
+  model?: string;
 }
 
 export interface GenerateAndPersistImageResult {
@@ -38,6 +39,11 @@ export interface GenerateAndPersistImageResult {
 }
 
 export interface ExecuteVideoShotResult {
-  url: string;
+  status: string;
+  key: string;
+  keyResourceId: string;
   version: number;
+  videoUrl: string;
+  referenceImageCount: number;
+  prompt: string;
 }
