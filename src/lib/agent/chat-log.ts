@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, writeFileSync } from "fs";
+import { join } from "path";
 import type { ChatMessage } from "./types";
 
 const TEMP_DIR = join(process.cwd(), "temp");

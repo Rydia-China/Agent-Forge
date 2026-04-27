@@ -1,7 +1,7 @@
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
 import { z } from "zod";
-import crypto from "node:crypto";
+import { v4 as uuidv4 } from "uuid";
 
 /* ================================================================== */
 /*  Shared helpers                                                     */
@@ -146,7 +146,7 @@ export const agentForgeMcp: McpProvider = {
       case "request_upload": {
         const params = RequestUploadParams.parse(args);
         const req: UploadRequest = {
-          uploadId: crypto.randomUUID(),
+          uploadId: uuidv4(),
           ...params,
         };
         return uploadResult(req);

@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/db";
-import { EventEmitter } from "node:events";
 import { runAgentStream } from "@/lib/agent/agent";
 import type { StreamCallbacks, KeyResourceEvent, AgentConfig } from "@/lib/agent/agent";
 import type { ToolCall } from "@/lib/agent/types";
@@ -25,20 +24,41 @@ const SUBAGENT_END = Symbol("subagent-end");
 export const MAX_SUBAGENT_DEPTH = 3;
 
 /* ================================================================== */
+/*  Simple EventEmitter implementation                                */
+/* ================================================================== */
+
+type EventHandler = (data?: SubAgentEventRow | symbol) => void;
+
+class SimpleEventEmitter {
+  private listeners = new Map<string, Set<EventHandler>>();
+
+  on(event: string, handler: EventHandler): void {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set());
+    }
+    this.listeners.get(event)!.add(handler);
+  }
+
+  off(event: string, handler: EventHandler): void {
+    this.listeners.get(event)?.delete(handler);
+  }
+
+  emit(event: string, data?: SubAgentEventRow | symbol): void {
+    this.listeners.get(event)?.forEach((handler) => handler(data));
+  }
+}
+
+/* ================================================================== */
 /*  In-memory state (survives Next.js HMR)                            */
 /* ================================================================== */
 
 const globalForSubAgent = globalThis as unknown as {
-  __subagentEmitter?: EventEmitter;
+  __subagentEmitter?: SimpleEventEmitter;
   __subagentAborts?: Map<string, AbortController>;
 };
 
 /** Emits `event:<subagentId>` for live events, `end:<subagentId>` on finish. */
-const emitter = (globalForSubAgent.__subagentEmitter ??= (() => {
-  const e = new EventEmitter();
-  e.setMaxListeners(0);
-  return e;
-})());
+const emitter = (globalForSubAgent.__subagentEmitter ??= new SimpleEventEmitter());
 
 /** Active subagents' AbortControllers, keyed by subagentId. */
 const activeAborts = (globalForSubAgent.__subagentAborts ??= new Map());
@@ -432,7 +452,9 @@ export async function* subscribeEvents(
   let ended = false;
   let highestSeen = lastEventId ?? 0;
 
-  const onEvent = (row: SubAgentEventRow) => {
+  const onEvent = (data?: SubAgentEventRow | symbol) => {
+    if (!data || typeof data === 'symbol') return;
+    const row = data as SubAgentEventRow;
     if (row.id <= highestSeen) return; // duplicate guard
     queue.push(row);
     resolve?.();

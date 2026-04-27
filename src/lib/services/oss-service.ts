@@ -1,6 +1,6 @@
 import OSS from "ali-oss";
 import { z } from "zod";
-import path from "node:path";
+import path from "path";
 
 /* ------------------------------------------------------------------ */
 /*  Zod schemas                                                       */

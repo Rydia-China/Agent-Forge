@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { v4 as uuidv4 } from "uuid";
 import type { ToolContext } from "@/lib/mcp/types";
 import { resolveModel } from "@/lib/agent/models";
 import type { TaskInput } from "./subagent-task-service";
@@ -96,7 +96,7 @@ export async function scheduleTask(
 
   const getOrCreateSession = await getSessionResolver();
   const session = await getOrCreateSession(context?.sessionId, context?.userName);
-  const scheduleId = `sched_${randomUUID()}`;
+  const scheduleId = `sched_${uuidv4()}`;
 
   const scheduledContext: ToolContext = {
     ...context,
