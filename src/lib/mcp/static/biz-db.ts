@@ -28,20 +28,20 @@ export const bizDbMcp: McpProvider = {
       {
         name: "list_tables",
         description:
-          "List all tables in the business database (PostgreSQL). Shows your tables and global tables.",
+          "列出业务数据库中的所有表。包括你的表和全局表。",
         inputSchema: { type: "object" as const, properties: {} },
       },
       {
         name: "describe_table",
         description:
-          "Show the column names and data types of table(s). Pass an array of table names. For a single table, pass a one-element array.",
+          "查看表的列名和数据类型。传入表名数组，单个表也需要用数组格式。",
         inputSchema: {
           type: "object" as const,
           properties: {
             tables: {
               type: "array",
               items: { type: "string" },
-              description: "Array of table names to describe",
+              description: "要查询的表名数组",
             },
           },
           required: ["tables"],
@@ -50,16 +50,13 @@ export const bizDbMcp: McpProvider = {
       {
         name: "sql",
         description:
-          "Run DML SQL on the business PostgreSQL database. " +
-          "Reads (SELECT / WITH) return JSON rows. " +
-          "Writes (INSERT, UPDATE, DELETE, TRUNCATE) return affected row count. " +
-          "DDL (CREATE/ALTER/DROP TABLE) is NOT allowed here — use create_table / alter_table / drop_table instead.",
+          "执行 DML SQL 语句。查询（SELECT/WITH）返回 JSON 行，写入（INSERT/UPDATE/DELETE/TRUNCATE）返回影响行数。禁止使用 DDL 语句，请改用 create_table/alter_table/drop_table。",
         inputSchema: {
           type: "object" as const,
           properties: {
             sql: {
               type: "string",
-              description: "SQL statement (DML only)",
+              description: "SQL 语句（仅限 DML）",
             },
           },
           required: ["sql"],
@@ -68,23 +65,22 @@ export const bizDbMcp: McpProvider = {
       {
         name: "upgrade_global",
         description:
-          "Upgrade a user-scoped table to a global table visible to all users. This is irreversible. " +
-          "If related tables are detected (from API definitions), they will be listed for confirmation before proceeding.",
+          "将用户表升级为全局表，所有用户可见。此操作不可逆。首次调用会列出关联表，需确认后再次调用。",
         inputSchema: {
           type: "object" as const,
           properties: {
             table: {
               type: "string",
-              description: "Logical table name to upgrade",
+              description: "要升级的逻辑表名",
             },
             confirm: {
               type: "boolean",
-              description: "Set to true to confirm upgrade (including related tables). First call without confirm to see related tables.",
+              description: "设为 true 确认升级。首次调用省略此参数以查看关联表",
             },
             include_related: {
               type: "array",
               items: { type: "string" },
-              description: "Related table names to also upgrade (from the list returned by the first call)",
+              description: "要一并升级的关联表名（从首次调用返回的列表中选择）",
             },
           },
           required: ["table"],
@@ -92,47 +88,46 @@ export const bizDbMcp: McpProvider = {
       },
       {
         name: "list_global_tables",
-        description: "List all global tables (not scoped to any user).",
+        description: "列出所有全局表（不限定用户范围）。",
         inputSchema: { type: "object" as const, properties: {} },
       },
       /* ---------- schema management ---------- */
       {
         name: "create_table",
         description:
-          "Create a new table with a declarative schema. The schema is versioned and the DDL is generated automatically. " +
-          "This is the ONLY way to create tables — raw CREATE TABLE in the sql tool is blocked.",
+          "声明式创建表。Schema 自动版本化，DDL 自动生成。这是创建表的唯一方式。",
         inputSchema: {
           type: "object" as const,
           properties: {
-            tableName: { type: "string", description: "Logical table name" },
+            tableName: { type: "string", description: "逻辑表名" },
             columns: {
               type: "array",
-              description: "Column definitions",
+              description: "列定义",
               items: {
                 type: "object",
                 properties: {
                   name: { type: "string" },
-                  type: { type: "string", description: "PostgreSQL type: text, integer, serial, boolean, timestamp, jsonb, ..." },
-                  nullable: { type: "boolean", description: "Default: true" },
-                  default: { type: "string", description: "Raw SQL default expression" },
+                  type: { type: "string", description: "PostgreSQL 类型：text, integer, serial, boolean, timestamp, jsonb 等" },
+                  nullable: { type: "boolean", description: "默认：true" },
+                  default: { type: "string", description: "原始 SQL 默认值表达式" },
                 },
                 required: ["name", "type"],
               },
             },
             constraints: {
               type: "array",
-              description: "Optional table constraints",
+              description: "可选的表约束",
               items: {
                 type: "object",
                 properties: {
-                  type: { type: "string", description: "\"pk\" or \"unique\"" },
+                  type: { type: "string", description: "\"pk\" 或 \"unique\"" },
                   columns: { type: "array", items: { type: "string" } },
                 },
                 required: ["type", "columns"],
               },
             },
-            description: { type: "string", description: "Human-readable description of the table" },
-            global: { type: "boolean", description: "Create as a global table (visible to all users). Default: false (user-scoped)." },
+            description: { type: "string", description: "表的可读描述" },
+            global: { type: "boolean", description: "创建为全局表（所有用户可见）。默认：false（用户范围）" },
           },
           required: ["tableName", "columns"],
         },
@@ -140,52 +135,51 @@ export const bizDbMcp: McpProvider = {
       {
         name: "alter_table",
         description:
-          "Alter an existing table. Provide a list of actions (add_column, drop_column, alter_column, add_constraint). " +
-          "Schema version is bumped automatically.",
+          "声明式修改表结构。提供操作列表（add_column, drop_column, alter_column, add_constraint）。Schema 版本自动递增。",
         inputSchema: {
           type: "object" as const,
           properties: {
-            tableName: { type: "string", description: "Logical table name" },
+            tableName: { type: "string", description: "逻辑表名" },
             actions: {
               type: "array",
-              description: "Alter actions to apply",
+              description: "要执行的修改操作",
               items: {
                 type: "object",
                 properties: {
                   action: { type: "string", description: "\"add_column\" | \"drop_column\" | \"alter_column\" | \"add_constraint\"" },
-                  column: { type: "object", description: "For add_column: { name, type, nullable?, default? }" },
-                  name: { type: "string", description: "For drop_column / alter_column: column name" },
-                  type: { type: "string", description: "For alter_column: new type" },
-                  nullable: { type: "boolean", description: "For alter_column: new nullable" },
-                  default: { type: "string", description: "For alter_column: new default (null to drop)" },
-                  constraint: { type: "object", description: "For add_constraint: { type, columns }" },
+                  column: { type: "object", description: "add_column 用：{ name, type, nullable?, default? }" },
+                  name: { type: "string", description: "drop_column / alter_column 用：列名" },
+                  type: { type: "string", description: "alter_column 用：新类型" },
+                  nullable: { type: "boolean", description: "alter_column 用：新的可空性" },
+                  default: { type: "string", description: "alter_column 用：新默认值（null 表示删除）" },
+                  constraint: { type: "object", description: "add_constraint 用：{ type, columns }" },
                 },
                 required: ["action"],
               },
             },
-            description: { type: "string", description: "Description of this change" },
+            description: { type: "string", description: "本次变更的描述" },
           },
           required: ["tableName", "actions"],
         },
       },
       {
         name: "drop_table",
-        description: "Drop a table and remove its schema registry entry.",
+        description: "删除表及其 schema 注册记录。",
         inputSchema: {
           type: "object" as const,
           properties: {
-            tableName: { type: "string", description: "Logical table name" },
+            tableName: { type: "string", description: "逻辑表名" },
           },
           required: ["tableName"],
         },
       },
       {
         name: "get_schema",
-        description: "Get the declared schema (columns, constraints, version) for a table.",
+        description: "获取表的声明式 schema（列、约束、版本）。",
         inputSchema: {
           type: "object" as const,
           properties: {
-            tableName: { type: "string", description: "Logical table name" },
+            tableName: { type: "string", description: "逻辑表名" },
           },
           required: ["tableName"],
         },
@@ -193,29 +187,28 @@ export const bizDbMcp: McpProvider = {
       {
         name: "diff_schema",
         description:
-          "Compare declared schema vs actual physical table structure. " +
-          "Returns differences if any (drift detection).",
+          "对比声明 schema 与实际物理表结构。返回差异（漂移检测）。",
         inputSchema: {
           type: "object" as const,
           properties: {
-            tableName: { type: "string", description: "Logical table name" },
+            tableName: { type: "string", description: "逻辑表名" },
           },
           required: ["tableName"],
         },
       },
       {
         name: "list_schemas",
-        description: "List all registered table schemas (summary: name, version, column count).",
+        description: "列出所有已注册的表 schema（摘要：名称、版本、列数）。",
         inputSchema: { type: "object" as const, properties: {} },
       },
       {
         name: "ensure_schema",
         description:
-          "Ensure a registered schema's physical table exists. Creates it if missing. Used for migration / environment setup.",
+          "确保已注册 schema 的物理表存在。不存在则创建。用于迁移/环境初始化。",
         inputSchema: {
           type: "object" as const,
           properties: {
-            tableName: { type: "string", description: "Logical table name" },
+            tableName: { type: "string", description: "逻辑表名" },
           },
           required: ["tableName"],
         },
