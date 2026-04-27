@@ -1,33 +1,5 @@
 const OSS = require('ali-oss')
 
-const downloadImageAsBase64 = async (url) => {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 30000)
-
-  const response = await fetch(url, {
-    signal: controller.signal,
-    headers: {
-      'User-Agent': 'Mozilla/5.0'
-    }
-  })
-
-  clearTimeout(timeoutId)
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`)
-  }
-
-  const arrayBuffer = await response.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
-  const base64 = buffer.toString('base64')
-  const contentType = response.headers.get('content-type') || 'image/jpeg'
-
-  return {
-    data: base64,
-    mimeType: contentType
-  }
-}
-
 const uploadToOSS = async (buffer, filename, folder = 'image') => {
   const client = new OSS({
     region: process.env.OSS_REGION,
@@ -49,67 +21,176 @@ const uploadToOSS = async (buffer, filename, folder = 'image') => {
   return url
 }
 
-const generateImage = async (prompt, baseURL, apiKey, model, referenceImageUrls) => {
-  const apiBase = baseURL.replace(/\/+$/, '')
-  const predictUrl = `${apiBase}/publishers/openai/models/${model}:predict`
+/**
+ * Create GPT Image 2 task
+ */
+const createTask = async (baseURL, token, params) => {
+  const url = `${baseURL}/api/v2/open/aigc/gpt-image`
   
-  console.log('Calling Vertex AI Predict API:', predictUrl)
+  console.log('Creating GPT Image 2 task:', { prompt: params.prompt.substring(0, 50) + '...', genType: params.genType })
   
-  const instances = [{
-    prompt: prompt
-  }]
-  
-  if (referenceImageUrls && referenceImageUrls.length > 0) {
-    instances[0].referenceImages = referenceImageUrls.map(url => ({ referenceImage: { gcsUri: url } }))
-  }
-  
-  const requestBody = {
-    instances: instances,
-    parameters: {
-      sampleCount: 1
-    }
-  }
-  
-  console.log('Request body:', JSON.stringify({ 
-    instances: [{ prompt: prompt.substring(0, 50) + '...', referenceImageCount: referenceImageUrls?.length || 0 }],
-    parameters: requestBody.parameters 
-  }))
-  
-  const response = await fetch(predictUrl, {
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      'Authorization': `Bearer ${token}`
     },
-    body: JSON.stringify(requestBody)
+    body: JSON.stringify(params)
   })
   
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Vertex AI Predict API failed: ${response.status} ${errorText}`)
+    throw new Error(`Create task failed: ${response.status} ${errorText}`)
   }
   
   const result = await response.json()
-  console.log('API response received, predictions length:', result.predictions?.length)
+  console.log('Task created:', result)
   
-  if (!result.predictions || result.predictions.length === 0) {
-    throw new Error('No predictions in API response')
+  if (result.code !== 0) {
+    throw new Error(`API error: ${result.msg}`)
   }
   
-  const prediction = result.predictions[0]
+  return result.data.taskId
+}
+
+/**
+ * Query task status
+ */
+const queryTask = async (baseURL, token, taskId) => {
+  const url = `${baseURL}/api/v2/open/aigc/${taskId}`
   
-  if (prediction.bytesBase64Encoded) {
-    const buffer = Buffer.from(prediction.bytesBase64Encoded, 'base64')
-    const filename = `gpt-${Date.now()}-${Math.random().toString(36).substring(7)}.png`
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+  
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Query task failed: ${response.status} ${errorText}`)
+  }
+  
+  const result = await response.json()
+  
+  if (result.code !== 0) {
+    throw new Error(`API error: ${result.msg}`)
+  }
+  
+  return result.data
+}
+
+/**
+ * Poll task until completion
+ * - First 30s: poll every 3s
+ * - 30s ~ 2min: poll every 5s
+ * - After 2min: poll every 10s
+ */
+const pollTask = async (baseURL, token, taskId, maxWaitMs = 300000) => {
+  const startTime = Date.now()
+  
+  while (Date.now() - startTime < maxWaitMs) {
+    const status = await queryTask(baseURL, token, taskId)
+    
+    console.log('Task status:', { taskId, status: status.status, elapsed: Date.now() - startTime })
+    
+    if (status.status === 'success') {
+      if (!status.result || status.result.length === 0) {
+        throw new Error('Task succeeded but no result returned')
+      }
+      return status.result
+    }
+    
+    if (status.status === 'failed') {
+      throw new Error(status.errorMsg || 'Task failed with unknown error')
+    }
+    
+    // Calculate wait time based on elapsed time
+    const elapsed = Date.now() - startTime
+    let waitMs
+    if (elapsed < 30000) {
+      waitMs = 3000 // 3s for first 30s
+    } else if (elapsed < 120000) {
+      waitMs = 5000 // 5s for 30s ~ 2min
+    } else {
+      waitMs = 10000 // 10s after 2min
+    }
+    
+    await new Promise((resolve) => setTimeout(resolve, waitMs))
+  }
+  
+  throw new Error(`Task polling timeout after ${maxWaitMs}ms`)
+}
+
+/**
+ * Download image from URL and optionally upload to OSS
+ */
+const downloadAndUpload = async (imageUrl, skipDownload = false) => {
+  if (skipDownload) {
+    console.log('Skip download enabled, returning upstream URL directly')
+    return imageUrl
+  }
+  
+  console.log('Downloading image from:', imageUrl)
+  
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 60000)
+  
+  try {
+    const response = await fetch(imageUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0'
+      }
+    })
+    
+    clearTimeout(timeoutId)
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download image: ${response.status} ${response.statusText}`)
+    }
+    
+    const arrayBuffer = await response.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
+    
+    const filename = `gpt-image2-${Date.now()}-${Math.random().toString(36).substring(7)}.png`
     
     console.log('Uploading image to OSS...')
-    const url = await uploadToOSS(buffer, filename)
-    console.log('Image uploaded to OSS:', url)
+    const ossUrl = await uploadToOSS(buffer, filename)
+    console.log('Image uploaded to OSS:', ossUrl)
     
-    return url
+    return ossUrl
+  } catch (error) {
+    clearTimeout(timeoutId)
+    throw error
+  }
+}
+
+/**
+ * Generate image using GPT Image 2 API
+ */
+const generateImage = async (prompt, baseURL, token, referenceImageUrls, skipDownload = false) => {
+  // Prepare task parameters
+  const params = {
+    prompt: prompt
   }
   
-  throw new Error('No valid image data in prediction')
+  // Add image-to-image parameters if reference images provided
+  if (referenceImageUrls && referenceImageUrls.length > 0) {
+    params.genType = 'i2i'
+    params.imageUrls = referenceImageUrls
+  }
+  
+  // Create task
+  const taskId = await createTask(baseURL, token, params)
+  
+  // Poll until completion
+  const resultUrls = await pollTask(baseURL, token, taskId)
+  
+  // Download and upload to OSS (or return upstream URL directly)
+  const ossUrl = await downloadAndUpload(resultUrls[0], skipDownload)
+  
+  return ossUrl
 }
 
 // 阿里云FC HTTP触发器入口
@@ -174,7 +255,7 @@ exports.handler = async (event, context) => {
     
     console.log('Parsed request body:', JSON.stringify(body))
 
-    const { prompt, referenceImageUrls } = body
+    const { prompt, referenceImageUrls, skipDownload } = body
 
     if (!prompt || prompt.trim() === '') {
       return {
@@ -184,25 +265,24 @@ exports.handler = async (event, context) => {
       }
     }
 
-    const baseURL = process.env.GPT_IMAGE_BASE_URL
-    const apiKey = process.env.GPT_IMAGE_API_KEY
-    const model = body.model || process.env.GPT_IMAGE_MODEL || 'gpt-image-2'
+    const baseURL = process.env.GPT_IMAGE2_BASE_URL
+    const token = process.env.GPT_IMAGE2_TOKEN
 
-    if (!baseURL || !apiKey) {
+    if (!baseURL || !token) {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Missing API configuration in environment variables (GPT_IMAGE_BASE_URL, GPT_IMAGE_API_KEY)' })
+        body: JSON.stringify({ error: 'Missing API configuration in environment variables (GPT_IMAGE2_BASE_URL, GPT_IMAGE2_TOKEN)' })
       }
     }
 
     console.log('Image generation request:', {
-      model,
       promptLength: prompt.length,
-      referenceImageCount: referenceImageUrls?.length || 0
+      referenceImageCount: referenceImageUrls?.length || 0,
+      skipDownload: skipDownload || false
     })
 
-    const result = await generateImage(prompt, baseURL, apiKey, model, referenceImageUrls)
+    const result = await generateImage(prompt, baseURL, token, referenceImageUrls, skipDownload)
 
     return {
       statusCode: 200,
