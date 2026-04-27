@@ -86,7 +86,7 @@ export async function listNovels(): Promise<NovelSummary[]> {
   const novels = await prisma.novel.findMany({
     orderBy: { createdAt: "desc" },
   });
-  return novels.map((novel) => ({
+  return novels.map((novel: { id: string; name: string; episodeCount: number; createdAt: Date }) => ({
     id: novel.id,
     name: novel.name,
     episodeCount: novel.episodeCount,
@@ -1585,7 +1585,7 @@ export async function executeVideoShot(
       prompt: shotPromptCompiled,
       url: videoUrl,
       refUrls: [...refImageUrls, ...(sourceVideoUrls ?? [])],
-      data: { duration: input.duration } as PrismaTypes.InputJsonValue,
+      data: { duration: input.duration } as Prisma.InputJsonValue,
     },
   );
   await setKeyResourceMetadata(kr.id, "视频", input.title ?? input.key);
