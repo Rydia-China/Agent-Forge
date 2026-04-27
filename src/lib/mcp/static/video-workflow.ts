@@ -17,6 +17,7 @@ import * as keyResourceService from "@/lib/services/key-resource-service";
 import { prisma } from "@/lib/db";
 import { getNovelLevelData } from "@/lib/services/video-workflow-service";
 import { compileTemplate } from "@/lib/mcp/static/langfuse-helpers";
+import { callFcGenerateVideo, callFcCropVideo } from "@/lib/services/fc-video-client";
 import type { Prisma } from "@/generated/prisma";
 
 /* ------------------------------------------------------------------ */
@@ -54,19 +55,6 @@ interface RunningTaskSummary {
   id: string;
   status: string;
   instructionPreview: string;
-}
-
-interface SeedanceGenerateInput {
-  prompt: string;
-  generateType: "text_to_video" | "first_frame" | "multimodal";
-  imageUrls?: string[];
-  videoUrls?: string[];
-  duration?: number;
-}
-
-interface SeedanceGenerateResult {
-  saveUrl: string;
-  timingMs: number;
 }
 
 function analyzeLocations(locationBible: Array<Record<string, unknown>>): AnalyzedLocation[] {
@@ -116,18 +104,6 @@ async function getRunningEpExecutorTasks(
 async function getRunningExecutorTasks(novelId: string): Promise<RunningTaskSummary[]> {
   void novelId;
   return [];
-}
-
-async function seedanceGenerate(input: SeedanceGenerateInput): Promise<SeedanceGenerateResult> {
-  void input;
-  throw new Error("video_workflow MCP restored; Seedance generation backend is not restored in this branch");
-}
-
-async function restoredExtractTail(
-  sourceVideoUrl: string,
-  seconds: number,
-): Promise<{ clipUrl: string; durationSec: number | null; extractedFrom: number | null; seconds: number }> {
-  return { clipUrl: sourceVideoUrl, durationSec: null, extractedFrom: null, seconds };
 }
 
 async function setKeyResourceMetadata(
@@ -237,24 +213,6 @@ const GenerateCostumeParams = z.object({
   model: z.string().min(1).optional(),
 });
 
-const GenerateVideoParams = z.object({
-  scriptId: z.string().min(1),
-  key: z.string().min(1),
-  clipDescription: z.string().min(1).optional(),
-  shotPrompt: z.string().min(1).optional(),
-  definition: z.string().optional(),
-  referenceImageUrls: z.array(z.string().url()).optional(),
-  duration: z.number().min(4).max(15).optional(),
-  sourceImageUrl: z.string().url().optional(),
-  sourceVideoUrls: z.array(z.string().url()).optional(),
-  title: z.string().optional(),
-  prompt: z.string().optional(),
-  styleName: z.string().min(1).optional(),
-}).refine(
-  (d) => d.clipDescription || d.shotPrompt,
-  { message: "Either clipDescription or shotPrompt is required" },
-);
-
 const PlanVideoShotsParams = z.object({
   scriptId: z.string().min(1),
   scriptContent: z.string().min(1),
@@ -269,18 +227,6 @@ const ExecuteVideoShotParams = z.object({
   definition: z.string().min(1),
   duration: z.number().min(4).max(15),
   previousVideoUrl: z.string().url().optional(),
-  title: z.string().optional(),
-});
-
-const ExtractTailParams = z.object({
-  sourceVideoUrl: z.string().url(),
-  seconds: z.number().min(1).max(10).default(5),
-});
-
-const ConcatClipsParams = z.object({
-  scriptId: z.string().min(1),
-  key: z.string().min(1),
-  clipUrls: z.array(z.string().url()).min(1),
   title: z.string().optional(),
 });
 
@@ -482,69 +428,6 @@ const TOOLS: Tool[] = [
       required: ["scriptId", "key", "shotPrompt", "definition", "duration"],
     },
   },
-
-  // --- Video Gen (low-level) ---
-  {
-    name: "generate_video",
-    description:
-      "Generate a ≤15s video clip via Seedance. Two modes:\n" +
-      "• **shotPrompt mode** (preferred): pass shotPrompt + referenceImageUrls. " +
-      "The caller resolves definition references to URLs using get_status data. " +
-      "Final prompt = copyright + shotPrompt + video_style. " +
-      "Pass sourceVideoUrls for continuation (extract_tail result).\n" +
-      "• **clipDescription mode** (legacy): pass clipDescription + styleName. The tool collects ALL scene/costume " +
-      "images and builds referenceInfo automatically.\n" +
-      "styleName is required for both modes. Pass sourceImageUrl for image-to-video (first_frame). " +
-      "Auto-handles prompt compilation / persistence.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        scriptId: { type: "string", description: "Episode script DB ID (scope)" },
-        key: { type: "string", description: "Unique key for this video clip (e.g. 'public_1')" },
-        shotPrompt: { type: "string", description: "Shot prompt from video_prompt_generator output. When provided, uses shotPrompt mode." },
-        referenceImageUrls: { type: "array", items: { type: "string" }, description: "Ordered reference image URLs resolved by the caller from shot definition (scene images, costume images, etc.). Used in shotPrompt mode." },
-        clipDescription: { type: "string", description: "(Legacy) Clip description from clip planner. Used when shotPrompt is not provided." },
-        styleName: { type: "string", description: "StylePreset name. Looked up by unique name from DB." },
-        duration: { type: "number", description: "Duration in seconds (4-15, default 5)" },
-        sourceImageUrl: { type: "string", description: "Source image for image-to-video (first_frame mode)" },
-        sourceVideoUrls: { type: "array", items: { type: "string" }, description: "Source videos for continuation (multimodal mode). Pass extract_tail result for @视频1." },
-        title: { type: "string", description: "Human-readable label" },
-        prompt: { type: "string", description: "Override prompt. Only for manual override in exceptional cases." },
-      },
-      required: ["scriptId", "key"],
-    },
-  },
-  {
-    name: "extract_tail",
-    description:
-      "Extract the last N seconds from a video URL. Used for video continuation — " +
-      "pass the result as sourceVideoUrls to the next generate_video call. " +
-      "Returns {clipUrl}. No DB persistence (transient reference clip).",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        sourceVideoUrl: { type: "string", description: "Video URL to extract from" },
-        seconds: { type: "number", description: "Seconds to extract from the end (default 5, max 10)" },
-      },
-      required: ["sourceVideoUrl"],
-    },
-  },
-  {
-    name: "concat_clips",
-    description:
-      "Concatenate multiple video clips into one final video. Clips are merged in order " +
-      "via ffmpeg. Result is persisted to OSS and DB. Returns {videoUrl, keyResourceId}.",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        scriptId: { type: "string", description: "Episode script DB ID (scope)" },
-        key: { type: "string", description: "Unique key for the final merged video (e.g. 'pre_choice_final')" },
-        clipUrls: { type: "array", items: { type: "string" }, description: "Ordered list of clip URLs to concatenate" },
-        title: { type: "string", description: "Human-readable label" },
-      },
-      required: ["scriptId", "key", "clipUrls"],
-    },
-  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -572,7 +455,7 @@ export const videoWorkflowMcp: McpProvider = {
           orderBy: { createdAt: "desc" },
         });
         return json(
-          novels.map((n) => ({
+          novels.map((n: { id: string; name: string; episodeCount: number; createdAt: Date }) => ({
             id: n.id,
             name: n.name,
             episodeCount: n.episodeCount,
@@ -591,7 +474,7 @@ export const videoWorkflowMcp: McpProvider = {
           orderBy: { scriptKey: "asc" },
         });
         return json(
-          scripts.map((s) => ({
+          scripts.map((s: { id: string; scriptKey: string; scriptName: string; createdAt: Date }) => ({
             scriptId: s.id,
             scriptKey: s.scriptKey,
             scriptName: s.scriptName,
@@ -670,7 +553,7 @@ export const videoWorkflowMcp: McpProvider = {
             where: { novelId },
             select: { id: true },
           });
-          const epIds = scripts.map((s) => s.id);
+          const epIds = scripts.map((s: { id: string }) => s.id);
           if (epIds.length > 0) {
             scriptResources = await prisma.keyResource.findMany({
               where: { scopeType: "script", scopeId: { in: epIds }, ...mediaFilter },
@@ -683,7 +566,7 @@ export const videoWorkflowMcp: McpProvider = {
         const allResources = [...novelResources, ...scriptResources];
         const currentVersionRow = (
           resource: (typeof allResources)[number],
-        ) => resource.versions.find((v) => v.version === resource.currentVersion) ?? null;
+        ) => resource.versions.find((v: { version: number }) => v.version === resource.currentVersion) ?? null;
 
         // 3. Map to output
         let resources = allResources.map((r) => {
@@ -1074,7 +957,6 @@ export const videoWorkflowMcp: McpProvider = {
           const refName = nameMatch[1]!;
 
           // Match: resource title appears in refName, or refName appears in title
-          // e.g. refName="Avery立绘" contains title="Avery", refName="Jason家别墅客厅空镜" contains title="Jason家别墅客厅"
           let matched: string | null = null;
           for (const r of allResources) {
             const url = r.versions[0]?.url;
@@ -1095,11 +977,21 @@ export const videoWorkflowMcp: McpProvider = {
         const shotStyle = await resolveStyle("video_style");
         if (shotStyle.styleRefUrl) refImageUrls.unshift(shotStyle.styleRefUrl);
 
-        // 5. Handle continuation: extract_tail if previousVideoUrl provided
+        // 5. Handle continuation: crop_video if previousVideoUrl provided
         let sourceVideoUrls: string[] | undefined;
         if (shotParams.previousVideoUrl) {
-          const tail = await restoredExtractTail(shotParams.previousVideoUrl, 5);
-          sourceVideoUrls = [tail.clipUrl];
+          try {
+            // Extract last 5 seconds using FC crop_video service
+            const tailUrl = await callFcCropVideo({
+              videoUrl: shotParams.previousVideoUrl,
+              startTime: Math.max(0, shotParams.duration - 5),
+              endTime: shotParams.duration,
+            });
+            sourceVideoUrls = [tailUrl];
+          } catch (err) {
+            // If crop fails, continue without continuation
+            void err;
+          }
         }
 
         // 6. Compile prompt via style template
@@ -1108,24 +1000,13 @@ export const videoWorkflowMcp: McpProvider = {
           prompt: shotParams.shotPrompt,
         });
 
-        // 7. Call Seedance
-        // generateType: multimodal when continuing from video, otherwise text_to_video.
-        // Reference images are passed via imageUrls but don't change the mode —
-        // the prompt text (@图1 作为首帧 etc.) tells Seedance how to use them.
-        const imageUrls = [...refImageUrls];
-        const videoUrls = sourceVideoUrls ?? [];
-        const generateType = videoUrls.length > 0
-          ? "multimodal" as const
-          : "text_to_video" as const;
-
-        let seedResult;
+        // 7. Call FC generate_video service
+        let videoUrl: string;
         try {
-          seedResult = await seedanceGenerate({
+          videoUrl = await callFcGenerateVideo({
             prompt: shotPromptCompiled,
-            generateType,
-            imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-            videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
-            duration: shotParams.duration,
+            referenceImageUrls: refImageUrls.length > 0 ? refImageUrls : undefined,
+            sourceVideoUrls,
           });
         } catch (err) {
           return json({
@@ -1142,9 +1023,9 @@ export const videoWorkflowMcp: McpProvider = {
           "script", shotParams.scriptId, shotParams.key, "video",
           {
             prompt: shotPromptCompiled,
-            url: seedResult.saveUrl,
-            refUrls: [...imageUrls, ...videoUrls],
-            data: { generateType, duration: shotParams.duration },
+            url: videoUrl,
+            refUrls: [...refImageUrls, ...(sourceVideoUrls ?? [])],
+            data: { duration: shotParams.duration },
           },
         );
         await setKeyResourceMetadata(kr.id, "视频", shotParams.title ?? shotParams.key);
@@ -1154,8 +1035,7 @@ export const videoWorkflowMcp: McpProvider = {
           key: shotParams.key,
           keyResourceId: kr.id,
           version: kr.version,
-          videoUrl: seedResult.saveUrl,
-          timingMs: seedResult.timingMs,
+          videoUrl,
           referenceImageCount: refImageUrls.length,
           prompt: shotPromptCompiled,
         });
@@ -1208,193 +1088,6 @@ export const videoWorkflowMcp: McpProvider = {
           "script", scriptId, key, "换装", prompt, characterName, finalRefUrls, model,
         );
         return json(result);
-      }
-
-      /* ------------------------------------------------------------ */
-      /*  generate_video                                               */
-      /* ------------------------------------------------------------ */
-      case "generate_video": {
-        const params = GenerateVideoParams.parse(args);
-
-        // --- 0. Resolve style from DB preset (by name) ---
-        const style = await resolveStyle(params.styleName);
-
-        // --- 1. Resolve novelId from scriptId ---
-        const script = await prisma.novelScript.findUnique({
-          where: { id: params.scriptId },
-          select: { novelId: true },
-        });
-        if (!script) return text(`Episode not found: ${params.scriptId}`);
-        const novelId = script.novelId;
-
-        let prompt: string;
-        let referenceImageUrls: string[];
-
-        if (params.shotPrompt && !params.prompt) {
-          // ============================================================
-          //  shotPrompt mode: definition + style + prompt
-          //  Reference URLs passed via referenceImageUrls / sourceVideoUrls
-          // ============================================================
-          referenceImageUrls = params.referenceImageUrls ?? [];
-
-          // Prepend style reference image if present
-          if (style.styleRefUrl) {
-            referenceImageUrls.unshift(style.styleRefUrl);
-          }
-
-          prompt = compileTemplate(style.stylePrompt, {
-            definition: params.definition ?? "",
-            prompt: params.shotPrompt!,
-          });
-
-        } else if (params.prompt) {
-          // ============================================================
-          //  Explicit prompt override
-          // ============================================================
-          prompt = params.prompt;
-          referenceImageUrls = [];
-
-        } else {
-          // ============================================================
-          //  Legacy clipDescription mode
-          //  Auto-collect reference image URLs from DB (style ref + scenes + costumes)
-          // ============================================================
-          const sceneResources = await prisma.keyResource.findMany({
-            where: { scopeType: "novel", scopeId: novelId, category: "场景", currentVersion: { gt: 0 } },
-            include: { versions: { orderBy: { version: "desc" }, take: 1 } },
-          });
-          const costumeResources = await prisma.keyResource.findMany({
-            where: { scopeType: "script", scopeId: params.scriptId, category: "换装", currentVersion: { gt: 0 } },
-            include: { versions: { orderBy: { version: "desc" }, take: 1 } },
-          });
-
-          referenceImageUrls = [];
-          if (style.styleRefUrl) referenceImageUrls.push(style.styleRefUrl);
-          for (const r of sceneResources) {
-            const url = r.versions[0]?.url;
-            if (url) referenceImageUrls.push(url);
-          }
-          for (const r of costumeResources) {
-            const url = r.versions[0]?.url;
-            if (url) referenceImageUrls.push(url);
-          }
-
-          prompt = compileTemplate(style.stylePrompt, {
-            definition: params.definition ?? "",
-            prompt: params.clipDescription ?? "",
-          });
-        }
-
-        // --- 4. Build image/video URL lists for Seedance ---
-        const imageUrls = [
-          ...(params.sourceImageUrl ? [params.sourceImageUrl] : []),
-          ...referenceImageUrls,
-        ];
-        const videoUrls = params.sourceVideoUrls ?? [];
-
-        const generateType = videoUrls.length > 0
-          ? "multimodal" as const
-          : params.sourceImageUrl
-            ? "first_frame" as const
-            : "text_to_video" as const;
-
-        // Debug context — always available for both success and failure
-        const debugContext = {
-          prompt,
-          generateType,
-          imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-          videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
-          referenceImageUrls,
-          duration: params.duration,
-        };
-
-        let result;
-        try {
-          result = await seedanceGenerate({
-            prompt,
-            generateType,
-            imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-            videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
-            duration: params.duration,
-          });
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          return json({
-            status: "error",
-            error: errMsg,
-            key: params.key,
-            ...debugContext,
-          });
-        }
-
-        // --- 5. Persist to KeyResource ---
-        const kr = await keyResourceService.upsertResource(
-          "script", params.scriptId, params.key, "video",
-          {
-            prompt,
-            url: result.saveUrl,
-            refUrls: [...imageUrls, ...videoUrls],
-            data: {
-              generateType,
-              imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-              videoUrls: videoUrls.length > 0 ? videoUrls : undefined,
-              duration: params.duration,
-            },
-          },
-        );
-        await setKeyResourceMetadata(kr.id, "视频", params.title ?? params.key);
-
-        return json({
-          status: "ok",
-          key: params.key,
-          keyResourceId: kr.id,
-          version: kr.version,
-          videoUrl: result.saveUrl,
-          timingMs: result.timingMs,
-          referenceCount: referenceImageUrls.length,
-          prompt,
-        });
-      }
-
-      /* ------------------------------------------------------------ */
-      /*  extract_tail                                                 */
-      /* ------------------------------------------------------------ */
-      case "extract_tail": {
-        const { sourceVideoUrl, seconds } = ExtractTailParams.parse(args);
-        const tail = await restoredExtractTail(sourceVideoUrl, seconds);
-        return json({
-          ...tail,
-          note: "video_workflow MCP restored; ffmpeg tail extraction backend is not restored",
-        });
-      }
-
-      /* ------------------------------------------------------------ */
-      /*  concat_clips                                                 */
-      /* ------------------------------------------------------------ */
-      case "concat_clips": {
-        const { scriptId, key, clipUrls, title } = ConcatClipsParams.parse(args);
-        const videoUrl = clipUrls.at(-1);
-        if (!videoUrl) return text("clipUrls must contain at least one URL");
-
-        const kr = await keyResourceService.upsertResource(
-          "script", scriptId, key, "video",
-          {
-            prompt: `Restored video_workflow concat placeholder for ${clipUrls.length} clips`,
-            url: videoUrl,
-            refUrls: clipUrls,
-          },
-        );
-        await setKeyResourceMetadata(kr.id, "视频", title ?? key);
-
-        return json({
-          status: "ok",
-          key,
-          keyResourceId: kr.id,
-          version: kr.version,
-          videoUrl,
-          clipCount: clipUrls.length,
-          note: "video_workflow MCP restored; ffmpeg concat backend is not restored",
-        });
       }
 
       default:
