@@ -17,6 +17,7 @@ import * as novelService from "@/lib/services/novel-service";
 import * as episodeService from "@/lib/services/episode-service";
 import * as orchestrationService from "@/lib/services/video-workflow-orchestration-service";
 import * as assetGenerationService from "@/lib/services/video-asset-generation-service";
+import * as shotPlanningService from "@/lib/services/video-shot-planning-service";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -178,6 +179,54 @@ const TOOLS: Tool[] = [
     },
   },
 
+  // --- Video Planning & Generation Pipeline ---
+  {
+    name: "plan_video_shots",
+    description:
+      "生成 EP 级别的所有视频镜头计划。输入当前 EP 剧本（可选前后 EP 作为上下文），" +
+      "输出所有镜头的提示词计划（shotId, duration, shotPrompt, definition, assets 等）。" +
+      "使用主 agent 分析剧本并生成镜头计划，遵循 video-workflow skill 规则。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        scriptId: { type: "string", description: "当前 Episode script DB ID" },
+        prevEpisodeId: { type: "string", description: "可选：前一个 EP 的 script ID，用于上下文连贯" },
+        nextEpisodeId: { type: "string", description: "可选：后一个 EP 的 script ID，用于情绪铺垫" },
+      },
+      required: ["scriptId"],
+    },
+  },
+  {
+    name: "review_video_shots",
+    description:
+      "使用 reviewer subagent 审查视频镜头提示词。按照 video-skill-reviewer 的 32 项标准检查，" +
+      "返回所有问题（error/warning）和改进建议。主 agent 应根据反馈迭代改进提示词。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        scriptId: { type: "string", description: "Episode script DB ID" },
+        shots: { type: "array", description: "待审查的镜头数组（plan_video_shots 的输出）" },
+      },
+      required: ["scriptId", "shots"],
+    },
+  },
+  {
+    name: "generate_video_shots",
+    description:
+      "完整的 EP 级视频生成管线：1) 规划镜头 2) reviewer 审查 3) 迭代改进直到通过 4) 批量生成视频。" +
+      "这是一站式工具，自动处理整个流程。支持前后 EP 上下文和最大审查迭代次数配置。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        scriptId: { type: "string", description: "当前 Episode script DB ID" },
+        prevEpisodeId: { type: "string", description: "可选：前一个 EP 的 script ID" },
+        nextEpisodeId: { type: "string", description: "可选：后一个 EP 的 script ID" },
+        maxReviewIterations: { type: "number", description: "最大审查迭代次数（默认 3）" },
+      },
+      required: ["scriptId"],
+    },
+  },
+
   // --- Video Execution ---
   {
     name: "execute_video_shot",
@@ -268,6 +317,24 @@ export const videoWorkflowMcp: McpProvider = {
         case "generate_costume": {
           const params = assetGenerationService.GenerateCostumeParams.parse(args);
           const result = await assetGenerationService.generateCostume(params);
+          return json(result);
+        }
+
+        case "plan_video_shots": {
+          const params = shotPlanningService.PlanVideoShotsParams.parse(args);
+          const result = await shotPlanningService.planVideoShots(params);
+          return json(result);
+        }
+
+        case "review_video_shots": {
+          const params = shotPlanningService.ReviewVideoShotsParams.parse(args);
+          const result = await shotPlanningService.reviewVideoShots(params);
+          return json(result);
+        }
+
+        case "generate_video_shots": {
+          const params = shotPlanningService.GenerateVideoShotsParams.parse(args);
+          const result = await shotPlanningService.generateVideoShots(params);
           return json(result);
         }
 
