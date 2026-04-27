@@ -6,8 +6,7 @@
     "agent-forge": "./dist/bin/agent-forge.js"
   },
   "scripts": {
-    "dev": "bash scripts/dev-all.sh",
-    "dev:stop": "bash scripts/dev-stop.sh",
+    "dev": "next dev --port ${PORT:-8001}",
     "build": "next build",
     "build:cli": "tsc --project tsconfig.cli.json",
     "cli": "tsx src/bin/agent-forge.ts",
