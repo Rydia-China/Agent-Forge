@@ -42,26 +42,26 @@ export const langfuseMcp: McpProvider = {
       {
         name: "list_prompts",
         description:
-          "List all prompts in Langfuse (names and metadata only, no content). Use to discover available prompt templates.",
+          "列出 Langfuse 中的所有 prompt 模板（仅名称和元数据，不含内容）。用于发现可用的 prompt。",
         inputSchema: { type: "object" as const, properties: {} },
       },
       {
         name: "compile_prompts",
         description:
-          "Fetch and compile Langfuse prompts by replacing {{variable}} placeholders concurrently. Returns an array of compiled prompts ready for subagent execution. For a single prompt, pass a one-element array.",
+          "获取并编译 Langfuse prompt，替换 {{variable}} 占位符。并发处理多个 prompt，返回编译后的内容。单个 prompt 也需要用数组格式。",
         inputSchema: {
           type: "object" as const,
           properties: {
             items: {
               type: "array",
-              description: "Array of prompts to compile",
+              description: "要编译的 prompt 数组",
               items: {
                 type: "object",
                 properties: {
-                  name: { type: "string", description: "Prompt name" },
+                  name: { type: "string", description: "Prompt 名称" },
                   variables: {
                     type: "object",
-                    description: "Key-value pairs to replace {{variable}} placeholders",
+                    description: "用于替换 {{variable}} 占位符的键值对",
                     additionalProperties: { type: "string" },
                   },
                 },

@@ -42,20 +42,20 @@ export const langfuseAdminMcp: McpProvider = {
       {
         name: "list_prompts",
         description:
-          "List all prompts in Langfuse with metadata (names, versions, labels, tags).",
+          "列出 Langfuse 中的所有 prompt，包含元数据（名称、版本、标签）。",
         inputSchema: { type: "object" as const, properties: {} },
       },
       {
         name: "get_prompts",
         description:
-          "Get prompt templates by name. Returns an array of results with full template content, version, and labels. For a single prompt, pass a one-element array.",
+          "根据名称获取 prompt 模板。返回完整模板内容、版本和标签。单个 prompt 也需要用数组格式。",
         inputSchema: {
           type: "object" as const,
           properties: {
             names: {
               type: "array",
               items: { type: "string" },
-              description: "Array of prompt names to fetch",
+              description: "要获取的 prompt 名称数组",
             },
           },
           required: ["names"],
@@ -64,24 +64,24 @@ export const langfuseAdminMcp: McpProvider = {
       {
         name: "create_prompt",
         description:
-          "Create a new prompt or push a new version of an existing prompt. If the name already exists, a new version is created. Set labels to [\"production\"] to deploy immediately.",
+          "创建新 prompt 或推送现有 prompt 的新版本。如果名称已存在，会创建新版本。设置 labels 为 [\"production\"] 可立即部署。",
         inputSchema: {
           type: "object" as const,
           properties: {
             name: {
               type: "string",
-              description: "Prompt name (use workflow__step__type convention)",
+              description: "Prompt 名称（建议使用 workflow__step__type 命名规范）",
             },
             prompt: {
               type: "string",
               description:
-                "Prompt template content. Use {{variableName}} for variable placeholders.",
+                "Prompt 模板内容。使用 {{variableName}} 作为变量占位符。",
             },
             labels: {
               type: "array",
               items: { type: "string" },
               description:
-                'Labels for this version (e.g. ["production"], ["staging"]). Omit to create without deploying.',
+                '此版本的标签（如 ["production"], ["staging"]）。省略则创建但不部署。',
             },
           },
           required: ["name", "prompt"],

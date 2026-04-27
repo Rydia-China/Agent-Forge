@@ -104,19 +104,17 @@ const TOOLS: Tool[] = [
   {
     name: "generate_portrait",
     description:
-      "Generate a character portrait (novel-level). DO NOT pass prompt — the tool auto-reads " +
-      "character_arcs from DB and compiles with style template. " +
-      "styleName is required — pass the StylePreset name declared in your skill. " +
-      "Only pass novelId + characterName + styleName. Auto-handles key/scope/category/persistence.",
+      "生成角色立绘（小说级）。工具会自动从数据库读取角色描述并结合样式模板生成 prompt。" +
+      "通常只需传递 novelId + characterName + styleName，无需手动指定 prompt。",
     inputSchema: {
       type: "object" as const,
       properties: {
-        novelId: { type: "string", description: "Novel ID" },
-        characterName: { type: "string", description: "Character name (exact match from JSON)" },
-        styleName: { type: "string", description: "StylePreset name (e.g. 'portrait-style'). Looked up by unique name from DB." },
-        prompt: { type: "string", description: "Override prompt. Only for manual override in exceptional cases." },
-        referenceUrls: { type: "array", items: { type: "string" }, description: "Optional reference image URLs" },
-        model: { type: "string", description: "Image generation model name (e.g. 'google/gemini-3-pro-image-preview'). Falls back to FC env default if omitted." },
+        novelId: { type: "string", description: "小说 ID" },
+        characterName: { type: "string", description: "角色名称（需与 JSON 中完全匹配）" },
+        styleName: { type: "string", description: "样式预设名称（例如 'portrait-style'），从数据库中按名称查找" },
+        prompt: { type: "string", description: "手动覆盖 prompt。仅在需要完全自定义生成内容时使用，通常应省略此参数" },
+        referenceUrls: { type: "array", items: { type: "string" }, description: "可选的参考图片 URL" },
+        model: { type: "string", description: "图片生成模型名称（例如 'google/gemini-3-pro-image-preview'）。省略时使用 FC 环境默认值" },
       },
       required: ["novelId", "characterName"],
     },
@@ -124,19 +122,17 @@ const TOOLS: Tool[] = [
   {
     name: "update_portrait",
     description:
-      "Update / regenerate a character portrait (novel-level). Logic is identical to generate_portrait " +
-      "but uses a separate style preset so the two can diverge later. " +
-      "Use styleName='update_portrait_style'. " +
-      "Only pass novelId + characterName + styleName. Auto-handles key/scope/category/persistence.",
+      "更新/重新生成角色立绘（小说级）。逻辑与 generate_portrait 相同，但使用独立的样式预设以便两者可以独立演化。" +
+      "通常只需传递 novelId + characterName + styleName，无需手动指定 prompt。",
     inputSchema: {
       type: "object" as const,
       properties: {
-        novelId: { type: "string", description: "Novel ID" },
-        characterName: { type: "string", description: "Character name (exact match from JSON)" },
-        styleName: { type: "string", description: "StylePreset name (default: 'update_portrait_style')." },
-        prompt: { type: "string", description: "Override prompt. Only for manual override in exceptional cases." },
-        referenceUrls: { type: "array", items: { type: "string" }, description: "Optional reference image URLs" },
-        model: { type: "string", description: "Image generation model name. Falls back to FC env default if omitted." },
+        novelId: { type: "string", description: "小说 ID" },
+        characterName: { type: "string", description: "角色名称（需与 JSON 中完全匹配）" },
+        styleName: { type: "string", description: "样式预设名称（默认：'update_portrait_style'）" },
+        prompt: { type: "string", description: "手动覆盖 prompt。仅在需要完全自定义生成内容时使用，通常应省略此参数" },
+        referenceUrls: { type: "array", items: { type: "string" }, description: "可选的参考图片 URL" },
+        model: { type: "string", description: "图片生成模型名称。省略时使用 FC 环境默认值" },
       },
       required: ["novelId", "characterName"],
     },
@@ -144,21 +140,19 @@ const TOOLS: Tool[] = [
   {
     name: "generate_scene",
     description:
-      "Generate a scene location image (novel-level). Supports three modes:\n" +
-      "• single (default): generates a single scene image from visual_prompt (style: location_style).\n" +
-      "• grid: generates a unified grid image for a parent location + all sub-locations (style: location_grid_style). " +
-      "Use get_status to find resources with key ending in '_grid' (url=null means not yet generated).\n" +
-      "• hd: generates an HD image for a sub-location, using the parent's grid image as reference (style: sub_location_style). " +
-      "The parent's grid image must already exist (run mode=grid first).\n" +
-      "Style is auto-selected per mode. Only pass novelId + sceneName + mode.",
+      "生成场景位置图片（小说级）。支持三种模式：\n" +
+      "• single（默认）：为单个场景生成独立图片，使用 location_style 样式\n" +
+      "• grid：为父场景及其所有子场景生成统一的网格拼图，使用 location_grid_style 样式。适用于需要保持多个子场景视觉一致性的情况\n" +
+      "• hd：基于父场景的 grid 图生成子场景的高清版本，使用 sub_location_style 样式。前置条件：父场景的 grid 图必须已存在\n" +
+      "决策流程：首次生成单个场景 → single；需要多个子场景保持统一风格 → 先 grid 再 hd；独立场景无子场景 → single",
     inputSchema: {
       type: "object" as const,
       properties: {
-        novelId: { type: "string", description: "Novel ID" },
-        sceneName: { type: "string", description: "Scene name in Chinese (e.g. '银月领地 豪宅' for grid, '银月领地 豪宅 厨房' for hd/single)" },
-        mode: { type: "string", enum: ["single", "grid", "hd"], description: "Generation mode: 'single' (default), 'grid' (parent + subs grid), 'hd' (sub-scene from grid reference)" },
-        referenceUrls: { type: "array", items: { type: "string" }, description: "Optional reference image URLs" },
-        model: { type: "string", description: "Image generation model name. Falls back to FC env default if omitted." },
+        novelId: { type: "string", description: "小说 ID" },
+        sceneName: { type: "string", description: "场景名称（中文），例如 '银月领地 豪宅'（grid 模式）或 '银月领地 豪宅 厨房'（hd/single 模式）" },
+        mode: { type: "string", enum: ["single", "grid", "hd"], description: "生成模式：'single'（默认，独立场景）、'grid'（父场景+子场景网格）、'hd'（基于 grid 的子场景高清版）" },
+        referenceUrls: { type: "array", items: { type: "string" }, description: "可选的参考图片 URL" },
+        model: { type: "string", description: "图片生成模型名称。省略时使用 FC 环境默认值" },
       },
       required: ["novelId", "sceneName"],
     },

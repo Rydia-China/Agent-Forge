@@ -53,7 +53,7 @@ export const videoMgrMcp: McpProvider = {
       {
         name: "generate_image",
         description:
-          "Generate image(s) from text prompt(s) via FC. Images are automatically persisted to DB on success (both key_resource for version tracking and domain_resources for UI display) — no additional save step needed. Each item requires a unique `key` (session-scoped); re-using an existing key creates a new version. Returns array of {status, imageUrl, key, keyResourceId, version}.",
+          "根据文本 prompt 生成图片。生成成功后自动保存并支持版本管理。相同 key 会创建新版本而非新图片。",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -85,7 +85,7 @@ export const videoMgrMcp: McpProvider = {
       {
         name: "generate_video",
         description:
-          "Store video generation prompt(s) for storyboard shots. Prompt is automatically persisted to domain_resources (mediaType=video) on success — no additional save step needed. Does NOT generate actual video; users can trigger actual generation later from the UI.",
+          "保存视频生成 prompt 到数据库。不会实际生成视频，用户可稍后在 UI 中触发生成。",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -113,7 +113,7 @@ export const videoMgrMcp: McpProvider = {
       {
         name: "resolve_key_resource",
         description:
-          "Resolve one or more KeyResource IDs to their current-version URLs. Use this to look up the actual URL of a resource stored by its key_resource_id in biz tables.",
+          "根据 KeyResource ID 查询资源的当前版本 URL。",
         inputSchema: {
           type: "object" as const,
           properties: {

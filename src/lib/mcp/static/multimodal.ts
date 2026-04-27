@@ -15,6 +15,7 @@ const GenerateImageParams = z.object({
     z.object({
       prompt: z.string().min(1),
       referenceImageUrls: z.array(z.string().url()).optional(),
+      model: z.enum(["gemini", "gpt"]).optional().default("gemini"),
     }),
   ).min(1),
 });
@@ -98,48 +99,26 @@ export const multimodalMcp: McpProvider = {
       {
         name: "generate_image",
         description:
-          "Generate image(s) using Gemini model via FC. Returns array of {status, imageUrl} for each item.",
+          "通过 FC 生成图片。支持 Gemini 和 GPT 模型。返回每个任务的 {status, imageUrl}。",
         inputSchema: {
           type: "object" as const,
           properties: {
             items: {
               type: "array",
-              description: "Array of image generation tasks using Gemini model",
+              description: "图片生成任务数组",
               items: {
                 type: "object",
                 properties: {
-                  prompt: { type: "string", description: "Text prompt describing the image to generate" },
+                  prompt: { type: "string", description: "描述要生成图片的文本 prompt" },
                   referenceImageUrls: {
                     type: "array",
                     items: { type: "string" },
-                    description: "Optional reference image URLs for style/content guidance",
+                    description: "可选的参考图片 URL，用于风格/内容指导",
                   },
-                },
-                required: ["prompt"],
-              },
-            },
-          },
-          required: ["items"],
-        },
-      },
-      {
-        name: "generate_image_gpt",
-        description:
-          "Generate image(s) using GPT model via FC. Returns array of {status, imageUrl} for each item.",
-        inputSchema: {
-          type: "object" as const,
-          properties: {
-            items: {
-              type: "array",
-              description: "Array of image generation tasks using GPT model",
-              items: {
-                type: "object",
-                properties: {
-                  prompt: { type: "string", description: "Text prompt describing the image to generate" },
-                  referenceImageUrls: {
-                    type: "array",
-                    items: { type: "string" },
-                    description: "Optional reference image URLs for style/content guidance",
+                  model: {
+                    type: "string",
+                    enum: ["gemini", "gpt"],
+                    description: "图片生成模型：'gemini'（默认）或 'gpt'",
                   },
                 },
                 required: ["prompt"],
@@ -243,54 +222,28 @@ export const multimodalMcp: McpProvider = {
   ): Promise<CallToolResult> {
     switch (name) {
       case "generate_image": {
-        const url = process.env.FC_GENERATE_IMAGE_URL;
-        const token = process.env.FC_GENERATE_IMAGE_TOKEN;
-        if (!url || !token) {
-          return json([
-            {
-              status: "error",
-              error: "FC_GENERATE_IMAGE_URL and FC_GENERATE_IMAGE_TOKEN must be configured in .env",
-            },
-          ]);
-        }
-
         const { items } = GenerateImageParams.parse(args);
+        
         const results = await Promise.allSettled(
           items.map(async (item, i) => {
             try {
-              const imageUrl = await callFcEndpoint(url, token, {
-                prompt: item.prompt,
-                referenceImageUrls: item.referenceImageUrls,
-              });
-              return { index: i, status: "ok" as const, imageUrl };
-            } catch (e) {
-              return {
-                index: i,
-                status: "error" as const,
-                error: e instanceof Error ? e.message : String(e),
-              };
-            }
-          }),
-        );
-        return json(results.map((r) => (r.status === "fulfilled" ? r.value : r.reason)));
-      }
+              const isGpt = item.model === "gpt";
+              const url = isGpt 
+                ? process.env.FC_GENERATE_IMAGE_GPT_URL 
+                : process.env.FC_GENERATE_IMAGE_URL;
+              const token = isGpt 
+                ? process.env.FC_GENERATE_IMAGE_GPT_TOKEN 
+                : process.env.FC_GENERATE_IMAGE_TOKEN;
+              
+              if (!url || !token) {
+                throw new Error(
+                  isGpt
+                    ? "FC_GENERATE_IMAGE_GPT_URL and FC_GENERATE_IMAGE_GPT_TOKEN must be configured in .env"
+                    : "FC_GENERATE_IMAGE_URL and FC_GENERATE_IMAGE_TOKEN must be configured in .env"
+                );
+              }
 
-      case "generate_image_gpt": {
-        const url = process.env.FC_GENERATE_IMAGE_GPT_URL;
-        const token = process.env.FC_GENERATE_IMAGE_GPT_TOKEN;
-        if (!url || !token) {
-          return json([
-            {
-              status: "error",
-              error: "FC_GENERATE_IMAGE_GPT_URL and FC_GENERATE_IMAGE_GPT_TOKEN must be configured in .env",
-            },
-          ]);
-        }
-
-        const { items } = GenerateImageParams.parse(args);
-        const results = await Promise.allSettled(
-          items.map(async (item, i) => {
-            try {
+              const timeout = isGpt ? 180000 : 120000; // GPT: 3 min, Gemini: 2 min
               const imageUrl = await callFcEndpoint(
                 url,
                 token,
@@ -298,9 +251,9 @@ export const multimodalMcp: McpProvider = {
                   prompt: item.prompt,
                   referenceImageUrls: item.referenceImageUrls,
                 },
-                180000, // 3 minutes for GPT image generation
+                timeout,
               );
-              return { index: i, status: "ok" as const, imageUrl };
+              return { index: i, status: "ok" as const, imageUrl, model: item.model };
             } catch (e) {
               return {
                 index: i,

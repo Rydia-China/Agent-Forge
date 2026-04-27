@@ -49,13 +49,13 @@ export const happyhorseMcp: McpProvider = {
       {
         name: "happyhorse_create_task",
         description:
-          "Create a HappyHorse video generation task using DashScope API. Supports video editing with reference images. Returns taskId for status tracking.",
+          "创建 HappyHorse 视频生成任务。支持视频编辑和参考图风格迁移。返回 taskId 用于状态跟踪。",
         inputSchema: {
           type: "object" as const,
           properties: {
             prompt: {
               type: "string",
-              description: "Video description prompt (max 2500 characters)",
+              description: "视频描述 prompt（最多 2500 字符）",
             },
             media: {
               type: "array",
@@ -65,34 +65,34 @@ export const happyhorseMcp: McpProvider = {
                   type: {
                     type: "string",
                     enum: ["video", "reference_image"],
-                    description: "Media type: video (source video to edit) or reference_image (style reference)",
+                    description: "媒体类型：video（待编辑的源视频）或 reference_image（风格参考图）",
                   },
                   url: {
                     type: "string",
-                    description: "Public URL of the media file. Video must be MP4 format.",
+                    description: "媒体文件的公开 URL。视频必须为 MP4 格式。",
                   },
                 },
                 required: ["type", "url"],
               },
-              description: "Media array containing video and/or reference images. At least one item required.",
+              description: "媒体数组，包含视频和/或参考图。至少需要一项。",
             },
             resolution: {
               type: "string",
               enum: ["1080P", "720P"],
-              description: "Video resolution (default: 1080P)",
+              description: "视频分辨率（默认：1080P）",
             },
             ratio: {
               type: "string",
               enum: ["16:9", "9:16", "1:1", "4:3", "3:4"],
-              description: "Aspect ratio (default: 16:9)",
+              description: "宽高比（默认：16:9）",
             },
             duration: {
               type: "number",
-              description: "Video duration in seconds (3-15, default: 5)",
+              description: "视频时长（秒），范围 3-15，默认 5",
             },
             model: {
               type: "string",
-              description: "Model name (default: happyhorse-1.0-r2v)",
+              description: "模型名称（默认：happyhorse-1.0-r2v）",
             },
           },
           required: ["prompt", "media"],
@@ -101,13 +101,13 @@ export const happyhorseMcp: McpProvider = {
       {
         name: "happyhorse_query_task",
         description:
-          "Query the status of a HappyHorse video generation task. Returns status (PENDING/RUNNING/SUCCEEDED/FAILED) and video URL when complete.",
+          "查询 HappyHorse 视频生成任务状态。返回状态（PENDING/RUNNING/SUCCEEDED/FAILED）和视频 URL（完成时）。",
         inputSchema: {
           type: "object" as const,
           properties: {
             taskId: {
               type: "string",
-              description: "Task ID returned from create_task",
+              description: "create_task 返回的任务 ID",
             },
           },
           required: ["taskId"],
@@ -116,21 +116,21 @@ export const happyhorseMcp: McpProvider = {
       {
         name: "happyhorse_wait_task",
         description:
-          "Wait for a HappyHorse task to complete with automatic polling. Returns final status and video URL. Use this for synchronous workflow.",
+          "等待 HappyHorse 任务完成，自动轮询。返回最终状态和视频 URL。适用于同步工作流。",
         inputSchema: {
           type: "object" as const,
           properties: {
             taskId: {
               type: "string",
-              description: "Task ID returned from create_task",
+              description: "create_task 返回的任务 ID",
             },
             maxWaitTime: {
               type: "number",
-              description: "Maximum wait time in milliseconds (default: 300000 = 5 minutes)",
+              description: "最大等待时间（毫秒），默认 300000（5 分钟）",
             },
             pollInterval: {
               type: "number",
-              description: "Initial poll interval in milliseconds (default: auto-adjusted)",
+              description: "初始轮询间隔（毫秒），默认自动调整",
             },
           },
           required: ["taskId"],
