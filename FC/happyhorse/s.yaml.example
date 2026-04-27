@@ -1,0 +1,54 @@
+edition: 3.0.0
+name: happyhorse-fc
+access: default
+resources:
+  fcDemo:
+    component: fc3
+    props:
+      region: cn-hangzhou
+      handler: index.handler
+      role: ''
+      disableOndemand: false
+      description: 'HappyHorse video generation wrapper'
+      timeout: 300
+      diskSize: 512
+      internetAccess: true
+      resourceGroupId: rg-acfmwcye2ca5jca
+      instanceIsolationMode: SHARE
+      logConfig:
+        enableRequestMetrics: true
+        enableInstanceMetrics: true
+        logBeginRule: DefaultRegex
+        project: serverless-cn-hangzhou-be4c408d-7f9d-59bc-9f0e-3de9dd268c6d
+        logstore: default-logs
+      functionName: happyhorse
+      sessionAffinity: NONE
+      runtime: nodejs18
+      cpu: 0.1
+      memorySize: 256
+      environmentVariables:
+        HAPPYHORSE_API_KEY: YOUR_HAPPYHORSE_API_KEY
+      code: ./happyhorse
+      triggers:
+        - triggerConfig:
+            methods:
+              - POST
+              - OPTIONS
+            authType: bearer
+            disableURLInternet: false
+            authConfig:
+              bearerFormat: opaque
+              opaqueTokenConfig:
+                tokens:
+                  - createdTime: '2026-04-27T08:00:00Z'
+                    enable: true
+                    lastModifiedTime: '2026-04-27T08:00:00Z'
+                    tokenData: YOUR_TOKEN_DATA
+                    tokenID: YOUR_TOKEN_ID
+                    tokenName: happyhorse-token
+          triggerName: defaultTrigger
+          description: ''
+          qualifier: LATEST
+          triggerType: http
+      scalingConfig:
+        minInstances: 0
