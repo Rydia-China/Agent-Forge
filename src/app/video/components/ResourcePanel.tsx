@@ -2,11 +2,13 @@
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Button, Collapse, Drawer, Empty, Input, Spin, Typography, Image, Tag, App } from "antd";
-import { DeleteOutlined, EditOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, EyeOutlined, FormatPainterOutlined } from "@ant-design/icons";
 import type { DomainResources, DomainResource, VideoResourceData } from "../types";
 import { fetchJson } from "@/app/components/client-utils";
 import { ImageDetailDrawer } from "./ImageDetailDrawer";
 import { VideoDetailDrawer } from "./VideoDetailDrawer";
+import { StylePresetDrawer } from "./StylePresetDrawer";
+import { PromptPreviewDrawer } from "./PromptPreviewDrawer";
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -15,8 +17,10 @@ import { VideoDetailDrawer } from "./VideoDetailDrawer";
 export interface ResourcePanelProps {
   resources: DomainResources | null;
   isLoading: boolean;
+  novelId: string;
   scriptId: string | null;
   sessionId: string | undefined;
+  isNovelLevel?: boolean;
   onRefresh?: () => void;
 }
 
@@ -26,7 +30,7 @@ export interface ResourcePanelProps {
 
 const ASIDE_CLASS = "flex h-full w-56 min-w-[200px] shrink-0 flex-col border-l border-slate-800 bg-slate-950/80";
 
-export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRefresh }: ResourcePanelProps) {
+export function ResourcePanel({ resources, isLoading, novelId, scriptId, sessionId, isNovelLevel, onRefresh }: ResourcePanelProps) {
   const { message } = App.useApp();
 
   /* ---- JSON editor drawer state ---- */
@@ -39,6 +43,12 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
 
   /* ---- Video detail drawer state ---- */
   const [selectedVideoResource, setSelectedVideoResource] = useState<DomainResource | null>(null);
+
+  /* ---- Style preset drawer state ---- */
+  const [styleDrawerOpen, setStyleDrawerOpen] = useState(false);
+
+  /* ---- Prompt preview drawer state ---- */
+  const [promptPreviewOpen, setPromptPreviewOpen] = useState(false);
 
   /* ---- Collapse expand state (controlled) ---- */
   const [activeKeys, setActiveKeys] = useState<string[]>([]);
@@ -306,7 +316,31 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
     <>
       <aside className={ASIDE_CLASS}>
         <div className="border-b border-slate-800 px-3 py-2">
-          <Typography.Text strong style={{ fontSize: 12 }}>Resources</Typography.Text>
+          <div className="flex items-center justify-between">
+            <Typography.Text strong style={{ fontSize: 12 }}>Resources</Typography.Text>
+            <div className="flex items-center gap-1">
+              {isNovelLevel && (
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<EyeOutlined />}
+                  onClick={() => setPromptPreviewOpen(true)}
+                  className="!text-slate-400 hover:!text-slate-200"
+                  title="Prompt Preview"
+                  style={{ width: 28, height: 28, minWidth: 28 }}
+                />
+              )}
+              <Button
+                type="text"
+                size="small"
+                icon={<FormatPainterOutlined />}
+                onClick={() => setStyleDrawerOpen(true)}
+                className="!text-slate-400 hover:!text-slate-200"
+                title="Style Presets"
+                style={{ width: 28, height: 28, minWidth: 28 }}
+              />
+            </div>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
           <Collapse activeKey={activeKeys} onChange={(keys) => setActiveKeys(keys as string[])} items={items} size="small" ghost />
@@ -323,6 +357,16 @@ export function ResourcePanel({ resources, isLoading, scriptId, sessionId, onRef
         resource={selectedVideoResource}
         onClose={() => setSelectedVideoResource(null)}
       />
+
+      <StylePresetDrawer open={styleDrawerOpen} onClose={() => setStyleDrawerOpen(false)} />
+
+      {isNovelLevel && (
+        <PromptPreviewDrawer
+          open={promptPreviewOpen}
+          onClose={() => setPromptPreviewOpen(false)}
+          novelId={novelId}
+        />
+      )}
 
       <Drawer
         title={editingItem?.title ?? "Edit JSON"}

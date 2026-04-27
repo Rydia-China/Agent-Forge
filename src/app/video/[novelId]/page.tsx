@@ -160,8 +160,10 @@ export default function VideoWorkflowPage() {
         <ResourcePanel
           resources={isNovelMode ? novelData.resources : epData.resources}
           isLoading={isNovelMode ? novelData.isLoading : epData.isLoadingResources}
+          novelId={novelId}
           scriptId={isNovelMode ? null : epData.selectedEpisode?.id ?? null}
           sessionId={currentSessionId}
+          isNovelLevel={isNovelMode}
           onRefresh={() => isNovelMode ? void novelData.refresh() : void epData.refreshResources()}
         />
       </main>
