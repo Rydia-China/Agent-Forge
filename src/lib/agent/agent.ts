@@ -46,13 +46,11 @@ export interface KeyResourceEvent {
  */
 const KEY_RESOURCE_TOOLS = new Set([
   "subagent__run_text",
-  "video_mgr__generate_image",
-  "video_mgr__generate_video",
 ]);
 
 /**
  * Extract key resource events from a specific tool's result.
- * Only the 3 known resource-producing tools are handled.
+ * Only known resource-producing tools are handled.
  */
 export function extractKeyResources(toolName: string, content: string): KeyResourceEvent[] {
   if (!KEY_RESOURCE_TOOLS.has(toolName)) return [];
@@ -79,25 +77,6 @@ export function extractKeyResources(toolName: string, content: string): KeyResou
         mediaType: "json",
         data,
         title: item.keyJsonTitle as string,
-      });
-    } else if (toolName === "video_mgr__generate_image") {
-      // generate_image: { status, key, keyResourceId, imageUrl, version }
-      if (typeof item.key !== "string" || typeof item.keyResourceId !== "string") continue;
-      out.push({
-        key: item.key as string,
-        mediaType: "image",
-        url: typeof item.imageUrl === "string" ? item.imageUrl as string : undefined,
-        title: item.key as string,
-        persisted: { id: item.keyResourceId as string, version: item.version as number },
-      });
-    } else if (toolName === "video_mgr__generate_video") {
-      // generate_video: { status, key, keyResourceId, version }
-      if (typeof item.key !== "string" || typeof item.keyResourceId !== "string") continue;
-      out.push({
-        key: item.key as string,
-        mediaType: "video",
-        title: item.key as string,
-        persisted: { id: item.keyResourceId as string, version: item.version as number },
       });
     }
   }
