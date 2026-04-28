@@ -18,6 +18,7 @@ const GenerateImageParams = z.object({
       key: z.string().min(1),
       prompt: z.string().min(1),
       referenceImageUrls: z.array(z.string().url()).optional(),
+      model: z.string().optional(),
       /** Resource classification — required for auto-writeback to domain_resources */
       category: z.string().min(1),
       scopeType: z.enum(["novel", "script"]),
@@ -70,6 +71,7 @@ export const videoMgrMcp: McpProvider = {
                     items: { type: "string" },
                     description: "Optional reference image URLs for style/content guidance",
                   },
+                  model: { type: "string", description: "Optional image generation model (e.g. 'gpt-image-2', 'gemini-2.0-flash-exp'). Defaults to 'gpt-image-2'." },
                   category: { type: "string", description: "Resource category for UI grouping (LLM decides, e.g. '角色立绘', '场景', '服装', '分镜')" },
                   scopeType: { type: "string", enum: ["novel", "script"], description: "Scope level: 'novel' for novel-wide resources, 'script' for episode-scoped" },
                   scopeId: { type: "string", description: "ID of the scope entity (novel ID or script DB ID)" },
@@ -138,13 +140,14 @@ export const videoMgrMcp: McpProvider = {
       case "generate_image": {
         const { items } = GenerateImageParams.parse(args);
         const results = await Promise.allSettled(
-          items.map(async ({ key, prompt, referenceImageUrls, scopeType, scopeId }) => {
+          items.map(async ({ key, prompt, referenceImageUrls, model, scopeType, scopeId }) => {
             return keyResourceService.generateImage({
               scopeType,
               scopeId,
               key,
               prompt,
               refUrls: referenceImageUrls,
+              model,
             });
           }),
         );

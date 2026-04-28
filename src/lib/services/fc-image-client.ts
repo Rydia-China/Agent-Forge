@@ -10,18 +10,35 @@ export async function callFcGenerateImage(
   refUrls?: string[],
   model?: string,
 ): Promise<string> {
-  const url = process.env.FC_GENERATE_IMAGE_URL;
-  const token = process.env.FC_GENERATE_IMAGE_TOKEN;
+  const effectiveModel = model ?? DEFAULT_IMAGE_MODEL;
+
+  // Select FC endpoint based on model
+  let url: string | undefined;
+  let token: string | undefined;
+
+  if (effectiveModel.startsWith("gpt-image")) {
+    url = process.env.FC_GENERATE_IMAGE_GPT_URL;
+    token = process.env.FC_GENERATE_IMAGE_GPT_TOKEN;
+  } else if (effectiveModel.startsWith("gemini")) {
+    url = process.env.FC_GENERATE_IMAGE_URL;
+    token = process.env.FC_GENERATE_IMAGE_TOKEN;
+  } else {
+    // Default to GPT for unknown models
+    url = process.env.FC_GENERATE_IMAGE_GPT_URL;
+    token = process.env.FC_GENERATE_IMAGE_GPT_TOKEN;
+  }
 
   if (!url || !token) {
     throw new Error(
-      "FC_GENERATE_IMAGE_URL and FC_GENERATE_IMAGE_TOKEN must be configured in .env"
+      `FC endpoint not configured for model "${effectiveModel}". ` +
+      `Check FC_GENERATE_IMAGE_GPT_URL/TOKEN (for gpt-image-*) or ` +
+      `FC_GENERATE_IMAGE_URL/TOKEN (for gemini-*) in .env`
     );
   }
 
   const payload: Record<string, unknown> = {
     prompt,
-    model: model ?? DEFAULT_IMAGE_MODEL,
+    model: effectiveModel,
   };
   if (refUrls && refUrls.length > 0) {
     payload.refUrls = refUrls;
@@ -44,7 +61,7 @@ export async function callFcGenerateImage(
   }
 
   const result: unknown = await response.json();
-  
+
   // Extract image URL from response
   if (
     typeof result === "object" &&
