@@ -17,7 +17,7 @@ import type {
   StaleResourceItem,
 } from "@/lib/video/resource-types";
 import type { EpisodeSummary } from "@/lib/video/episode-types";
-import type { ScriptEpisode, NovelScriptUpload } from "@/lib/video/script-upload-schema";
+import type { NovelScriptUpload } from "@/lib/video/script-upload-schema";
 import {
   portraitKey,
   sceneKey,
@@ -112,21 +112,6 @@ function addScriptCostumeResource(
   });
 }
 
-function addCharactersFromValue(
-  items: ExpectedResourceMeta[],
-  seen: Set<string>,
-  novelId: string,
-  value: unknown,
-  nameMapping?: Map<string, string>,
-): void {
-  for (const name of parseArray(value)) {
-    if (typeof name === "string") {
-      const normalizedName = nameMapping?.get(name) ?? name;
-      addNovelCharacterResource(items, seen, novelId, normalizedName);
-    }
-  }
-}
-
 function addOutfitsFromValue(
   items: ExpectedResourceMeta[],
   seen: Set<string>,
@@ -139,25 +124,6 @@ function addOutfitsFromValue(
   for (const name of Object.keys(outfits)) {
     const normalizedName = nameMapping?.get(name) ?? name;
     addScriptCostumeResource(items, seen, scriptId, normalizedName);
-  }
-}
-
-function addSceneLocationsFromValue(
-  items: ExpectedResourceMeta[],
-  seen: Set<string>,
-  novelId: string,
-  value: unknown,
-): void {
-  const sceneLocations = parseRecord(value);
-  if (!sceneLocations) return;
-
-  // Add all scene_locations that are referenced in episodes,
-  // regardless of whether they have visual_prompt or not.
-  // The presence in scene_locations indicates they are used by the script.
-  for (const [name, rawScene] of Object.entries(sceneLocations)) {
-    if (name && name.trim()) {
-      addNovelSceneResource(items, seen, novelId, name);
-    }
   }
 }
 
@@ -269,8 +235,7 @@ function computeExpectedKeys(
     const episode = episodes[index];
     const scriptId = createdEpisodes[index]?.id;
     if (!episode || !scriptId) continue;
-    addCharactersFromValue(items, seen, novelId, episode.output.characters, nameMapping);
-    addSceneLocationsFromValue(items, seen, novelId, episode.output.scene_locations);
+    // Episode data may reference local characters/scenes, but it only creates script-scope resources.
     const outfits = episode.output.character_outfits;
     if (outfits) addOutfitsFromValue(items, seen, scriptId, outfits, nameMapping);
   }
@@ -291,10 +256,12 @@ async function computeStoredExpectedKeys(
     select: { characterArcs: true, locationBible: true },
   });
 
-  const scripts = await prisma.novelScript.findMany({
-    where: { novelId },
-    select: { id: true, initResult: true, characters: true, costumes: true },
-  });
+  const scripts = scriptScopeIds.size > 0
+    ? await prisma.novelScript.findMany({
+        where: { novelId, id: { in: Array.from(scriptScopeIds) } },
+        select: { id: true, initResult: true, costumes: true },
+      })
+    : [];
 
   const items: ExpectedResourceMeta[] = [];
   const seen = new Set<string>();
@@ -339,9 +306,7 @@ async function computeStoredExpectedKeys(
     const scriptId = script.id;
 
     const initResult = parseRecord(script.initResult);
-    addCharactersFromValue(items, seen, novelId, initResult?.characters ?? script.characters, nameMapping);
-    addSceneLocationsFromValue(items, seen, novelId, initResult?.scene_locations);
-
+    // Stored episode data may only add script-scoped resources for the requested script.
     if (scriptScopeIds.has(scriptId)) {
       addOutfitsFromValue(items, seen, scriptId, initResult?.character_outfits ?? script.costumes, nameMapping);
     }

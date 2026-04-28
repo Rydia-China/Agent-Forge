@@ -32,8 +32,8 @@ export class NovelContextProvider implements ContextProvider {
       "",
       "## Scope",
       "当前为小说级资源管理，用于初始化和管理整个小说的共享资源：",
-      "- 角色信息和初始立绘 (characters)",
-      "- 场景位置和场景图片 (scene_locations)",
+      "- character_arcs 中定义的角色信息和初始立绘",
+      "- location_bible 中定义的场景位置和场景图片",
       "",
       "这些资源将被所有 EP 共享复用。",
     ];
