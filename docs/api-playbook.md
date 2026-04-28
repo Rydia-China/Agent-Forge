@@ -158,6 +158,48 @@ EP 级资源 agent：
 5. 主控只有在 Optimizer 返回 `passed` 且 `allowVideoGeneration=true` 后，才调用 `save_reviewed_video_prompt` 保存 prompt
 6. 视频生成时支持系统资源形式的帧参照：从上一个视频抽取末尾帧并保存为后续 shot 的参考资源
 
+**EP Prompt Optimizer 调试 SOP**：
+适用场景：调整 `video-workflow`、`video-prompt-optimizer`、`video-skill-reviewer` 或资源门禁后，需要验证主控、Optimizer、Writer、Reviewer 的实际调度链路。
+1. 先确认 EP 资源状态，不要直接启动生成：
+```
+pnpm --dir /path/to/Agent-Forge --silent run cli debug:mcp-call '{"provider":"video_workflow","name":"get_status","arguments":{"scriptId":"<scriptId>"}}'
+```
+验收：`portraits/scenes/costumes` 都是 `done=total`，且 `runningTasks` 为空；否则先处理资源门禁，不进入 Prompt Optimizer。
+2. 通过 URL-only/CLI 启动 EP agent，消息必须明确“不要执行视频生成”：
+```
+pnpm --dir /path/to/Agent-Forge --silent run cli debug:mcp-call '{"provider":"agent_forge","name":"submit_ep_agent","arguments":{"novelId":"<novelId>","scriptId":"<scriptId>","scriptKey":"<scriptKey>","message":"执行 EP prompt 生成流程；使用 Prompt Optimizer 最多 5 轮增量迭代；通过后保存 reviewed prompts；不要执行视频生成。"}}'
+```
+记录返回的 `subagent_id` 和 `session_id`，后续禁止丢失这些 ID。
+3. 观察顶层事件流：
+```
+pnpm --dir /path/to/Agent-Forge --silent run cli debug:subagent-events '{"subagentId":"<subagent_id>","timeoutMs":180000,"showText":false}'
+```
+顶层验收：应看到 `video_workflow__get_status`、必要时 `video_workflow__get_episode`，然后只出现一次用于 Prompt Optimizer 的 `subagent__run`。顶层主控不应直接循环调用 Prompt Writer / Reviewer。
+4. 抽取顶层 session 工具调用和工具结果：
+```
+pnpm --dir /path/to/Agent-Forge --silent run cli debug:session-tools '{"sessionId":"<session_id>","includeToolResults":true,"includeArguments":true,"resultMaxChars":50000}'
+```
+验收：`subagent__run` 的 arguments 中应包含 `skills:["video-prompt-optimizer",...]`、`mcpScope:["subagent"]`、`includeTrace:true`。工具结果应包含 Optimizer 的结构化输出或 trace，可用于确认内部 Writer/Reviewer 轮次。
+5. 如 `subagent__run` 返回内存 `agentId`，立即抓嵌套 trace：
+```
+pnpm --dir /path/to/Agent-Forge --silent run cli debug:mcp-call '{"provider":"subagent","name":"get_trace","arguments":{"agentId":"<optimizerAgentId>","tree":true}}'
+```
+该 trace 是内存态调试数据，进程重启后可能不可用；持久证据以 session tools 中的 tool result 为准。
+6. Optimizer 内部验收：
+- 每轮必须有独立 Prompt Writer 和独立 Reviewer。
+- 最多 5 轮，且每轮更新 `iterationHistory`。
+- 下一轮 Writer 输入必须包含 `latestPromptJson`、`latestReviewJson`、历史 issue 摘要和 `doNotRegress`，而不是只传上一轮口头反馈。
+- Reviewer issue 应有稳定 `issueId` / `rule` / `blocking`，便于区分 `resolvedIssues`、`remainingIssues`、`newIssues`。
+- `status="passed"` 时才能进入保存；`max_iterations` / `conflict` / `failed` 均不得保存 reviewed prompt，不得产视。
+7. 停止与恢复规则：
+- 用户要求停止调试时，先取消顶层 `subagent_id`：`curl -X POST http://localhost:8001/api/subagents/<subagent_id>/cancel`。
+- 如果返回 “not found or already finished”，不得为了看 trace 重新执行；先用 `debug:subagent-get`、`debug:session-tools` recall 已持久化结果。
+- `interrupted` 表示 partial context 已保存，不自动重跑；继续前必须基于已有 session 续写。
+8. 保存结果验收：
+- 只有 Optimizer `passed` 且 final review 允许生成时，主控才调用 `save_reviewed_video_prompt`。
+- 保存的 prompt JSON data 必须包含 `iterationCount`、`iterationHistory`、`bestVersion`、`resolvedIssues`、`remainingIssues`、`doNotRegress` 和 `optimizerSummary`，保证 UI 可查看版本路径和反馈历史。
+- 用户未明确要求生成视频时，不应出现 `execute_video_prompt`。
+
 前端兼容性：`/api/video/tasks` 与 `/api/video/novel/{novelId}/chat` 都返回 `subagent_id`，并同时保留 `task_id` 作为旧字段别名；前端以 `subagent_id` 连接 `/api/subagents/{id}/events`。
 
 ## 双入口等价性
