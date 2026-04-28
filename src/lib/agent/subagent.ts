@@ -50,6 +50,8 @@ export interface SubAgentConfig {
   keyJsonTitle?: string;
   /** Parent agent ID — set automatically when spawned by another SubAgent. */
   parentAgentId?: string;
+  /** Persisted SubAgent row ID for durable trace parentage. */
+  persistentAgentId?: string;
 }
 
 export interface ToolCallTrace {
@@ -468,6 +470,7 @@ export class SubAgent {
   private readonly config: SubAgentConfig;
   private readonly model: string;
   private readonly isToolLoop: boolean;
+  private readonly persistentAgentId?: string;
   private availableMcpScope: string[] = [];
 
   /* Internal state */
@@ -486,6 +489,7 @@ export class SubAgent {
     this.model = resolveModel(config.model);
     this.isToolLoop = !!(config.mcpScope && config.mcpScope.length > 0);
     this.parentAgentId = config.parentAgentId ?? null;
+    this.persistentAgentId = config.persistentAgentId;
     this.depth = depth;
     activeAgents.set(this.id, this);
   }
@@ -740,6 +744,7 @@ export class SubAgent {
             {
               ...toolContext,
               parentAgentId: this.id,
+              persistentParentAgentId: this.persistentAgentId ?? toolContext?.persistentParentAgentId,
               agentDepth: this.depth + 1,
             },
           );

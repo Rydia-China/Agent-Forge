@@ -7,6 +7,12 @@ import {
   type SubAgentProgressCallbacks,
 } from "@/lib/agent/subagent";
 import { resolveModel } from "@/lib/agent/models";
+import {
+  createSubAgentTaskRecord,
+  markTaskRunning,
+  persistFailure,
+  persistResult,
+} from "./subagent-persistence-service";
 
 /* ================================================================== */
 /*  Types                                                              */
@@ -33,6 +39,7 @@ export interface TaskResult {
   status: string;
   result: string;
   agentId: string;
+  taskId?: string;
   model: string;
   durationMs: number;
   toolCallCount: number;
@@ -73,6 +80,9 @@ function formatResult(
     toolCallCount: result.toolCallCount,
   };
   if (result.error) base.error = result.error;
+  if ("taskId" in result && typeof result.taskId === "string") {
+    base.taskId = result.taskId;
+  }
   if (result.validated !== undefined) base.validated = result.validated;
   if (result.attempts !== undefined) base.attempts = result.attempts;
   if (result.keyJsonTitle) base.keyJsonTitle = result.keyJsonTitle;
@@ -139,8 +149,32 @@ export async function runSubAgentTask(
   task: TaskInput,
   context?: ToolContext,
   callbacks?: SubAgentProgressCallbacks,
+  options?: { persist?: boolean },
 ): Promise<SubAgentResult & { agentId: string }> {
-  return runSubAgent(task, context, callbacks);
+  if (options?.persist === false) {
+    return runSubAgent(task, context, callbacks);
+  }
+
+  const taskId = await createSubAgentTaskRecord(task, context);
+  const t0 = Date.now();
+  try {
+    await markTaskRunning(taskId);
+    const result = await runSubAgent(
+      { ...task, persistentAgentId: taskId },
+      context,
+      callbacks,
+    );
+    await persistResult(taskId, result);
+    return { ...result, taskId };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    await persistFailure(taskId, message, resolveModel(task.model), Date.now() - t0).catch(
+      () => {
+        /* best effort */
+      },
+    );
+    throw err;
+  }
 }
 
 /**

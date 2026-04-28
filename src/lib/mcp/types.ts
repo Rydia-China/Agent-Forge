@@ -16,6 +16,8 @@ export interface ToolContext {
   userName?: string;
   /** Parent in-memory subagent ID when tools are called by a subagent. */
   parentAgentId?: string;
+  /** Parent persisted SubAgent row ID for durable trace trees. */
+  persistentParentAgentId?: string;
   /** Current subagent nesting depth. */
   agentDepth?: number;
   /** Optional progress bridge used by streaming agent/subagent execution. */
