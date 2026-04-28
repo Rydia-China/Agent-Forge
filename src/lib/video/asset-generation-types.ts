@@ -34,8 +34,12 @@ export interface GenerateAndPersistImageInput {
 }
 
 export interface GenerateAndPersistImageResult {
-  url: string;
+  status: "ok" | "error";
+  key: string;
+  keyResourceId: string;
+  imageUrl?: string;
   version: number;
+  error?: string;
 }
 
 export interface ExecuteVideoShotResult {
