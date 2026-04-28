@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
-import type { ChatMessage } from "@/lib/agent/types";
+import type { ChatMessage, ProviderMetadata } from "@/lib/agent/types";
 
 /* ------------------------------------------------------------------ */
 /*  User                                                               */
@@ -130,6 +130,7 @@ export async function pushMessages(
     images: m.images?.length ? m.images : [],
     toolCalls: m.tool_calls ? (m.tool_calls as unknown as Prisma.InputJsonValue) : undefined,
     toolCallId: m.tool_call_id ?? null,
+    providerMetadata: providerMetadataToJson(m.providerMetadata),
     hidden: m.hidden ?? false,
   }));
 
@@ -184,7 +185,30 @@ interface DbMessageRow {
   images: string[];
   toolCalls: Prisma.JsonValue;
   toolCallId: string | null;
+  providerMetadata: Prisma.JsonValue;
   hidden: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function providerMetadataToJson(metadata: ProviderMetadata | undefined): Prisma.InputJsonValue | undefined {
+  if (!metadata) return undefined;
+  const out: Record<string, string> = {};
+  if (metadata.reasoning_content && metadata.reasoning_content.trim().length > 0) {
+    out.reasoning_content = metadata.reasoning_content;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function providerMetadataFromJson(value: Prisma.JsonValue): ProviderMetadata | undefined {
+  if (!isRecord(value)) return undefined;
+  const reasoningContent = value.reasoning_content;
+  if (typeof reasoningContent !== "string" || reasoningContent.trim().length === 0) {
+    return undefined;
+  }
+  return { reasoning_content: reasoningContent };
 }
 
 function dbMsgToChat(row: DbMessageRow): ChatMessage {
@@ -200,6 +224,10 @@ function dbMsgToChat(row: DbMessageRow): ChatMessage {
   }
   if (row.toolCallId) {
     msg.tool_call_id = row.toolCallId;
+  }
+  const providerMetadata = providerMetadataFromJson(row.providerMetadata);
+  if (providerMetadata) {
+    msg.providerMetadata = providerMetadata;
   }
   if (row.hidden) {
     msg.hidden = true;

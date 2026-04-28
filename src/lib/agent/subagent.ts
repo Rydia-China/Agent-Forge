@@ -69,6 +69,7 @@ export interface SubAgentTraceMessage {
   content: string | null;
   tool_calls?: unknown[];
   tool_call_id?: string;
+  reasoning_content?: string;
 }
 
 export interface SubAgentTrace {
@@ -226,6 +227,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function getReasoningContent(value: unknown): string | undefined {
+  if (!isRecord(value)) return undefined;
+  const raw = value.reasoning_content;
+  return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+}
+
+function messageWithReasoning(
+  message: Record<string, unknown>,
+  source: unknown,
+): LlmMessage {
+  const reasoningContent = getReasoningContent(source);
+  if (reasoningContent) {
+    message.reasoning_content = reasoningContent;
+  }
+  return message as unknown as LlmMessage;
+}
+
 function parseToolArgs(raw: string): Record<string, unknown> {
   const parseCandidate = (candidate: string): Record<string, unknown> | null => {
     try {
@@ -325,6 +343,10 @@ function traceMessageFromLlm(message: LlmMessage): SubAgentTraceMessage {
   }
   if ("tool_call_id" in message && typeof message.tool_call_id === "string") {
     out.tool_call_id = message.tool_call_id;
+  }
+  const reasoningContent = getReasoningContent(message);
+  if (reasoningContent) {
+    out.reasoning_content = reasoningContent;
   }
   return out;
 }
@@ -577,10 +599,14 @@ export class SubAgent {
         undefined,
         this.model,
       );
-      const raw = completion.choices[0]?.message.content ?? "";
+      const assistantMsg = completion.choices[0]?.message;
+      const raw = assistantMsg?.content ?? "";
       this.iterations++;
 
-      this.messages.push({ role: "assistant", content: raw });
+      this.messages.push(messageWithReasoning(
+        { role: "assistant", content: raw },
+        assistantMsg,
+      ));
 
       if (!this.config.outputSchema) {
         return this.completedResult(t0, raw);
@@ -649,11 +675,14 @@ export class SubAgent {
           },
         };
       });
-      const assistantLlm: LlmMessage = {
-        role: "assistant",
-        content: assistantMsg.content ?? null,
-        ...(normalizedToolCalls?.length ? { tool_calls: normalizedToolCalls } : {}),
-      };
+      const assistantLlm = messageWithReasoning(
+        {
+          role: "assistant",
+          content: assistantMsg.content ?? null,
+          ...(normalizedToolCalls?.length ? { tool_calls: normalizedToolCalls } : {}),
+        },
+        assistantMsg,
+      );
       this.messages.push(assistantLlm);
       this.iterations = iteration + 1;
       if (!normalizedToolCalls?.length) {

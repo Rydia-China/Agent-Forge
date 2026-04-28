@@ -256,6 +256,9 @@ function chatMsgToLlm(msg: ChatMessage): LlmMessage {
   };
   if (msg.tool_calls?.length) base.tool_calls = msg.tool_calls;
   if (msg.tool_call_id) base.tool_call_id = msg.tool_call_id;
+  if (msg.providerMetadata?.reasoning_content) {
+    base.reasoning_content = msg.providerMetadata.reasoning_content;
+  }
   return base as unknown as LlmMessage;
 }
 
@@ -342,6 +345,7 @@ async function runAgentInnerCore(
       role: "assistant",
       content: assistantMsg.content ?? null,
     };
+    attachReasoningContent(stored, getReasoningContent(assistantMsg));
     if (assistantMsg.tool_calls?.length) {
       stored.tool_calls = assistantMsg.tool_calls
         .filter((tc): tc is Extract<typeof tc, { type: "function" }> => tc.type === "function")
@@ -409,6 +413,21 @@ interface ToolCallDelta {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
+
+function getReasoningContent(value: unknown): string | undefined {
+  if (!isRecord(value)) return undefined;
+  const raw = value.reasoning_content;
+  return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+}
+
+function attachReasoningContent(message: ChatMessage, reasoningContent: string | undefined): void {
+  if (!reasoningContent) return;
+  message.providerMetadata = {
+    ...(message.providerMetadata ?? {}),
+    reasoning_content: reasoningContent,
+  };
+}
+
 const RECOVERABLE_NETWORK_CODES = new Set([
   "ETIMEDOUT",
   "ECONNRESET",
@@ -598,6 +617,7 @@ async function runAgentStreamInnerCore(
     }
 
     let currentContent = "";
+    let currentReasoningContent = "";
 
     let phase: "llm" | "tools" = "llm";
 
@@ -614,6 +634,10 @@ async function runAgentStreamInnerCore(
         if (delta.content) {
           currentContent += delta.content;
           callbacks.onDelta?.(delta.content);
+        }
+        const reasoningDelta = getReasoningContent(delta);
+        if (reasoningDelta) {
+          currentReasoningContent += reasoningDelta;
         }
         if (delta.tool_calls?.length) {
           for (const tcDelta of delta.tool_calls) {
@@ -633,6 +657,7 @@ async function runAgentStreamInnerCore(
         role: "assistant",
         content: currentContent ? currentContent : null,
       };
+      attachReasoningContent(stored, currentReasoningContent);
       if (toolCalls.length > 0) {
         stored.tool_calls = toolCalls;
       }
@@ -727,7 +752,9 @@ async function runAgentStreamInnerCore(
           (m) => m.role === "assistant" && m.content === currentContent,
         )) {
           lastReply = currentContent;
-          newMessages.push({ role: "assistant", content: currentContent });
+          const partialMsg: ChatMessage = { role: "assistant", content: currentContent };
+          attachReasoningContent(partialMsg, currentReasoningContent);
+          newMessages.push(partialMsg);
         }
         break;
       }
@@ -740,7 +767,9 @@ async function runAgentStreamInnerCore(
             (m) => m.role === "assistant" && m.content === currentContent,
           )) {
             lastReply = currentContent;
-            newMessages.push({ role: "assistant", content: currentContent });
+            const partialMsg: ChatMessage = { role: "assistant", content: currentContent };
+            attachReasoningContent(partialMsg, currentReasoningContent);
+            newMessages.push(partialMsg);
           }
           await flush();
           const allMessages = [...session.messages, ...newMessages];
