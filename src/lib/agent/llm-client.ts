@@ -54,8 +54,13 @@ export type LlmMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 
 type LlmThinkingMode = "enabled" | "disabled";
 type ThinkingRequest = { thinking?: { type: LlmThinkingMode } };
+type JsonResponseFormat = { type: "json_object" };
 type NonStreamingRequest = ChatCompletionCreateParamsNonStreaming & ThinkingRequest;
 type StreamingRequest = ChatCompletionCreateParamsStreaming & ThinkingRequest;
+
+export interface ChatCompletionOptions {
+  responseFormat?: JsonResponseFormat;
+}
 
 function getThinkingMode(): LlmThinkingMode | undefined {
   const raw = process.env.LLM_THINKING_MODE?.trim().toLowerCase();
@@ -73,12 +78,14 @@ export async function chatCompletion(
   messages: LlmMessage[],
   tools?: ChatCompletionTool[],
   model?: string,
+  options?: ChatCompletionOptions,
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const client = getClient();
   const body: NonStreamingRequest = {
     model: model ?? DEFAULT_MODEL,
     messages,
     tools: tools?.length ? tools : undefined,
+    response_format: options?.responseFormat,
   };
   applyThinkingMode(body);
   const rawRes: unknown = await client.chat.completions.create(body);
