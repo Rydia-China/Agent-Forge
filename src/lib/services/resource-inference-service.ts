@@ -117,9 +117,13 @@ function addCharactersFromValue(
   seen: Set<string>,
   novelId: string,
   value: unknown,
+  nameMapping?: Map<string, string>,
 ): void {
   for (const name of parseArray(value)) {
-    if (typeof name === "string") addNovelCharacterResource(items, seen, novelId, name);
+    if (typeof name === "string") {
+      const normalizedName = nameMapping?.get(name) ?? name;
+      addNovelCharacterResource(items, seen, novelId, normalizedName);
+    }
   }
 }
 
@@ -128,11 +132,13 @@ function addOutfitsFromValue(
   seen: Set<string>,
   scriptId: string,
   value: unknown,
+  nameMapping?: Map<string, string>,
 ): void {
   const outfits = parseRecord(value);
   if (!outfits) return;
   for (const name of Object.keys(outfits)) {
-    addScriptCostumeResource(items, seen, scriptId, name);
+    const normalizedName = nameMapping?.get(name) ?? name;
+    addScriptCostumeResource(items, seen, scriptId, normalizedName);
   }
 }
 
@@ -196,6 +202,29 @@ async function listKeyResourceMetaByScopeIds(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Helper: Build character name mapping (short name -> full name)    */
+/* ------------------------------------------------------------------ */
+
+function buildCharacterNameMapping(characterArcs: unknown): Map<string, string> {
+  const mapping = new Map<string, string>();
+  for (const arc of parseArray(characterArcs)) {
+    if (!isRecord(arc)) continue;
+    const fullName = arc.name;
+    if (typeof fullName !== "string") continue;
+    
+    // Map full name to itself
+    mapping.set(fullName, fullName);
+    
+    // Extract first name (before first space) and map to full name
+    const firstName = fullName.split(/\s+/)[0];
+    if (firstName && firstName !== fullName) {
+      mapping.set(firstName, fullName);
+    }
+  }
+  return mapping;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Expected resource computation from uploads                         */
 /* ------------------------------------------------------------------ */
 
@@ -206,6 +235,9 @@ function computeExpectedKeys(
 ): ExpectedResourceMeta[] {
   const items: ExpectedResourceMeta[] = [];
   const seen = new Set<string>();
+
+  // Build name mapping from character arcs
+  const nameMapping = buildCharacterNameMapping(upload.character_arcs);
 
   for (const arc of upload.character_arcs ?? []) {
     addNovelCharacterResource(items, seen, novelId, arc.name);
@@ -236,10 +268,10 @@ function computeExpectedKeys(
     const episode = episodes[index];
     const scriptId = createdEpisodes[index]?.id;
     if (!episode || !scriptId) continue;
-    addCharactersFromValue(items, seen, novelId, episode.output.characters);
+    addCharactersFromValue(items, seen, novelId, episode.output.characters, nameMapping);
     addSceneLocationsFromValue(items, seen, novelId, episode.output.scene_locations);
     const outfits = episode.output.character_outfits;
-    if (outfits) addOutfitsFromValue(items, seen, scriptId, outfits);
+    if (outfits) addOutfitsFromValue(items, seen, scriptId, outfits, nameMapping);
   }
 
   return items;
@@ -265,6 +297,9 @@ async function computeStoredExpectedKeys(
 
   const items: ExpectedResourceMeta[] = [];
   const seen = new Set<string>();
+
+  // Build name mapping from character arcs
+  const nameMapping = buildCharacterNameMapping(novel?.characterArcs);
 
   for (const arc of parseArray(novel?.characterArcs)) {
     if (!isRecord(arc)) continue;
@@ -303,11 +338,11 @@ async function computeStoredExpectedKeys(
     const scriptId = script.id;
 
     const initResult = parseRecord(script.initResult);
-    addCharactersFromValue(items, seen, novelId, initResult?.characters ?? script.characters);
+    addCharactersFromValue(items, seen, novelId, initResult?.characters ?? script.characters, nameMapping);
     addSceneLocationsFromValue(items, seen, novelId, initResult?.scene_locations);
 
     if (scriptScopeIds.has(scriptId)) {
-      addOutfitsFromValue(items, seen, scriptId, initResult?.character_outfits ?? script.costumes);
+      addOutfitsFromValue(items, seen, scriptId, initResult?.character_outfits ?? script.costumes, nameMapping);
     }
   }
 
