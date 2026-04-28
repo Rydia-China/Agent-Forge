@@ -602,6 +602,7 @@ export class SubAgent {
         this.messages,
         undefined,
         this.model,
+        this.config.outputSchema ? { responseFormat: { type: "json_object" } } : undefined,
       );
       const assistantMsg = completion.choices[0]?.message;
       const raw = assistantMsg?.content ?? "";
@@ -662,6 +663,7 @@ export class SubAgent {
         this.messages,
         openaiTools,
         this.model,
+        this.config.outputSchema ? { responseFormat: { type: "json_object" } } : undefined,
       );
       const choice = completion.choices[0];
       if (!choice) {
