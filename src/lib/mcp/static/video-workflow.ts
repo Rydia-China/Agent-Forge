@@ -102,41 +102,72 @@ const TOOLS: Tool[] = [
     },
   },
 
-  // --- Async Image Generation Tasks ---
+  // --- Async Batch Generation Tasks ---
   {
-    name: "submit_generation_task",
+    name: "submit_portraits_task",
     description:
-      "提交异步图片生成任务。所有图片生成操作（单个或批量）都使用此接口，避免超时问题。" +
-      "支持的任务类型：\n" +
-      "• portrait - 生成单个角色立绘（小说级）\n" +
-      "• update_portrait - 更新单个角色立绘（小说级）\n" +
-      "• scene - 生成单个场景图片（小说级）\n" +
-      "• costume - 生成单个角色换装图（EP 级）\n" +
-      "• batch_portraits - 批量生成角色立绘（小说级）\n" +
-      "• batch_scenes - 批量生成场景图片（小说级）\n" +
-      "• batch_costumes - 批量生成角色换装图（EP 级）\n" +
-      "返回 taskId，使用 get_task_status 查询任务状态和结果。",
+      "批量生成角色立绘（小说级）。异步执行，立即返回 taskId。" +
+      "单个生成时传入长度为 1 的数组。适用于生成小说中所有角色的立绘。",
     inputSchema: {
       type: "object" as const,
       properties: {
-        taskType: {
-          type: "string",
-          enum: ["portrait", "update_portrait", "scene", "costume", "batch_portraits", "batch_scenes", "batch_costumes"],
-          description: "任务类型",
+        novelId: { type: "string", description: "小说 ID" },
+        characterNames: {
+          type: "array",
+          items: { type: "string" },
+          description: "角色名称列表（单个生成时传入长度为 1 的数组）",
+          minItems: 1,
         },
-        params: {
-          type: "object",
-          description:
-            "任务参数（根据 taskType 不同而不同）：\n" +
-            "• portrait/update_portrait: {novelId, characterName, styleName?, prompt?, referenceUrls?, model?}\n" +
-            "• scene: {novelId, sceneName, mode?, referenceUrls?, model?}\n" +
-            "• costume: {scriptId, characterName, styleName?, referenceUrls?, model?}\n" +
-            "• batch_portraits: {novelId, characterNames[], styleName?, model?}\n" +
-            "• batch_scenes: {novelId, sceneNames[], mode?, model?}\n" +
-            "• batch_costumes: {scriptId, characterNames[], styleName?, model?}",
-        },
+        styleName: { type: "string", description: "样式预设名称（可选）" },
+        model: { type: "string", description: "图片生成模型名称（可选）" },
       },
-      required: ["taskType", "params"],
+      required: ["novelId", "characterNames"],
+    },
+  },
+  {
+    name: "submit_scenes_task",
+    description:
+      "批量生成场景图片（小说级）。异步执行，立即返回 taskId。" +
+      "单个生成时传入长度为 1 的数组。适用于生成小说中所有场景的背景图。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        novelId: { type: "string", description: "小说 ID" },
+        sceneNames: {
+          type: "array",
+          items: { type: "string" },
+          description: "场景名称列表（单个生成时传入长度为 1 的数组）",
+          minItems: 1,
+        },
+        mode: {
+          type: "string",
+          enum: ["single", "grid", "hd"],
+          description: "生成模式（可选，默认 single）",
+        },
+        model: { type: "string", description: "图片生成模型名称（可选）" },
+      },
+      required: ["novelId", "sceneNames"],
+    },
+  },
+  {
+    name: "submit_costumes_task",
+    description:
+      "批量生成角色换装图（EP 级）。异步执行，立即返回 taskId。" +
+      "单个生成时传入长度为 1 的数组。适用于生成 EP 中所有角色的换装图。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        scriptId: { type: "string", description: "Episode script DB ID" },
+        characterNames: {
+          type: "array",
+          items: { type: "string" },
+          description: "角色名称列表（单个生成时传入长度为 1 的数组）",
+          minItems: 1,
+        },
+        styleName: { type: "string", description: "样式预设名称（可选）" },
+        model: { type: "string", description: "图片生成模型名称（可选）" },
+      },
+      required: ["scriptId", "characterNames"],
     },
   },
   {
@@ -146,13 +177,13 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: "object" as const,
       properties: {
-        taskId: { type: "string", description: "任务 ID（由 submit_generation_task 返回）" },
+        taskId: { type: "string", description: "任务 ID（由 submit_*_task 返回）" },
       },
       required: ["taskId"],
     },
   },
   {
-    name: "list_generation_tasks",
+    name: "list_tasks",
     description:
       "列出指定范围内的所有异步生成任务。用于查看小说或 EP 的所有生成任务历史。",
     inputSchema: {
@@ -161,88 +192,6 @@ const TOOLS: Tool[] = [
         novelId: { type: "string", description: "小说 ID（查询小说级任务）" },
         scriptId: { type: "string", description: "EP script ID（查询 EP 级任务）" },
       },
-    },
-  },
-  {
-    name: "batch_generate_costumes",
-    description:
-      "批量生成多个角色换装图片（EP 级）。并行调用 FC 生成服务，自动从数据库读取 character_outfits 并结合样式模板生成 prompt。" +
-      "返回所有角色的生成结果（包括成功和失败）。适用于 EP 初始化时批量生成所有角色换装。",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        scriptId: { type: "string", description: "Episode script DB ID" },
-        characterNames: { type: "array", items: { type: "string" }, description: "角色名称列表（需与 JSON 中完全匹配）" },
-        styleName: { type: "string", description: "样式预设名称（例如 'costume_style'），从数据库中按名称查找" },
-        model: { type: "string", description: "图片生成模型名称。省略时使用 FC 环境默认值" },
-      },
-      required: ["scriptId", "characterNames"],
-    },
-  },
-
-  // --- Async Batch Generation Tasks ---
-  {
-    name: "submit_batch_portraits_task",
-    description:
-      "提交批量角色立绘生成任务（异步）。立即返回 taskId，任务在后台执行。" +
-      "适用于需要生成大量角色立绘且不想等待的场景（生成时间可能长达 5 分钟）。" +
-      "使用 get_batch_task_status 查询任务状态和结果。",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        novelId: { type: "string", description: "小说 ID" },
-        characterNames: { type: "array", items: { type: "string" }, description: "角色名称列表" },
-        styleName: { type: "string", description: "样式预设名称" },
-        model: { type: "string", description: "图片生成模型名称" },
-      },
-      required: ["novelId", "characterNames"],
-    },
-  },
-  {
-    name: "submit_batch_scenes_task",
-    description:
-      "提交批量场景图片生成任务（异步）。立即返回 taskId，任务在后台执行。" +
-      "适用于需要生成大量场景图片且不想等待的场景（生成时间可能长达 5 分钟）。" +
-      "使用 get_batch_task_status 查询任务状态和结果。",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        novelId: { type: "string", description: "小说 ID" },
-        sceneNames: { type: "array", items: { type: "string" }, description: "场景名称列表" },
-        mode: { type: "string", enum: ["single", "grid", "hd"], description: "生成模式" },
-        model: { type: "string", description: "图片生成模型名称" },
-      },
-      required: ["novelId", "sceneNames"],
-    },
-  },
-  {
-    name: "submit_batch_costumes_task",
-    description:
-      "提交批量换装图片生成任务（异步）。立即返回 taskId，任务在后台执行。" +
-      "适用于 EP 初始化时需要生成所有角色换装且不想等待的场景（生成时间可能长达 5 分钟）。" +
-      "使用 get_batch_task_status 查询任务状态和结果。",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        scriptId: { type: "string", description: "Episode script DB ID" },
-        characterNames: { type: "array", items: { type: "string" }, description: "角色名称列表" },
-        styleName: { type: "string", description: "样式预设名称" },
-        model: { type: "string", description: "图片生成模型名称" },
-      },
-      required: ["scriptId", "characterNames"],
-    },
-  },
-  {
-    name: "get_batch_task_status",
-    description:
-      "查询批量生成任务的状态和结果。返回任务状态（pending/running/completed/failed）、" +
-      "进度（已完成数量/总数量）、结果（completed 时）或错误信息（failed 时）。",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        taskId: { type: "string", description: "任务 ID（由 submit_batch_*_task 返回）" },
-      },
-      required: ["taskId"],
     },
   },
 
@@ -363,50 +312,21 @@ export const videoWorkflowMcp: McpProvider = {
           return json(result);
         }
 
-        case "submit_generation_task": {
-          const { taskType, params } = z.object({
-            taskType: z.enum(["portrait", "update_portrait", "scene", "costume", "batch_portraits", "batch_scenes", "batch_costumes"]),
-            params: z.record(z.string(), z.unknown()),
-          }).parse(args);
+        case "submit_portraits_task": {
+          const params = batchTaskService.SubmitBatchPortraitsParams.parse(args);
+          const taskId = await batchTaskService.submitBatchPortraitsTask(params);
+          return json({ taskId, status: "submitted" });
+        }
 
-          let taskId: string = "";
-          switch (taskType) {
-            case "portrait": {
-              const parsed = batchTaskService.SubmitPortraitParams.parse(params);
-              taskId = await batchTaskService.submitPortraitTask(parsed);
-              break;
-            }
-            case "update_portrait": {
-              const parsed = batchTaskService.SubmitUpdatePortraitParams.parse(params);
-              taskId = await batchTaskService.submitUpdatePortraitTask(parsed);
-              break;
-            }
-            case "scene": {
-              const parsed = batchTaskService.SubmitSceneParams.parse(params);
-              taskId = await batchTaskService.submitSceneTask(parsed);
-              break;
-            }
-            case "costume": {
-              const parsed = batchTaskService.SubmitCostumeParams.parse(params);
-              taskId = await batchTaskService.submitCostumeTask(parsed);
-              break;
-            }
-            case "batch_portraits": {
-              const parsed = batchTaskService.SubmitBatchPortraitsParams.parse(params);
-              taskId = await batchTaskService.submitBatchPortraitsTask(parsed);
-              break;
-            }
-            case "batch_scenes": {
-              const parsed = batchTaskService.SubmitBatchScenesParams.parse(params);
-              taskId = await batchTaskService.submitBatchScenesTask(parsed);
-              break;
-            }
-            case "batch_costumes": {
-              const parsed = batchTaskService.SubmitBatchCostumesParams.parse(params);
-              taskId = await batchTaskService.submitBatchCostumesTask(parsed);
-              break;
-            }
-          }
+        case "submit_scenes_task": {
+          const params = batchTaskService.SubmitBatchScenesParams.parse(args);
+          const taskId = await batchTaskService.submitBatchScenesTask(params);
+          return json({ taskId, status: "submitted" });
+        }
+
+        case "submit_costumes_task": {
+          const params = batchTaskService.SubmitBatchCostumesParams.parse(args);
+          const taskId = await batchTaskService.submitBatchCostumesTask(params);
           return json({ taskId, status: "submitted" });
         }
 
@@ -419,7 +339,7 @@ export const videoWorkflowMcp: McpProvider = {
           return json(result);
         }
 
-        case "list_generation_tasks": {
+        case "list_tasks": {
           const { novelId, scriptId } = z.object({
             novelId: z.string().optional(),
             scriptId: z.string().optional(),
