@@ -8,8 +8,6 @@ export async function GET(
 ) {
   try {
     const { novelId, scriptId } = await params;
-    const { searchParams } = new URL(req.url);
-    const styleName = searchParams.get("styleName") || "update_portrait_style";
 
     const script = await prisma.novelScript.findUnique({
       where: { id: scriptId },
@@ -36,12 +34,12 @@ export async function GET(
       return NextResponse.json({ costumes: [] });
     }
 
-    const stylePreset = await prisma.stylePreset.findFirst({
-      where: { name: styleName },
+    const stylePreset = await prisma.stylePreset.findUnique({
+      where: { name: "update_portrait_style" },
     });
 
     if (!stylePreset) {
-      return NextResponse.json({ error: "Style preset not found" }, { status: 404 });
+      return NextResponse.json({ error: "update_portrait_style preset not found" }, { status: 404 });
     }
 
     const costumes = Object.entries(outfits).map(([characterName, outfitDesc]) => {

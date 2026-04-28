@@ -1,131 +1,144 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Drawer, Select, Spin, Empty, Card, Typography, Image } from "antd";
+import { Drawer, Spin, Empty, Typography, Collapse, Tag, Image } from "antd";
+import { UserOutlined } from "@ant-design/icons";
 import { useCostumePreview } from "../hooks/useCostumePreview";
 
-const { Title, Text, Paragraph } = Typography;
+/* ------------------------------------------------------------------ */
+/*  Props                                                              */
+/* ------------------------------------------------------------------ */
 
-interface CostumePreviewDrawerProps {
+export interface CostumePreviewDrawerProps {
   open: boolean;
   onClose: () => void;
   novelId: string;
   scriptId: string | null;
 }
 
-export function CostumePreviewDrawer({
-  open,
-  onClose,
-  novelId,
-  scriptId,
-}: CostumePreviewDrawerProps) {
-  const [styleName, setStyleName] = useState("update_portrait_style");
-  const { costumes, loading, error } = useCostumePreview(novelId, scriptId, styleName);
+/* ------------------------------------------------------------------ */
+/*  Compiled prompt display                                            */
+/* ------------------------------------------------------------------ */
 
-  if (!scriptId) {
+function CompiledPrompt({ prompt }: { prompt: string | null }) {
+  if (!prompt) {
     return (
-      <Drawer
-        title="换装预览"
-        placement="right"
-        width={600}
-        onClose={onClose}
-        open={open}
-      >
-        <Empty description="请先选择一个 EP" />
-      </Drawer>
+      <div className="mt-2 rounded bg-slate-800/50 px-2.5 py-1.5 text-[11px] text-slate-500 italic">
+        编译结果待生成
+      </div>
     );
   }
 
   return (
-    <Drawer
-      title="换装预览"
-      placement="right"
-      width={600}
-      onClose={onClose}
-      open={open}
-    >
-      <div style={{ marginBottom: 16 }}>
-        <Text strong>风格预设：</Text>
-        <Select
-          value={styleName}
-          onChange={setStyleName}
-          style={{ width: "100%", marginTop: 8 }}
-          options={[
-            { label: "更新角色着装", value: "update_portrait_style" },
-          ]}
-        />
+    <div className="mt-2">
+      <div className="mb-0.5 text-[11px] text-slate-500">编译结果</div>
+      <pre className="whitespace-pre-wrap rounded bg-slate-800/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-200/80 font-mono">
+        {prompt}
+      </pre>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Costume card                                                       */
+/* ------------------------------------------------------------------ */
+
+function CostumeCard({
+  costume,
+}: {
+  costume: {
+    characterName: string;
+    outfitDesc: string;
+    compiledPrompt: string;
+    portraitUrl: string | null;
+  };
+}) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+      <div className="flex items-center gap-2">
+        {costume.portraitUrl ? (
+          <Image
+            src={costume.portraitUrl}
+            alt={costume.characterName}
+            width={40}
+            height={40}
+            className="rounded-full object-cover"
+            style={{ width: 40, height: 40 }}
+            preview={{ mask: false }}
+          />
+        ) : (
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800">
+            <UserOutlined className="text-slate-500" />
+          </div>
+        )}
+        <Typography.Text strong className="!text-sm">{costume.characterName}</Typography.Text>
       </div>
 
-      {loading && (
-        <div style={{ textAlign: "center", padding: 40 }}>
-          <Spin size="large" />
+      <div className="mt-1">
+        <div className="mb-0.5 text-[11px] text-slate-500">outfit_desc</div>
+        <div className="text-xs leading-relaxed text-slate-300 whitespace-pre-wrap">
+          {costume.outfitDesc || <span className="text-slate-600 italic">empty</span>}
         </div>
-      )}
+      </div>
 
-      {error && (
-        <div style={{ color: "red", marginBottom: 16 }}>
-          错误: {error}
+      <CompiledPrompt prompt={costume.compiledPrompt} />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main Drawer                                                        */
+/* ------------------------------------------------------------------ */
+
+export function CostumePreviewDrawer({ open, onClose, novelId, scriptId }: CostumePreviewDrawerProps) {
+  const { costumes, loading, error } = useCostumePreview(novelId, scriptId);
+
+  const costumeCount = costumes.length;
+
+  return (
+    <Drawer
+      title="Costume Preview"
+      open={open}
+      onClose={onClose}
+      size="large"
+      styles={{ body: { padding: "12px 16px", background: "rgb(2 6 23)" } }}
+    >
+      {loading && !costumes.length ? (
+        <div className="flex items-center justify-center py-20">
+          <Spin />
         </div>
-      )}
-
-      {!loading && !error && costumes.length === 0 && (
-        <Empty description="该 EP 没有换装数据" />
-      )}
-
-      {!loading && !error && costumes.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {costumes.map((costume) => (
-            <Card key={costume.characterName} size="small">
-              <Title level={5}>{costume.characterName}</Title>
-
-              {costume.portraitUrl && (
-                <div style={{ marginBottom: 12 }}>
-                  <Text type="secondary">参考立绘：</Text>
-                  <div style={{ marginTop: 8 }}>
-                    <Image
-                      src={costume.portraitUrl}
-                      alt={costume.characterName}
-                      width={120}
-                      height={120}
-                      style={{ objectFit: "cover", borderRadius: 4 }}
-                    />
-                  </div>
+      ) : error ? (
+        <Empty description={error} />
+      ) : !scriptId ? (
+        <Empty description="请先选择一个 EP" />
+      ) : (
+        <Collapse
+          defaultActiveKey={["costumes"]}
+          ghost
+          size="small"
+          items={[
+            {
+              key: "costumes",
+              label: (
+                <span className="flex items-center gap-1.5 text-xs font-medium">
+                  <UserOutlined /> 换装
+                  <Tag style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>{costumeCount}</Tag>
+                  {loading && <Spin size="small" />}
+                </span>
+              ),
+              children: (
+                <div className="space-y-2">
+                  {costumes.length === 0 ? (
+                    <Empty description="该 EP 没有换装数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  ) : (
+                    costumes.map((c) => (
+                      <CostumeCard key={c.characterName} costume={c} />
+                    ))
+                  )}
                 </div>
-              )}
-
-              <div style={{ marginBottom: 12 }}>
-                <Text type="secondary">换装描述：</Text>
-                <Paragraph
-                  style={{
-                    marginTop: 4,
-                    padding: 8,
-                    background: "#f5f5f5",
-                    borderRadius: 4,
-                    fontSize: 12,
-                  }}
-                >
-                  {costume.outfitDesc}
-                </Paragraph>
-              </div>
-
-              <div>
-                <Text type="secondary">编译后 Prompt：</Text>
-                <Paragraph
-                  style={{
-                    marginTop: 4,
-                    padding: 8,
-                    background: "#e6f7ff",
-                    borderRadius: 4,
-                    fontSize: 12,
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {costume.compiledPrompt}
-                </Paragraph>
-              </div>
-            </Card>
-          ))}
-        </div>
+              ),
+            },
+          ]}
+        />
       )}
     </Drawer>
   );

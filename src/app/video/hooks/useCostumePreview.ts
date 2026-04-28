@@ -8,7 +8,7 @@ export interface CostumePreview {
   portraitUrl: string | null;
 }
 
-export function useCostumePreview(novelId: string, scriptId: string | null, styleName: string) {
+export function useCostumePreview(novelId: string, scriptId: string | null) {
   const [costumes, setCostumes] = useState<CostumePreview[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,9 +23,8 @@ export function useCostumePreview(novelId: string, scriptId: string | null, styl
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({ styleName });
         const res = await fetch(
-          `/api/video/novels/${novelId}/scripts/${scriptId}/costume-preview?${params}`
+          `/api/video/novels/${novelId}/scripts/${scriptId}/costume-preview`
         );
         if (!res.ok) {
           throw new Error(`Failed to fetch costumes: ${res.statusText}`);
@@ -41,7 +40,7 @@ export function useCostumePreview(novelId: string, scriptId: string | null, styl
     };
 
     fetchCostumes();
-  }, [novelId, scriptId, styleName]);
+  }, [novelId, scriptId]);
 
   return { costumes, loading, error };
 }
