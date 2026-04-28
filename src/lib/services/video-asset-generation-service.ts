@@ -5,7 +5,7 @@
  * - Portrait generation (character images)
  * - Scene generation (location images, grids, HD)
  * - Costume generation (character outfits)
- * - Video shot execution
+ * - Video prompt execution
  */
 
 import { z } from "zod";
@@ -16,7 +16,7 @@ import type {
   AnalyzedLocation,
   GenerateAndPersistImageInput,
   GenerateAndPersistImageResult,
-  ExecuteVideoShotResult,
+  ExecuteVideoPromptResult,
 } from "@/lib/video/asset-generation-types";
 import * as keyResourceService from "./key-resource-service";
 import { callFcGenerateVideo, callFcCropVideo } from "./fc-video-client";
@@ -26,7 +26,6 @@ import { getNovelLevelData } from "./novel-service";
 /* ------------------------------------------------------------------ */
 /*  Style resolution                                                   */
 /* ------------------------------------------------------------------ */
-
 export async function resolveStyle(styleName: string): Promise<StylePreset> {
   const preset = await prisma.stylePreset.findUnique({ where: { name: styleName } });
   if (!preset) throw new Error(`Style preset not found: ${styleName}`);
@@ -391,7 +390,7 @@ export async function generateCostume(
   const demographics = outfits?.[input.characterName];
   if (!demographics) throw new Error(`No outfit for "${input.characterName}"`);
 
-  const style = await resolveStyle(input.styleName ?? "costume_style");
+  const style = await resolveStyle(input.styleName ?? "update_portrait_style");
   const styleRefUrl = style.styleRefUrl;
 
   const prompt = compileTemplate(style.stylePrompt, { appearance_desc: demographics });
@@ -424,24 +423,23 @@ export async function generateCostume(
 }
 
 /* ------------------------------------------------------------------ */
-/*  Video shot execution                                               */
+/*  Video prompt execution                                             */
 /* ------------------------------------------------------------------ */
 
-export const ExecuteVideoShotParams = z.object({
+export const ExecuteVideoPromptParams = z.object({
   scriptId: z.string().min(1),
   key: z.string().min(1),
-  shotPrompt: z.string().min(1),
+  prompt: z.string().min(1),
   definition: z.string().min(1),
   duration: z.number().min(4).max(15),
   previousVideoUrl: z.string().url().optional(),
   title: z.string().optional(),
 });
+export type ExecuteVideoPromptInput = z.infer<typeof ExecuteVideoPromptParams>;
 
-export type ExecuteVideoShotInput = z.infer<typeof ExecuteVideoShotParams>;
-
-export async function executeVideoShot(
-  input: ExecuteVideoShotInput,
-): Promise<ExecuteVideoShotResult> {
+export async function executeVideoPrompt(
+  input: ExecuteVideoPromptInput,
+): Promise<ExecuteVideoPromptResult> {
   const script = await prisma.novelScript.findUnique({
     where: { id: input.scriptId },
     select: { novelId: true },
@@ -481,8 +479,8 @@ export async function executeVideoShot(
     if (matched) refImageUrls.push(matched);
   }
 
-  const shotStyle = await resolveStyle("video_style");
-  if (shotStyle.styleRefUrl) refImageUrls.unshift(shotStyle.styleRefUrl);
+  const videoStyle = await resolveStyle("video_style");
+  if (videoStyle.styleRefUrl) refImageUrls.unshift(videoStyle.styleRefUrl);
 
   let sourceVideoUrls: string[] | undefined;
   if (input.previousVideoUrl) {
@@ -498,13 +496,13 @@ export async function executeVideoShot(
     }
   }
 
-  const shotPromptCompiled = compileTemplate(shotStyle.stylePrompt, {
+  const compiledPrompt = compileTemplate(videoStyle.stylePrompt, {
     definition: input.definition,
-    prompt: input.shotPrompt,
+    prompt: input.prompt,
   });
 
   const videoUrl = await callFcGenerateVideo({
-    prompt: shotPromptCompiled,
+    prompt: compiledPrompt,
     referenceImageUrls: refImageUrls.length > 0 ? refImageUrls : undefined,
     sourceVideoUrls,
   });
@@ -515,7 +513,7 @@ export async function executeVideoShot(
     input.key,
     "video",
     {
-      prompt: shotPromptCompiled,
+      prompt: compiledPrompt,
       url: videoUrl,
       refUrls: [...refImageUrls, ...(sourceVideoUrls ?? [])],
       data: { duration: input.duration } as Prisma.InputJsonValue,
@@ -530,7 +528,7 @@ export async function executeVideoShot(
     version: kr.version,
     videoUrl,
     referenceImageCount: refImageUrls.length,
-    prompt: shotPromptCompiled,
+    prompt: compiledPrompt,
   };
 }
 

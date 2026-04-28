@@ -17,7 +17,7 @@ import type { VideoContext } from "../types";
 /* ------------------------------------------------------------------ */
 
 const NOVEL_SKILLS = ["novel-resource-mgr"];
-const EP_SKILLS = ["ep-video-workflow"];
+const EP_SKILLS = ["video-workflow"];
 
 type PageMode = "novel" | "episode";
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
-import type { McpProvider, ToolContext } from "../types";
+import type { McpProvider } from "../types";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -131,7 +131,7 @@ export const multimodalMcp: McpProvider = {
       {
         name: "generate_video",
         description:
-          "Generate video(s) via Seedance through FC. Supports shotPrompt mode (recommended) with referenceImageUrls and sourceVideoUrls for continuation. Returns array of {status, videoUrl} for each item.",
+          "Generate video(s) via Seedance through FC. Supports prompt mode with referenceImageUrls and sourceVideoUrls for continuation. Returns array of {status, videoUrl} for each item.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -218,7 +218,6 @@ export const multimodalMcp: McpProvider = {
   async callTool(
     name: string,
     args: Record<string, unknown>,
-    context?: ToolContext,
   ): Promise<CallToolResult> {
     switch (name) {
       case "generate_image": {

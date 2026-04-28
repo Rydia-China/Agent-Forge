@@ -144,15 +144,15 @@ EP 级资源 agent：
 2. 会话 user scope 为 `video:{novelId}:{scriptKey}`
 3. `POST /api/video/tasks` 创建 SubAgent
 4. 服务端注入 `VideoContextProvider`，提供 `novel_id`、`script_id`、`script_key` 与 `init_result`
-5. 默认 skill 为 `ep-video-workflow`，用于生成/管理 `scopeType="script"` 的视频 prompt 和资源
+5. 默认 skill 为 `video-workflow`，用于无文件系统环境下的 EP 级视频 prompt 生成、review 门禁和产视编排
 
 **视频生成工作流**：
-1. Agent 生成所有视频镜头的 prompt（不生成实际视频）
-2. Reviewer subagent 审查所有 prompt
-3. 主 agent 根据反馈迭代改进 prompt
-4. 审核通过后，prompt 保存到 KeyResource（status: "reviewed"）
-5. 用户在 UI 中手动触发视频生成（调用 FC API 使用即梦2）
-6. 视频生成时支持帧参照：从上一个视频抽取末尾帧作为下一个视频的参照
+1. 先提交 EP 级异步批量换装任务，等待 `completed`，并将换装图作为服装权威源
+2. 独立 Prompt Writer subagent 按 `video-workflow` 的新管线 prompt 规格生成所有视频 prompt
+3. 独立 Reviewer subagent 使用 `video-skill-reviewer` 审查 prompt、换装资源、资源引用顺序和剧情一致性
+4. 若 `passed=false`、`allowVideoGeneration=false` 或存在 error，按反馈重复 prompt writer + reviewer 循环
+5. 只有 `passed=true` 且 `allowVideoGeneration=true` 后，prompt 才能保存为 reviewed 并允许产视
+6. 视频生成时支持系统资源形式的帧参照：从上一个视频抽取末尾帧并保存为后续 shot 的参考资源
 
 前端兼容性：`/api/video/tasks` 与 `/api/video/novel/{novelId}/chat` 都返回 `subagent_id`，并同时保留 `task_id` 作为旧字段别名；前端以 `subagent_id` 连接 `/api/subagents/{id}/events`。
 

@@ -42,7 +42,7 @@ export interface GenerateAndPersistImageResult {
   error?: string;
 }
 
-export interface ExecuteVideoShotResult {
+export interface ExecuteVideoPromptResult {
   status: string;
   key: string;
   keyResourceId: string;

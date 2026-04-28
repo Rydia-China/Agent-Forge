@@ -258,7 +258,7 @@ model DomainResource {
   id            String   @id @default(cuid())
   scopeType     String   // "novel" | "script"
   scopeId       String   // novel ID / script ID
-  category      String   // LLM 自由分类：角色立绘、场景、换装、视频、分镜等
+  category      String   // LLM 自由分类：角色立绘、场景、换装、视频Prompt、视频等
   mediaType     String   // "image" | "video" | "json"
   title         String?
   url           String?

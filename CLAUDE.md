@@ -54,8 +54,8 @@
 - 系统支持通用能力的 **领域专用裁剪**：将 skills、MCP tools、biz-db、chat、OSS 等通用基础设施组合为面向特定领域的工作台
 - 每个专项模块由以下部分组成：
   - **领域 Schema** — 单一 `domain_resources` 表，LLM 通过 `category` 字段自由分类，代码只按 `media_type`（image/video/json）渲染
-  - **领域 Skills** — 预绑定的 builtin skills（如 video-mgr、novel-video-workflow）
-  - **领域 MCP Tools** — 对应的 static MCP provider（如 video_mgr）
+  - **领域 Skills** — 预绑定的 builtin skills（如 video-workflow、novel-resource-mgr）
+  - **领域 MCP Tools** — 对应的 static MCP provider（如 video_workflow）
   - **领域 Context Provider** — 为 agent 注入领域上下文（当前 novel、script 等），使对话天然具备领域感知
   - **领域 UI** — 专用布局：左侧=最终交付物（视频列表），中间=chat，右侧=按 category 动态分组的资源素材
 - 专项模块不是独立系统，是通用能力的**组合 + 约束**；新增领域时复用同一套 pattern

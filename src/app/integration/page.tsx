@@ -185,7 +185,7 @@ curl http://localhost:8001/api/mcps/builtins
 \`\`\`
 
 Returns all built-in static providers:
-- \`agent_forge\`, \`biz_db\`, \`langfuse_admin\`, \`langfuse\`, \`multimodal\`, \`oss\`, \`skills\`, \`subagent\`, \`video_mgr\`
+- \`agent_forge\`, \`biz_db\`, \`langfuse_admin\`, \`langfuse\`, \`multimodal\`, \`oss\`, \`skills\`, \`subagent\`, \`video_workflow\`
 
 ### List Dynamic MCPs (User-Created)
 
@@ -442,7 +442,7 @@ See \`.env.example\` for complete list.
               返回所有内置静态 providers：
             </Paragraph>
             <ul className="list-disc list-inside space-y-1">
-              <li><Text code>agent_forge</Text>, <Text code>biz_db</Text>, <Text code>langfuse_admin</Text>, <Text code>langfuse</Text>, <Text code>multimodal</Text>, <Text code>oss</Text>, <Text code>skills</Text>, <Text code>subagent</Text>, <Text code>video_mgr</Text></li>
+              <li><Text code>agent_forge</Text>, <Text code>biz_db</Text>, <Text code>langfuse_admin</Text>, <Text code>langfuse</Text>, <Text code>multimodal</Text>, <Text code>oss</Text>, <Text code>skills</Text>, <Text code>subagent</Text>, <Text code>video_workflow</Text></li>
             </ul>
           </Card>
         </div>

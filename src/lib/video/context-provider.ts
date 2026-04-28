@@ -48,7 +48,7 @@ export class VideoContextProvider implements ContextProvider {
       lines.push("## ⚠ Workflow NOT initialized");
       lines.push("init_workflow 尚未成功执行，当前 EP 缺少结构化数据（人物、场景等）。");
       lines.push("请告知用户：工作流初始化失败，需要重新上传 EP 或手动触发初始化后才能继续。");
-      lines.push("在初始化完成前，不要调用任何 generate_image / generate_video 等工具。");
+      lines.push("在初始化完成前，不要调用任何视频生成或资源生成工具。");
       return lines.join("\n");
     }
 

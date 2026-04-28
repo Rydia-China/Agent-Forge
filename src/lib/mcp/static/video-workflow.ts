@@ -5,20 +5,22 @@
  * Data queries (2): get_episode, get_status
  * Novel-level image gen (2): generate_portrait, generate_scene (single/grid/hd)
  * EP-level image gen (1): generate_costume
- * Video gen (1): execute_video_shot
+ * Prompt/video gen (2): save_reviewed_video_prompt, execute_video_prompt
  *
  * All generate_* tools auto-handle key/scope/category/KeyResource/domain_resources.
  */
 
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
-import type { McpProvider, ToolContext } from "../types";
+import type { McpProvider } from "../types";
+import type { Prisma } from "@/generated/prisma";
 import * as novelService from "@/lib/services/novel-service";
 import * as episodeService from "@/lib/services/episode-service";
 import * as orchestrationService from "@/lib/services/video-workflow-orchestration-service";
 import * as assetGenerationService from "@/lib/services/video-asset-generation-service";
-import * as shotPlanningService from "@/lib/services/video-shot-planning-service";
 import * as batchTaskService from "@/lib/services/batch-generation-task-service";
+import * as keyResourceService from "@/lib/services/key-resource-service";
+import { setKeyResourceMetadata } from "@/lib/services/video-asset-generation-service";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -38,6 +40,17 @@ function json(data: unknown): CallToolResult {
 
 const NovelIdParam = z.object({ novelId: z.string().min(1) });
 const ScriptIdParam = z.object({ scriptId: z.string().min(1) });
+const SaveReviewedVideoPromptParams = z.object({
+  scriptId: z.string().min(1),
+  key: z.string().min(1),
+  prompt: z.string().min(1),
+  title: z.string().optional(),
+  definition: z.string().optional(),
+  duration: z.number().min(1).max(60).optional(),
+  refUrls: z.array(z.string().url()).optional(),
+  reviewResult: z.unknown().optional(),
+  data: z.unknown().optional(),
+});
 
 /* ------------------------------------------------------------------ */
 /*  Tool Definitions                                                   */
@@ -119,7 +132,7 @@ const TOOLS: Tool[] = [
           minItems: 1,
         },
         styleName: { type: "string", description: "样式预设名称（可选）" },
-        model: { type: "string", description: "图片生成模型名称（可选）" },
+        model: { type: "string", description: "图片生成模型（可选）：'gemini'/'google/gemini-*' 走 Gemini FC；'gpt'/'gpt-*' 走 GPT Image FC" },
       },
       required: ["novelId", "characterNames"],
     },
@@ -144,7 +157,7 @@ const TOOLS: Tool[] = [
           enum: ["single", "grid", "hd"],
           description: "生成模式（可选，默认 single）",
         },
-        model: { type: "string", description: "图片生成模型名称（可选）" },
+        model: { type: "string", description: "图片生成模型（可选）：'gemini'/'google/gemini-*' 走 Gemini FC；'gpt'/'gpt-*' 走 GPT Image FC" },
       },
       required: ["novelId", "sceneNames"],
     },
@@ -165,7 +178,7 @@ const TOOLS: Tool[] = [
           minItems: 1,
         },
         styleName: { type: "string", description: "样式预设名称（可选）" },
-        model: { type: "string", description: "图片生成模型名称（可选）" },
+        model: { type: "string", description: "图片生成模型（可选）：'gemini'/'google/gemini-*' 走 Gemini FC；'gpt'/'gpt-*' 走 GPT Image FC" },
       },
       required: ["scriptId", "characterNames"],
     },
@@ -195,74 +208,44 @@ const TOOLS: Tool[] = [
     },
   },
 
-  // --- Video Planning & Generation Pipeline ---
+  // --- Prompt Persistence & Video Execution ---
   {
-    name: "plan_video_shots",
+    name: "save_reviewed_video_prompt",
     description:
-      "生成 EP 级别的所有视频镜头计划。输入当前 EP 剧本（可选前后 EP 作为上下文），" +
-      "输出所有镜头的提示词计划（shotId, duration, shotPrompt, definition, assets 等）。" +
-      "使用主 agent 分析剧本并生成镜头计划，遵循 video-workflow skill 规则。",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        scriptId: { type: "string", description: "当前 Episode script DB ID" },
-        prevEpisodeId: { type: "string", description: "可选：前一个 EP 的 script ID，用于上下文连贯" },
-        nextEpisodeId: { type: "string", description: "可选：后一个 EP 的 script ID，用于情绪铺垫" },
-      },
-      required: ["scriptId"],
-    },
-  },
-  {
-    name: "review_video_shots",
-    description:
-      "使用 reviewer subagent 审查视频镜头提示词。按照 video-skill-reviewer 的 32 项标准检查，" +
-      "返回所有问题（error/warning）和改进建议。主 agent 应根据反馈迭代改进提示词。",
+      "保存 Reviewer 已通过的视频 prompt。EP 主控在 Prompt Writer subagent 和 Reviewer subagent 都通过后调用；" +
+      "只持久化 prompt/review 元数据，不生成视频。",
     inputSchema: {
       type: "object" as const,
       properties: {
         scriptId: { type: "string", description: "Episode script DB ID" },
-        shots: { type: "array", description: "待审查的镜头数组（plan_video_shots 的输出）" },
+        key: { type: "string", description: "Prompt key，例如 reviewed_prompt_main 或 clip_1_prompt" },
+        prompt: { type: "string", description: "Reviewer 放行的视频生成 prompt" },
+        title: { type: "string", description: "可选：UI 展示标题" },
+        definition: { type: "string", description: "可选：@图N / @视频N 素材定义" },
+        duration: { type: "number", description: "可选：目标视频时长" },
+        refUrls: { type: "array", items: { type: "string" }, description: "可选：prompt 使用的资源 URL 列表" },
+        reviewResult: { type: "object", description: "可选：Reviewer JSON 结果" },
+        data: { type: "object", description: "可选：额外 JSON 元数据" },
       },
-      required: ["scriptId", "shots"],
+      required: ["scriptId", "key", "prompt"],
     },
   },
   {
-    name: "generate_video_shots",
+    name: "execute_video_prompt",
     description:
-      "完整的 EP 级视频生成管线：1) 规划镜头 2) reviewer 审查 3) 迭代改进直到通过 4) 批量生成视频。" +
-      "这是一站式工具，自动处理整个流程。支持前后 EP 上下文和最大审查迭代次数配置。",
-    inputSchema: {
-      type: "object" as const,
-      properties: {
-        scriptId: { type: "string", description: "当前 Episode script DB ID" },
-        prevEpisodeId: { type: "string", description: "可选：前一个 EP 的 script ID" },
-        nextEpisodeId: { type: "string", description: "可选：后一个 EP 的 script ID" },
-        maxReviewIterations: { type: "number", description: "最大审查迭代次数（默认 3）" },
-      },
-      required: ["scriptId"],
-    },
-  },
-
-  // --- Video Execution ---
-  {
-    name: "execute_video_shot",
-    description:
-      "Execute a single video shot end-to-end: auto-resolves reference images from definition, " +
-      "always uses video_style, handles extract_tail for continuation shots. " +
-      "Pass the shot data from plan_video_shots output. For continuation shots (definition has @视频1), " +
-      "pass previousVideoUrl. The tool does everything else.",
+      "执行一个已通过 review 的视频 prompt。只有用户明确要求生成视频时才调用；工具会解析 definition 中的资源引用、套用 video_style 并调用视频生成。",
     inputSchema: {
       type: "object" as const,
       properties: {
         scriptId: { type: "string", description: "Episode script DB ID" },
-        key: { type: "string", description: "Shot key (e.g. 'public_1', 'branch_1_1')" },
-        shotPrompt: { type: "string", description: "Shot prompt from plan_video_shots output" },
-        definition: { type: "string", description: "Definition from plan_video_shots (e.g. '@图1 是 [场景X空镜]，@图2 是 [人物A立绘]')" },
+        key: { type: "string", description: "生成后保存的视频资源 key" },
+        prompt: { type: "string", description: "Reviewer 放行的视频 prompt" },
+        definition: { type: "string", description: "素材定义，例如 '@图1 是 [场景X]，@图2 是 [人物A换装图]'" },
         duration: { type: "number", description: "Duration in seconds (4-15)" },
-        previousVideoUrl: { type: "string", description: "Previous shot's video URL (for continuation shots with @视频1). Tool auto-calls extract_tail." },
+        previousVideoUrl: { type: "string", description: "可选：延续上一段视频时传入上一段 URL，工具会截取末帧/尾段" },
         title: { type: "string", description: "Human-readable label" },
       },
-      required: ["scriptId", "key", "shotPrompt", "definition", "duration"],
+      required: ["scriptId", "key", "prompt", "definition", "duration"],
     },
   },
 ];
@@ -281,7 +264,6 @@ export const videoWorkflowMcp: McpProvider = {
   async callTool(
     name: string,
     args: Record<string, unknown>,
-    _context?: ToolContext,
   ): Promise<CallToolResult> {
     try {
       switch (name) {
@@ -355,27 +337,38 @@ export const videoWorkflowMcp: McpProvider = {
           return json(tasks);
         }
 
-        case "plan_video_shots": {
-          const params = shotPlanningService.PlanVideoShotsParams.parse(args);
-          const result = await shotPlanningService.planVideoShots(params);
-          return json(result);
+        case "save_reviewed_video_prompt": {
+          const params = SaveReviewedVideoPromptParams.parse(args);
+          const data = {
+            ...(params.definition ? { definition: params.definition } : {}),
+            ...(params.duration ? { duration: params.duration } : {}),
+            ...(params.reviewResult != null ? { reviewResult: params.reviewResult } : {}),
+            ...(params.data != null ? { data: params.data } : {}),
+          } as Prisma.InputJsonValue;
+          const resource = await keyResourceService.upsertResource(
+            "script",
+            params.scriptId,
+            params.key,
+            "json",
+            {
+              title: params.title ?? params.key,
+              prompt: params.prompt,
+              refUrls: params.refUrls ?? [],
+              data,
+            },
+          );
+          await setKeyResourceMetadata(resource.id, "视频Prompt", params.title ?? params.key);
+          return json({
+            status: "saved",
+            key: params.key,
+            keyResourceId: resource.id,
+            version: resource.version,
+          });
         }
 
-        case "review_video_shots": {
-          const params = shotPlanningService.ReviewVideoShotsParams.parse(args);
-          const result = await shotPlanningService.reviewVideoShots(params);
-          return json(result);
-        }
-
-        case "generate_video_shots": {
-          const params = shotPlanningService.GenerateVideoShotsParams.parse(args);
-          const result = await shotPlanningService.generateVideoShots(params);
-          return json(result);
-        }
-
-        case "execute_video_shot": {
-          const params = assetGenerationService.ExecuteVideoShotParams.parse(args);
-          const result = await assetGenerationService.executeVideoShot(params);
+        case "execute_video_prompt": {
+          const params = assetGenerationService.ExecuteVideoPromptParams.parse(args);
+          const result = await assetGenerationService.executeVideoPrompt(params);
           return json(result);
         }
 

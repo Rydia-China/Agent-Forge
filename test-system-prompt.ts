@@ -21,7 +21,7 @@ async function main() {
   console.log(systemPrompt);
   
   console.log('\n=== System Prompt with Skills ===');
-  const systemPromptWithSkills = await buildSystemPrompt(['video-mgr']);
+  const systemPromptWithSkills = await buildSystemPrompt(['video-workflow']);
   console.log(systemPromptWithSkills);
 }
 
