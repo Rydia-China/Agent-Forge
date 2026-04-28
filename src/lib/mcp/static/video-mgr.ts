@@ -71,7 +71,7 @@ export const videoMgrMcp: McpProvider = {
                     items: { type: "string" },
                     description: "Optional reference image URLs for style/content guidance",
                   },
-                  model: { type: "string", description: "Optional image generation model (e.g. 'gpt-image-2', 'gemini-2.0-flash-exp'). Defaults to 'gpt-image-2'." },
+                  model: { type: "string", description: "Optional image generation model (e.g. 'gpt', 'gemini-3.1-flash-image-preview', 'gemini-3-pro-image-preview'). Defaults to 'gpt'." },
                   category: { type: "string", description: "Resource category for UI grouping (LLM decides, e.g. '角色立绘', '场景', '服装', '分镜')" },
                   scopeType: { type: "string", enum: ["novel", "script"], description: "Scope level: 'novel' for novel-wide resources, 'script' for episode-scoped" },
                   scopeId: { type: "string", description: "ID of the scope entity (novel ID or script DB ID)" },
