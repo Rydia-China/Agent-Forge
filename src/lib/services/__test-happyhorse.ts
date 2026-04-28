@@ -2,7 +2,7 @@
  * Test script for HappyHorse FC integration
  * 
  * Usage:
- *   tsx src/lib/services/__test-happyhorse.ts
+ *   tsx src/lib/services/__test-happyhorse.ts <source-video-url> [reference-image-url...]
  */
 
 import "dotenv/config";
@@ -10,45 +10,70 @@ import {
   callFcHappyHorseCreate,
   callFcHappyHorseQuery,
   callFcHappyHorseWait,
+  type MediaItem,
 } from "./fc-happyhorse-client";
+
+function buildMedia(
+  sourceVideoUrl: string,
+  referenceImageUrls: string[],
+): MediaItem[] {
+  return [
+    { type: "video", url: sourceVideoUrl },
+    ...referenceImageUrls.map((url): MediaItem => ({
+      type: "reference_image",
+      url,
+    })),
+  ];
+}
 
 async function testHappyHorse() {
   console.log("=== HappyHorse FC Integration Test ===\n");
 
-  // Test 1: Text-to-Video
-  console.log("Test 1: Creating text-to-video task...");
+  const sourceVideoUrl = process.argv[2];
+  const referenceImageUrls = process.argv.slice(3);
+
+  if (!sourceVideoUrl) {
+    console.log("Usage:");
+    console.log(
+      "  tsx src/lib/services/__test-happyhorse.ts <source-video-url> [reference-image-url...]",
+    );
+    console.log("\nNo source video URL provided. Skipping live FC create/query test.");
+    return;
+  }
+
+  // Test 1: Video editing with optional reference images
+  console.log("Test 1: Creating video generation task...");
   try {
-    const t2vTask = await callFcHappyHorseCreate({
+    const task = await callFcHappyHorseCreate({
       prompt: "一个小女孩在花园里奔跑，阳光明媚",
-      genType: "t2v",
+      media: buildMedia(sourceVideoUrl, referenceImageUrls),
       resolution: "720P",
       ratio: "16:9",
       duration: 5,
     });
-    console.log("✓ T2V Task created:", t2vTask);
-    console.log(`  Task ID: ${t2vTask.taskId}`);
-    console.log(`  Status: ${t2vTask.status}\n`);
+    console.log("✓ Task created:", task);
+    console.log(`  Task ID: ${task.taskId}`);
+    console.log(`  Status: ${task.status}\n`);
 
     // Query the task
     console.log("Querying task status...");
-    const queryResult = await callFcHappyHorseQuery(t2vTask.taskId);
+    const queryResult = await callFcHappyHorseQuery(task.taskId);
     console.log("✓ Query result:", queryResult);
     console.log(`  Status: ${queryResult.status}\n`);
   } catch (error) {
-    console.error("✗ T2V test failed:", error);
+    console.error("✗ Create/query test failed:", error);
   }
 
-  // Test 2: Image-to-Video (requires image URL)
-  console.log("\nTest 2: Creating image-to-video task...");
-  console.log("Note: This test requires valid image URLs. Skipping for now.");
+  // Test 2: Reference image example
+  console.log("\nTest 2: Creating task with reference images");
   console.log("Example usage:");
   console.log(`
-  const i2vTask = await callFcHappyHorseCreate({
+  const taskWithReference = await callFcHappyHorseCreate({
     prompt: "让图片中的场景动起来，微风吹拂",
-    genType: "i2v",
-    imageUrls: [
-      "https://example.com/image1.jpg",
-      "https://example.com/image2.jpg"
+    media: [
+      { type: "video", url: "https://example.com/source.mp4" },
+      { type: "reference_image", url: "https://example.com/image1.jpg" },
+      { type: "reference_image", url: "https://example.com/image2.jpg" }
     ],
     resolution: "1080P",
     duration: 5,
@@ -64,7 +89,7 @@ async function testHappyHorse() {
     maxWaitTime: 300000, // 5 minutes
     onProgress: (status) => console.log("Status:", status),
   });
-  console.log("Video URL:", result.result?.[0]);
+  console.log("Video URL:", result.videoUrl);
   `);
 
   console.log("\n=== Test Complete ===");
