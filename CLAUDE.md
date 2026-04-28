@@ -27,6 +27,7 @@
 - Skill 格式为 SKILL.md: YAML frontmatter (`name`, `description`) + Markdown body
 - DB 字段与标准字段一一对齐，支持 SKILL.md 导入/导出
 - 必须兼容 Claude Code / Codex / Cursor 等主流 agent 工具的 skills 体系
+- **Skills 存储在 OSS 中** — 需要修改 Skill 内容时，必须到 OSS 系统中修改，不在本代码库中维护 Skill 文件
 
 ### MCP 标准
 - 遵循 **Model Context Protocol** 开放标准 (modelcontextprotocol.io)
