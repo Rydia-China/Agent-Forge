@@ -62,27 +62,25 @@ export async function callFcGenerateImage(
 
   const result: unknown = await response.json();
 
-  // Extract image URL from response
-  if (
-    typeof result === "object" &&
-    result !== null &&
-    "imageUrl" in result &&
-    typeof result.imageUrl === "string"
-  ) {
-    return result.imageUrl;
-  }
+  // Extract image URL from response - try multiple field names
+  if (typeof result === "object" && result !== null) {
+    // Check 'result' field (GPT FC returns this)
+    if ("result" in result && typeof result.result === "string") {
+      return result.result;
+    }
 
-  // Fallback: check for 'url' field
-  if (
-    typeof result === "object" &&
-    result !== null &&
-    "url" in result &&
-    typeof result.url === "string"
-  ) {
-    return result.url;
+    // Check 'imageUrl' field
+    if ("imageUrl" in result && typeof result.imageUrl === "string") {
+      return result.imageUrl;
+    }
+
+    // Check 'url' field
+    if ("url" in result && typeof result.url === "string") {
+      return result.url;
+    }
   }
 
   throw new Error(
-    `FC image generation response missing imageUrl field: ${JSON.stringify(result)}`
+    `FC image generation response missing image URL field: ${JSON.stringify(result)}`
   );
 }
