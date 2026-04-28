@@ -22,11 +22,11 @@ export interface ModelOption {
  * of the IDs below.
  */
 export const MODEL_OPTIONS: ModelOption[] = [
-  { id: "claude-sonnet-4-6", label: "Sonnet 4.6", default: true },
-  { id: "claude-opus-4-6", label: "Opus 4.6" },
-  { id: "claude-opus-4-7", label: "Opus 4.7" },
-  { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
-  { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
+  // { id: "claude-sonnet-4-6", label: "Sonnet 4.6", default: true },
+  // { id: "claude-opus-4-6", label: "Opus 4.6" },
+  // { id: "claude-opus-4-7", label: "Opus 4.7" },
+  // { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
+  { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", default: true },
 ];
 
 /* ---- Derived helpers (do not edit) ---- */
