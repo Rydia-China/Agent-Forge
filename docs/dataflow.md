@@ -3,7 +3,7 @@
 仅记录跨系统边界的外部依赖，内部流转从 codebase 推断。
 
 ## 外部依赖
-- LLM API: 出站 HTTPS (OpenAI-compatible)，密钥通过 `LLM_API_KEY` 环境变量，地址与默认模型由 `LLM_BASE_URL` / `LLM_DEFAULT_MODEL` 配置
+- LLM API: 出站 HTTPS (OpenAI-compatible)，密钥通过 `LLM_API_KEY` 环境变量，地址、默认模型与 thinking 开关由 `LLM_BASE_URL` / `LLM_DEFAULT_MODEL` / `LLM_THINKING_MODE` 配置
 - asMCP: 入站 HTTP `POST /mcp`，当前无鉴权
 - CORS 全开放（所有 origin）
 
