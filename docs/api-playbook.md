@@ -105,7 +105,7 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 `subagent` 是给主 agent 和外部 `/mcp` 调用方使用的 MCP provider，和 `/api/subagents` 后端驱动架构并存，不替代 REST/SSE 任务入口。
 
 时序：
-1. `initMcp()` 注册 static provider 后，`registry.listAllTools()` 暴露 `subagent__run`、`subagent__run_async`、`subagent__get_result`、`subagent__get_trace`、`subagent__continue`、`subagent__wait`
+1. `initMcp()` 注册 static provider 后，`registry.listAllTools()` 暴露 `subagent__run`、`subagent__run_async`、`subagent__get_result`、`subagent__get_trace`、`subagent__continue`
 2. `subagent__run` 接收 `tasks[]`；每个 task 不传 `mcpScope` 时是 single-shot LLM 调用，传非空 `mcpScope` 时进入 tool-use loop，只能调用指定 provider 的 tools
 3. 同步执行完成后返回 `agentId`；该 ID 是进程内 active registry 状态，可继续调用 `subagent__continue` 或 `subagent__get_trace`
 4. `subagent__run_async` 或带 `timeout` 的 `subagent__run` 会创建 `SubAgent` DB 记录作为 `taskId`，后台执行完成后把 output/error/trace 写回该记录
