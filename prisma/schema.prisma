@@ -60,6 +60,7 @@ model ChatMessage {
   images     String[]    // 附带的图片 URL 列表（视觉模型用）
   toolCalls  Json?       // OpenAI tool_calls 数组
   toolCallId String?
+  providerMetadata Json?  // 供应商特定消息元数据，如 DeepSeek reasoning_content
   hidden     Boolean     @default(false)
   createdAt  DateTime    @default(now())
 
@@ -293,5 +294,4 @@ model BatchGenerationTask {
   @@index([status, createdAt])
   @@index([scopeType, scopeId])
 }
-
 
