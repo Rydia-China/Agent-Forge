@@ -151,10 +151,11 @@ function addSceneLocationsFromValue(
   const sceneLocations = parseRecord(value);
   if (!sceneLocations) return;
 
+  // Add all scene_locations that are referenced in episodes,
+  // regardless of whether they have visual_prompt or not.
+  // The presence in scene_locations indicates they are used by the script.
   for (const [name, rawScene] of Object.entries(sceneLocations)) {
-    const scene = parseRecord(rawScene);
-    const visualPrompt = scene?.visual_prompt;
-    if (typeof visualPrompt === "string" && visualPrompt.trim()) {
+    if (name && name.trim()) {
       addNovelSceneResource(items, seen, novelId, name);
     }
   }
