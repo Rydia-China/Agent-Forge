@@ -276,15 +276,15 @@ model DomainResource {
 /// 用于处理耗时的批量生成操作（portraits, scenes, costumes）
 model BatchGenerationTask {
   id          String   @id @default(cuid())
-  type        String   // "portraits" | "scenes" | "costumes"
+  type        String   // "portrait" | "scene" | "costume" | "update_portrait" | "batch_portraits" | "batch_scenes" | "batch_costumes"
   scopeType   String   // "novel" | "script"
   scopeId     String   // novel ID / script ID
   status      String   @default("pending") // pending | running | completed | failed
-  input       Json     // 输入参数（characterNames, sceneNames, styleName, model 等）
-  result      Json?    // 批量生成结果（results 数组）
+  input       Json     // 输入参数（characterName/characterNames, sceneName/sceneNames, styleName, model 等）
+  result      Json?    // 生成结果（单个或批量）
   error       String?  // 错误信息
   progress    Int      @default(0) // 已完成数量
-  total       Int      // 总数量
+  total       Int      // 总数量（单个任务为 1）
   startedAt   DateTime?
   completedAt DateTime?
   createdAt   DateTime @default(now())

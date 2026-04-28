@@ -1,7 +1,7 @@
 /**
- * Batch Generation Task Service - Async task management for batch image generation
+ * Generation Task Service - Async task management for image generation
  *
- * Handles long-running batch generation operations (portraits, scenes, costumes)
+ * Handles long-running image generation operations (single and batch)
  * with task submission, background execution, and status polling.
  */
 
@@ -14,15 +14,23 @@ import * as assetGenerationService from "./video-asset-generation-service";
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
-export type BatchTaskType = "portraits" | "scenes" | "costumes";
-export type BatchTaskStatus = "pending" | "running" | "completed" | "failed";
+export type TaskType =
+  | "portrait"
+  | "scene"
+  | "costume"
+  | "update_portrait"
+  | "batch_portraits"
+  | "batch_scenes"
+  | "batch_costumes";
 
-export interface BatchTaskResult {
+export type TaskStatus = "pending" | "running" | "completed" | "failed";
+
+export interface TaskResult {
   id: string;
-  type: BatchTaskType;
+  type: TaskType;
   scopeType: string;
   scopeId: string;
-  status: BatchTaskStatus;
+  status: TaskStatus;
   progress: number;
   total: number;
   result?: unknown;
@@ -33,8 +41,130 @@ export interface BatchTaskResult {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Task submission                                                    */
+/*  Task submission - Single generation                               */
 /* ------------------------------------------------------------------ */
+
+export const SubmitPortraitParams = z.object({
+  novelId: z.string().min(1),
+  characterName: z.string().min(1),
+  styleName: z.string().min(1).optional(),
+  prompt: z.string().optional(),
+  referenceUrls: z.array(z.string().url()).optional(),
+  model: z.string().min(1).optional(),
+});
+
+export const SubmitSceneParams = z.object({
+  novelId: z.string().min(1),
+  sceneName: z.string().min(1),
+  mode: z.enum(["single", "grid", "hd"]).default("single"),
+  referenceUrls: z.array(z.string().url()).optional(),
+  model: z.string().min(1).optional(),
+});
+
+export const SubmitCostumeParams = z.object({
+  scriptId: z.string().min(1),
+  characterName: z.string().min(1),
+  styleName: z.string().min(1).optional(),
+  referenceUrls: z.array(z.string().url()).optional(),
+  model: z.string().min(1).optional(),
+});
+
+export const SubmitUpdatePortraitParams = z.object({
+  novelId: z.string().min(1),
+  characterName: z.string().min(1),
+  styleName: z.string().min(1).optional(),
+  prompt: z.string().optional(),
+  referenceUrls: z.array(z.string().url()).optional(),
+  model: z.string().min(1).optional(),
+});
+
+/**
+ * Submit a portrait generation task
+ */
+export async function submitPortraitTask(
+  input: z.infer<typeof SubmitPortraitParams>,
+): Promise<string> {
+  const task = await prisma.batchGenerationTask.create({
+    data: {
+      type: "portrait",
+      scopeType: "novel",
+      scopeId: input.novelId,
+      status: "pending",
+      input: input as Prisma.InputJsonValue,
+      total: 1,
+      progress: 0,
+    },
+  });
+
+  void executePortraitTask(task.id, input);
+  return task.id;
+}
+
+/**
+ * Submit a scene generation task
+ */
+export async function submitSceneTask(
+  input: z.infer<typeof SubmitSceneParams>,
+): Promise<string> {
+  const task = await prisma.batchGenerationTask.create({
+    data: {
+      type: "scene",
+      scopeType: "novel",
+      scopeId: input.novelId,
+      status: "pending",
+      input: input as Prisma.InputJsonValue,
+      total: 1,
+      progress: 0,
+    },
+  });
+
+  void executeSceneTask(task.id, input);
+  return task.id;
+}
+
+/**
+ * Submit a costume generation task
+ */
+export async function submitCostumeTask(
+  input: z.infer<typeof SubmitCostumeParams>,
+): Promise<string> {
+  const task = await prisma.batchGenerationTask.create({
+    data: {
+      type: "costume",
+      scopeType: "script",
+      scopeId: input.scriptId,
+      status: "pending",
+      input: input as Prisma.InputJsonValue,
+      total: 1,
+      progress: 0,
+    },
+  });
+
+  void executeCostumeTask(task.id, input);
+  return task.id;
+}
+
+/**
+ * Submit an update portrait task
+ */
+export async function submitUpdatePortraitTask(
+  input: z.infer<typeof SubmitUpdatePortraitParams>,
+): Promise<string> {
+  const task = await prisma.batchGenerationTask.create({
+    data: {
+      type: "update_portrait",
+      scopeType: "novel",
+      scopeId: input.novelId,
+      status: "pending",
+      input: input as Prisma.InputJsonValue,
+      total: 1,
+      progress: 0,
+    },
+  });
+
+  void executeUpdatePortraitTask(task.id, input);
+  return task.id;
+}
 
 export const SubmitBatchPortraitsParams = z.object({
   novelId: z.string().min(1),
@@ -65,7 +195,7 @@ export async function submitBatchPortraitsTask(
 ): Promise<string> {
   const task = await prisma.batchGenerationTask.create({
     data: {
-      type: "portraits",
+      type: "batch_portraits",
       scopeType: "novel",
       scopeId: input.novelId,
       status: "pending",
@@ -89,7 +219,7 @@ export async function submitBatchScenesTask(
 ): Promise<string> {
   const task = await prisma.batchGenerationTask.create({
     data: {
-      type: "scenes",
+      type: "batch_scenes",
       scopeType: "novel",
       scopeId: input.novelId,
       status: "pending",
@@ -113,7 +243,7 @@ export async function submitBatchCostumesTask(
 ): Promise<string> {
   const task = await prisma.batchGenerationTask.create({
     data: {
-      type: "costumes",
+      type: "batch_costumes",
       scopeType: "script",
       scopeId: input.scriptId,
       status: "pending",
@@ -130,7 +260,147 @@ export async function submitBatchCostumesTask(
 }
 
 /* ------------------------------------------------------------------ */
-/*  Task execution                                                     */
+/*  Task execution - Single generation                                */
+/* ------------------------------------------------------------------ */
+
+async function executePortraitTask(
+  taskId: string,
+  input: z.infer<typeof SubmitPortraitParams>,
+): Promise<void> {
+  try {
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: { status: "running", startedAt: new Date() },
+    });
+
+    const result = await assetGenerationService.generatePortrait(input);
+
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: {
+        status: "completed",
+        result: result as unknown as Prisma.InputJsonValue,
+        progress: 1,
+        completedAt: new Date(),
+      },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: {
+        status: "failed",
+        error: message,
+        completedAt: new Date(),
+      },
+    });
+  }
+}
+
+async function executeSceneTask(
+  taskId: string,
+  input: z.infer<typeof SubmitSceneParams>,
+): Promise<void> {
+  try {
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: { status: "running", startedAt: new Date() },
+    });
+
+    const result = await assetGenerationService.generateScene(input);
+
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: {
+        status: "completed",
+        result: result as unknown as Prisma.InputJsonValue,
+        progress: 1,
+        completedAt: new Date(),
+      },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: {
+        status: "failed",
+        error: message,
+        completedAt: new Date(),
+      },
+    });
+  }
+}
+
+async function executeCostumeTask(
+  taskId: string,
+  input: z.infer<typeof SubmitCostumeParams>,
+): Promise<void> {
+  try {
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: { status: "running", startedAt: new Date() },
+    });
+
+    const result = await assetGenerationService.generateCostume(input);
+
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: {
+        status: "completed",
+        result: result as unknown as Prisma.InputJsonValue,
+        progress: 1,
+        completedAt: new Date(),
+      },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: {
+        status: "failed",
+        error: message,
+        completedAt: new Date(),
+      },
+    });
+  }
+}
+
+async function executeUpdatePortraitTask(
+  taskId: string,
+  input: z.infer<typeof SubmitUpdatePortraitParams>,
+): Promise<void> {
+  try {
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: { status: "running", startedAt: new Date() },
+    });
+
+    const result = await assetGenerationService.updatePortrait(input);
+
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: {
+        status: "completed",
+        result: result as unknown as Prisma.InputJsonValue,
+        progress: 1,
+        completedAt: new Date(),
+      },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    await prisma.batchGenerationTask.update({
+      where: { id: taskId },
+      data: {
+        status: "failed",
+        error: message,
+        completedAt: new Date(),
+      },
+    });
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Task execution - Batch generation                                 */
 /* ------------------------------------------------------------------ */
 
 async function executeBatchPortraitsTask(
@@ -149,7 +419,7 @@ async function executeBatchPortraitsTask(
       where: { id: taskId },
       data: {
         status: "completed",
-        result: result as Prisma.InputJsonValue,
+        result: result as unknown as Prisma.InputJsonValue,
         progress: input.characterNames.length,
         completedAt: new Date(),
       },
@@ -183,7 +453,7 @@ async function executeBatchScenesTask(
       where: { id: taskId },
       data: {
         status: "completed",
-        result: result as Prisma.InputJsonValue,
+        result: result as unknown as Prisma.InputJsonValue,
         progress: input.sceneNames.length,
         completedAt: new Date(),
       },
@@ -217,7 +487,7 @@ async function executeBatchCostumesTask(
       where: { id: taskId },
       data: {
         status: "completed",
-        result: result as Prisma.InputJsonValue,
+        result: result as unknown as Prisma.InputJsonValue,
         progress: input.characterNames.length,
         completedAt: new Date(),
       },
@@ -242,7 +512,7 @@ async function executeBatchCostumesTask(
 /**
  * Get task status and result
  */
-export async function getBatchTaskStatus(taskId: string): Promise<BatchTaskResult | null> {
+export async function getTaskStatus(taskId: string): Promise<TaskResult | null> {
   const task = await prisma.batchGenerationTask.findUnique({
     where: { id: taskId },
   });
@@ -251,10 +521,10 @@ export async function getBatchTaskStatus(taskId: string): Promise<BatchTaskResul
 
   return {
     id: task.id,
-    type: task.type as BatchTaskType,
+    type: task.type as TaskType,
     scopeType: task.scopeType,
     scopeId: task.scopeId,
-    status: task.status as BatchTaskStatus,
+    status: task.status as TaskStatus,
     progress: task.progress,
     total: task.total,
     result: task.result,
@@ -268,10 +538,10 @@ export async function getBatchTaskStatus(taskId: string): Promise<BatchTaskResul
 /**
  * List tasks by scope
  */
-export async function listBatchTasks(
+export async function listTasks(
   scopeType: string,
   scopeId: string,
-): Promise<BatchTaskResult[]> {
+): Promise<TaskResult[]> {
   const tasks = await prisma.batchGenerationTask.findMany({
     where: { scopeType, scopeId },
     orderBy: { createdAt: "desc" },
@@ -280,10 +550,10 @@ export async function listBatchTasks(
 
   return tasks.map((task) => ({
     id: task.id,
-    type: task.type as BatchTaskType,
+    type: task.type as TaskType,
     scopeType: task.scopeType,
     scopeId: task.scopeId,
-    status: task.status as BatchTaskStatus,
+    status: task.status as TaskStatus,
     progress: task.progress,
     total: task.total,
     result: task.result,
