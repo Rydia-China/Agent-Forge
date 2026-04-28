@@ -467,6 +467,10 @@ export async function executeVideoPrompt(
   });
 
   const refImageUrls: string[] = [];
+  for (const url of extractUrls(input.definition)) {
+    refImageUrls.push(url);
+  }
+
   const imgRefs = input.definition.match(/@图\d+\s*是\s*\[([^\]]+)\]/g) ?? [];
   for (const ref of imgRefs) {
     const nameMatch = ref.match(/\[([^\]]+)\]/);
@@ -485,7 +489,7 @@ export async function executeVideoPrompt(
         if (r.category === "换装") break;
       }
     }
-    if (matched) refImageUrls.push(matched);
+    if (matched && !refImageUrls.includes(matched)) refImageUrls.push(matched);
   }
 
   const videoStyle = await resolveStyle("video_style");
@@ -522,6 +526,7 @@ export async function executeVideoPrompt(
     })
     : await callFcGenerateVideo({
       prompt: compiledPrompt,
+      sourceImageUrl: refImageUrls[0],
       referenceImageUrls: refImageUrls.length > 0 ? refImageUrls : undefined,
       sourceVideoUrls,
     });
@@ -552,6 +557,11 @@ export async function executeVideoPrompt(
     referenceImageCount: refImageUrls.length,
     prompt: compiledPrompt,
   };
+}
+
+function extractUrls(text: string): string[] {
+  const matches = text.match(/https?:\/\/[^\s，。；、)）\]}]+/g) ?? [];
+  return Array.from(new Set(matches));
 }
 
 async function generateHappyHorseVideo(input: {
