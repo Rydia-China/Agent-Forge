@@ -212,6 +212,22 @@ const TOOLS: Tool[] = [
       required: ["scriptId", "characterName"],
     },
   },
+  {
+    name: "batch_generate_costumes",
+    description:
+      "批量生成多个角色换装图片（EP 级）。并行调用 FC 生成服务，自动从数据库读取 character_outfits 并结合样式模板生成 prompt。" +
+      "返回所有角色的生成结果（包括成功和失败）。适用于 EP 初始化时批量生成所有角色换装。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        scriptId: { type: "string", description: "Episode script DB ID" },
+        characterNames: { type: "array", items: { type: "string" }, description: "角色名称列表（需与 JSON 中完全匹配）" },
+        styleName: { type: "string", description: "样式预设名称（例如 'costume_style'），从数据库中按名称查找" },
+        model: { type: "string", description: "图片生成模型名称。省略时使用 FC 环境默认值" },
+      },
+      required: ["scriptId", "characterNames"],
+    },
+  },
 
   // --- Video Planning & Generation Pipeline ---
   {
@@ -363,6 +379,12 @@ export const videoWorkflowMcp: McpProvider = {
         case "generate_costume": {
           const params = assetGenerationService.GenerateCostumeParams.parse(args);
           const result = await assetGenerationService.generateCostume(params);
+          return json(result);
+        }
+
+        case "batch_generate_costumes": {
+          const params = assetGenerationService.BatchGenerateCostumesParams.parse(args);
+          const result = await assetGenerationService.batchGenerateCostumes(params);
           return json(result);
         }
 
