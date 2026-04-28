@@ -18,6 +18,7 @@ import * as episodeService from "@/lib/services/episode-service";
 import * as orchestrationService from "@/lib/services/video-workflow-orchestration-service";
 import * as assetGenerationService from "@/lib/services/video-asset-generation-service";
 import * as shotPlanningService from "@/lib/services/video-shot-planning-service";
+import * as batchTaskService from "@/lib/services/batch-generation-task-service";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -229,6 +230,72 @@ const TOOLS: Tool[] = [
     },
   },
 
+  // --- Async Batch Generation Tasks ---
+  {
+    name: "submit_batch_portraits_task",
+    description:
+      "提交批量角色立绘生成任务（异步）。立即返回 taskId，任务在后台执行。" +
+      "适用于需要生成大量角色立绘且不想等待的场景（生成时间可能长达 5 分钟）。" +
+      "使用 get_batch_task_status 查询任务状态和结果。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        novelId: { type: "string", description: "小说 ID" },
+        characterNames: { type: "array", items: { type: "string" }, description: "角色名称列表" },
+        styleName: { type: "string", description: "样式预设名称" },
+        model: { type: "string", description: "图片生成模型名称" },
+      },
+      required: ["novelId", "characterNames"],
+    },
+  },
+  {
+    name: "submit_batch_scenes_task",
+    description:
+      "提交批量场景图片生成任务（异步）。立即返回 taskId，任务在后台执行。" +
+      "适用于需要生成大量场景图片且不想等待的场景（生成时间可能长达 5 分钟）。" +
+      "使用 get_batch_task_status 查询任务状态和结果。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        novelId: { type: "string", description: "小说 ID" },
+        sceneNames: { type: "array", items: { type: "string" }, description: "场景名称列表" },
+        mode: { type: "string", enum: ["single", "grid", "hd"], description: "生成模式" },
+        model: { type: "string", description: "图片生成模型名称" },
+      },
+      required: ["novelId", "sceneNames"],
+    },
+  },
+  {
+    name: "submit_batch_costumes_task",
+    description:
+      "提交批量换装图片生成任务（异步）。立即返回 taskId，任务在后台执行。" +
+      "适用于 EP 初始化时需要生成所有角色换装且不想等待的场景（生成时间可能长达 5 分钟）。" +
+      "使用 get_batch_task_status 查询任务状态和结果。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        scriptId: { type: "string", description: "Episode script DB ID" },
+        characterNames: { type: "array", items: { type: "string" }, description: "角色名称列表" },
+        styleName: { type: "string", description: "样式预设名称" },
+        model: { type: "string", description: "图片生成模型名称" },
+      },
+      required: ["scriptId", "characterNames"],
+    },
+  },
+  {
+    name: "get_batch_task_status",
+    description:
+      "查询批量生成任务的状态和结果。返回任务状态（pending/running/completed/failed）、" +
+      "进度（已完成数量/总数量）、结果（completed 时）或错误信息（failed 时）。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        taskId: { type: "string", description: "任务 ID（由 submit_batch_*_task 返回）" },
+      },
+      required: ["taskId"],
+    },
+  },
+
   // --- Video Planning & Generation Pipeline ---
   {
     name: "plan_video_shots",
@@ -385,6 +452,33 @@ export const videoWorkflowMcp: McpProvider = {
         case "batch_generate_costumes": {
           const params = assetGenerationService.BatchGenerateCostumesParams.parse(args);
           const result = await assetGenerationService.batchGenerateCostumes(params);
+          return json(result);
+        }
+
+        case "submit_batch_portraits_task": {
+          const params = batchTaskService.SubmitBatchPortraitsParams.parse(args);
+          const taskId = await batchTaskService.submitBatchPortraitsTask(params);
+          return json({ taskId, status: "submitted" });
+        }
+
+        case "submit_batch_scenes_task": {
+          const params = batchTaskService.SubmitBatchScenesParams.parse(args);
+          const taskId = await batchTaskService.submitBatchScenesTask(params);
+          return json({ taskId, status: "submitted" });
+        }
+
+        case "submit_batch_costumes_task": {
+          const params = batchTaskService.SubmitBatchCostumesParams.parse(args);
+          const taskId = await batchTaskService.submitBatchCostumesTask(params);
+          return json({ taskId, status: "submitted" });
+        }
+
+        case "get_batch_task_status": {
+          const { taskId } = z.object({ taskId: z.string() }).parse(args);
+          const result = await batchTaskService.getBatchTaskStatus(taskId);
+          if (!result) {
+            return json({ status: "error", error: "Task not found" });
+          }
           return json(result);
         }
 
