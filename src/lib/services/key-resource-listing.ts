@@ -20,9 +20,29 @@ export interface ResourceItem {
   url: string | null;
   data: unknown;
   prompt: string | null;
+  refUrls: string[];
   currentVersion: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function mergePromptFieldsIntoData(
+  data: unknown,
+  prompt: string | null,
+  refUrls: string[] | null,
+): unknown {
+  if (data == null && prompt == null && refUrls == null) return null;
+  const cloned = data == null ? {} : JSON.parse(JSON.stringify(data));
+  if (!isPlainJsonObject(cloned)) return cloned;
+  return {
+    ...cloned,
+    ...(prompt != null ? { prompt } : {}),
+    ...(refUrls != null ? { refUrls } : {}),
+  };
 }
 
 export interface ResourceCategoryGroup {
@@ -43,6 +63,7 @@ interface ResourceListRow {
   url: string | null;
   data: unknown;
   prompt: string | null;
+  refUrls: string[] | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -76,7 +97,8 @@ export async function listResourcesByScope(
       krv.title AS "versionTitle",
       krv.url,
       krv.data,
-      krv.prompt
+      krv.prompt,
+      krv."refUrls"
     FROM "KeyResource" kr
     LEFT JOIN "KeyResourceVersion" krv
       ON krv."keyResourceId" = kr.id
@@ -99,8 +121,11 @@ export async function listResourcesByScope(
       mediaType: resource.mediaType,
       title: resource.title ?? resource.versionTitle,
       url: resource.url,
-      data: resource.mediaType === "json" ? resource.data ?? null : null,
+      data: resource.mediaType === "json"
+        ? mergePromptFieldsIntoData(resource.data, resource.prompt, resource.refUrls)
+        : null,
       prompt: resource.prompt,
+      refUrls: resource.refUrls ?? [],
       currentVersion: resource.currentVersion,
       createdAt: resource.createdAt,
       updatedAt: resource.updatedAt,

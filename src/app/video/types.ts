@@ -24,6 +24,7 @@ export interface ResourceItem {
   url: string | null;
   data: unknown;
   prompt: string | null;
+  refUrls?: string[];
   currentVersion: number;
   keyResourceId?: string | null;
   sortOrder?: number;

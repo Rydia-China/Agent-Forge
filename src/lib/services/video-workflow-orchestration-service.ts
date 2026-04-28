@@ -78,6 +78,25 @@ export const GetStatusParams = z.object({
 
 export type GetStatusInput = z.infer<typeof GetStatusParams>;
 
+function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function mergePromptFieldsIntoData(
+  data: unknown,
+  prompt: string | null,
+  refUrls: string[] | null,
+): unknown {
+  if (data == null && prompt == null && refUrls == null) return null;
+  const cloned = data == null ? {} : JSON.parse(JSON.stringify(data));
+  if (!isPlainJsonObject(cloned)) return cloned;
+  return {
+    ...cloned,
+    ...(prompt != null ? { prompt } : {}),
+    ...(refUrls != null ? { refUrls } : {}),
+  };
+}
+
 export async function getStatus(input: GetStatusInput): Promise<GetStatusResult> {
   let novelId = input.novelId;
   let scriptKey: string | undefined;
@@ -141,7 +160,15 @@ export async function getStatus(input: GetStatusInput): Promise<GetStatusResult>
       key: r.key,
       mediaType: r.mediaType,
       url: currentVer?.url ?? null,
-      ...(r.mediaType === "json" ? { data: currentVer?.data ?? null } : {}),
+      ...(r.mediaType === "json" ? {
+        data: mergePromptFieldsIntoData(
+          currentVer?.data ?? null,
+          currentVer?.prompt ?? null,
+          currentVer?.refUrls ?? null,
+        ),
+      } : {}),
+      prompt: currentVer?.prompt ?? null,
+      refUrls: currentVer?.refUrls ?? [],
       version: r.currentVersion,
       title: r.title,
       category: r.category,

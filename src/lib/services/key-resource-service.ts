@@ -44,6 +44,7 @@ export interface KeyResourceSummary {
   url: string | null;
   data: PrismaTypes.JsonValue;
   prompt: string | null;
+  refUrls: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,6 +60,7 @@ export interface KeyResourceDetail {
   url: string | null;
   data: PrismaTypes.JsonValue;
   prompt: string | null;
+  refUrls: string[];
   versions: KeyResourceVersionRow[];
   createdAt: Date;
   updatedAt: Date;
@@ -80,14 +82,64 @@ async function nextVersion(keyResourceId: string): Promise<number> {
 function currentVersionData(
   versions: KeyResourceVersionRow[],
   currentVersion: number,
-): { title: string | null; url: string | null; data: PrismaTypes.JsonValue; prompt: string | null } {
+): {
+  title: string | null;
+  url: string | null;
+  data: PrismaTypes.JsonValue;
+  prompt: string | null;
+  refUrls: string[];
+} {
   const ver = versions.find((v) => v.version === currentVersion);
   return {
     title: ver?.title ?? null,
     url: ver?.url ?? null,
     data: ver?.data ?? null,
     prompt: ver?.prompt ?? null,
+    refUrls: ver?.refUrls ?? [],
   };
+}
+
+function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function cloneJson(value: unknown): unknown {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function mergePromptFieldsIntoData(
+  data: PrismaTypes.InputJsonValue | PrismaTypes.JsonValue | null | undefined,
+  prompt?: string | null,
+  refUrls?: string[] | null,
+): PrismaTypes.InputJsonValue | undefined {
+  const hasPrompt = typeof prompt === "string";
+  const hasRefUrls = Array.isArray(refUrls);
+  if (data == null && !hasPrompt && !hasRefUrls) return undefined;
+
+  const cloned = data == null ? {} : cloneJson(data);
+  if (!isPlainJsonObject(cloned)) {
+    return cloned as PrismaTypes.InputJsonValue;
+  }
+
+  const next: Record<string, unknown> = { ...cloned };
+  if (hasPrompt) next.prompt = prompt;
+  if (hasRefUrls) next.refUrls = refUrls;
+  return next as PrismaTypes.InputJsonValue;
+}
+
+function promptFromData(data: PrismaTypes.InputJsonValue | PrismaTypes.JsonValue): string | null {
+  const cloned = cloneJson(data);
+  return isPlainJsonObject(cloned) && typeof cloned.prompt === "string"
+    ? cloned.prompt
+    : null;
+}
+
+function refUrlsFromData(data: PrismaTypes.InputJsonValue | PrismaTypes.JsonValue): string[] | null {
+  const cloned = cloneJson(data);
+  if (!isPlainJsonObject(cloned) || !Array.isArray(cloned.refUrls)) return null;
+  return cloned.refUrls.every((url): url is string => typeof url === "string")
+    ? cloned.refUrls
+    : null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -114,13 +166,18 @@ export async function upsertResource(
 
   // 2. Create new version
   const ver = await nextVersion(resource.id);
+  const data = mergePromptFieldsIntoData(
+    versionData.data,
+    versionData.prompt,
+    versionData.refUrls,
+  );
   await prisma.keyResourceVersion.create({
     data: {
       keyResourceId: resource.id,
       version: ver,
       title: versionData.title ?? null,
       url: versionData.url ?? null,
-      data: versionData.data ?? undefined,
+      data,
       prompt: versionData.prompt ?? null,
       refUrls: versionData.refUrls ?? [],
     },
@@ -315,12 +372,19 @@ export async function updatePrompt(
     : null;
 
   const ver = await nextVersion(resource.id);
+  const nextData = mergePromptFieldsIntoData(
+    curVer?.data ?? null,
+    newPrompt,
+    curVer?.refUrls ?? [],
+  );
   await prisma.keyResourceVersion.create({
     data: {
       keyResourceId: resource.id,
       version: ver,
+      title: curVer?.title ?? null,
       prompt: newPrompt,
       url: curVer?.url ?? null,
+      data: nextData,
       refUrls: curVer?.refUrls ?? [],
     },
   });
@@ -364,15 +428,18 @@ export async function updateData(
     : null;
 
   const ver = await nextVersion(resource.id);
+  const prompt = promptFromData(newData) ?? curVer?.prompt ?? null;
+  const refUrls = refUrlsFromData(newData) ?? curVer?.refUrls ?? [];
+  const data = mergePromptFieldsIntoData(newData, prompt, refUrls) ?? newData;
   await prisma.keyResourceVersion.create({
     data: {
       keyResourceId: resource.id,
       version: ver,
       title: curVer?.title ?? null,
       url: curVer?.url ?? null,
-      data: newData,
-      prompt: curVer?.prompt ?? null,
-      refUrls: curVer?.refUrls ?? [],
+      data,
+      prompt,
+      refUrls,
     },
   });
 
@@ -483,6 +550,8 @@ export async function listForScope(
   title: string | null;
   url: string | null;
   data: PrismaTypes.JsonValue;
+  prompt: string | null;
+  refUrls: string[];
 }>> {
   const resources = await prisma.keyResource.findMany({
     where: { scopeType, scopeId },
@@ -500,6 +569,8 @@ export async function listForScope(
       title: cur.title,
       url: cur.url,
       data: cur.data,
+      prompt: cur.prompt,
+      refUrls: cur.refUrls,
     };
   });
 }

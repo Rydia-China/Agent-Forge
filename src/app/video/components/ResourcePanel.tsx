@@ -31,7 +31,7 @@ export interface ResourcePanelProps {
 
 const ASIDE_CLASS = "flex h-full w-56 min-w-[200px] shrink-0 flex-col border-l border-slate-800 bg-slate-950/80";
 
-export function ResourcePanel({ resources, isLoading, novelId, scriptId, sessionId, isNovelLevel, onRefresh }: ResourcePanelProps) {
+export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovelLevel, onRefresh }: ResourcePanelProps) {
   const { message } = App.useApp();
 
   /* ---- JSON editor drawer state ---- */
@@ -83,6 +83,19 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
       />
     );
   };
+  const jsonDataForDisplay = (r: DomainResource): unknown => {
+    const hasPrompt = typeof r.prompt === "string";
+    const hasRefUrls = Array.isArray(r.refUrls);
+    if (!hasPrompt && !hasRefUrls) return r.data;
+    if (typeof r.data !== "object" || r.data === null || Array.isArray(r.data)) {
+      return r.data;
+    }
+    return {
+      ...(r.data as Record<string, unknown>),
+      ...(hasPrompt ? { prompt: r.prompt } : {}),
+      ...(hasRefUrls ? { refUrls: r.refUrls } : {}),
+    };
+  };
 
   /* ---- Delete handler ---- */
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -107,7 +120,7 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
         return next;
       });
     }
-  }, [scriptId, onRefresh]);
+  }, [scriptId, onRefresh, message]);
 
   /* ---- JSON editor ---- */
   const openEditor = useCallback((item: { id: string; title: string; data: unknown }) => {
@@ -139,7 +152,7 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
     } finally {
       setIsSaving(false);
     }
-  }, [editingItem, editText, scriptId, onRefresh]);
+  }, [editingItem, editText, scriptId, onRefresh, message]);
 
   /* ---- Per media_type renderers ---- */
 
@@ -226,14 +239,15 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
   };
 
   const renderJsonItem = (r: DomainResource) => {
-    const text = r.data != null
-      ? (typeof r.data === "string" ? r.data : JSON.stringify(r.data, null, 2))
+    const data = jsonDataForDisplay(r);
+    const text = data != null
+      ? (typeof data === "string" ? data : JSON.stringify(data, null, 2))
       : "";
     return (
       <div
         key={r.id}
         className="group/card relative cursor-pointer overflow-hidden rounded-lg bg-slate-900"
-        onClick={() => openEditor({ id: r.id, title: r.title ?? "JSON", data: r.data })}
+        onClick={() => openEditor({ id: r.id, title: r.title ?? "JSON", data })}
         title="Click to edit"
       >
         {renderDeleteBtn(r.id)}
@@ -251,7 +265,7 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, session
   };
 
   /* ---- Auto-expand newly appeared categories, preserve existing expand state ---- */
-  const categories = resources?.categories ?? [];
+  const categories = useMemo(() => resources?.categories ?? [], [resources?.categories]);
   const categoryKeys = useMemo(() => categories.map((g) => `cat-${g.category}`), [categories]);
   useEffect(() => {
     const newKeys = categoryKeys.filter((k) => !knownKeysRef.current.has(k));
