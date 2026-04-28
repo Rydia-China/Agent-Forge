@@ -78,15 +78,18 @@ SSE 事件类型：
 - `event: upload_request` → 上传请求
 - `event: key_resource` → 关键资源
 - `event: done` → `{ session_id, reply }`
-- `event: error` → `{ error }`
+- `event: interrupted` → `{ session_id, output, error, recoverable: true, partial_saved: true, code? }`
+- `event: error` → `{ error }`（取消或不可恢复失败）
 
 每个事件带有单调递增 `id:` 字段。断线重连时，服务端通过 `Last-Event-ID` header 从 DB 重放遗漏事件，确保不丢失。
+
+LLM streaming 的瞬时网络错误（如 `ETIMEDOUT`、连接重置、undici `terminated`）不会把任务标记为 `failed`。服务端会先持久化本轮 user message 和已收到的 assistant partial reply，随后将 SubAgent 标记为 `interrupted` 并发送 `interrupted` 事件。该状态表示上下文已保存，用户可以继续发送下一条消息；系统不会自动重跑整轮 agent，避免重复工具调用或外部副作用。
 
 **查询任务状态**：
 ```
 curl http://localhost:8001/api/subagents/{subagent_id}
 # → { "id", "sessionId", "status", "output", "error", ... }
-# status: pending | running | completed | failed | cancelled
+# status: pending | running | completed | failed | interrupted | cancelled | max_iterations
 ```
 
 **取消任务**：
@@ -98,6 +101,7 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 1. `GET /api/sessions/{sid}` → 响应包含 `activeSubAgent: { id, status }` （若有活跃任务）
 2. 前端加载 session 时，发现 activeSubAgent → 自动连接 `GET /api/subagents/{subagentId}/events`
 3. EventSource 断线时浏览器自动重连，携带 `Last-Event-ID`
+4. 若任务已进入 `interrupted`，它不再算活跃任务；前端重新加载 session messages 即可看到已保存的 partial context，用户可继续对话
 
 **因果**：SubAgent 状态和事件持久化到 DB，客户端断开不影响执行，重连后从断点继续。
 

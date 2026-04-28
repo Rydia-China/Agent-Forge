@@ -272,6 +272,7 @@ export async function getTaskResults(taskIds: string[]): Promise<AsyncTaskResult
     const isTerminal =
       row.status === "completed" ||
       row.status === "failed" ||
+      row.status === "interrupted" ||
       row.status === "max_iterations";
 
     if (isTerminal) {

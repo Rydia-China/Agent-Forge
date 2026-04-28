@@ -103,7 +103,7 @@ export type KeyResourceItem = {
   title?: string | null;
 };
 
-export type ActiveTask = {
+export type ActiveSubAgent = {
   id: string;
   status: string;
 };
@@ -113,7 +113,9 @@ export type SessionDetail = {
   title: string | null;
   messages: ChatMessage[];
   keyResources?: KeyResourceItem[];
-  activeTask?: ActiveTask | null;
+  activeSubAgent?: ActiveSubAgent | null;
+  /** Deprecated compatibility alias for older API responses. */
+  activeTask?: ActiveSubAgent | null;
 };
 
 export type UploadRequestPayload = {
