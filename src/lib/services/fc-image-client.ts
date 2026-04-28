@@ -3,6 +3,8 @@
  * Calls the Function Compute image generation endpoint.
  */
 
+const DEFAULT_IMAGE_MODEL = "gpt-image-2";
+
 export async function callFcGenerateImage(
   prompt: string,
   refUrls?: string[],
@@ -17,12 +19,12 @@ export async function callFcGenerateImage(
     );
   }
 
-  const payload: Record<string, unknown> = { prompt };
+  const payload: Record<string, unknown> = {
+    prompt,
+    model: model ?? DEFAULT_IMAGE_MODEL,
+  };
   if (refUrls && refUrls.length > 0) {
     payload.refUrls = refUrls;
-  }
-  if (model) {
-    payload.model = model;
   }
 
   const response = await fetch(url, {
