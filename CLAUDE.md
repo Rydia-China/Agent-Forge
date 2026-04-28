@@ -92,6 +92,15 @@
 ## 端口
 - 8001 (env `PORT`)
 
+## 数据库
+- **PostgreSQL** 运行在 Docker 容器中
+- 使用 Prisma ORM 进行数据库操作
+- 连接信息配置在 `.env` 文件的 `DATABASE_URL`
+- 排查数据库问题时可通过 Docker 命令访问：
+  - 查看容器状态：`docker ps`
+  - 查看日志：`docker logs <container-name>`
+  - 进入 psql：`docker exec -it <container-name> psql -U <username> -d <database>`
+
 ## 环境变量
 - `.env.example` 是环境变量的唯一源，提交到 Git
 - 新增 `process.env.XXX` 时，必须同步更新 `.env.example` 和 `.env`（实际值留空或填默认值）
