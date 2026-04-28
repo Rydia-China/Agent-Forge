@@ -657,3 +657,67 @@ export async function batchGenerateScenes(
     }),
   };
 }
+
+/* ------------------------------------------------------------------ */
+/*  Batch costume generation                                           */
+/* ------------------------------------------------------------------ */
+
+export const BatchGenerateCostumesParams = z.object({
+  scriptId: z.string().min(1),
+  characterNames: z.array(z.string().min(1)),
+  styleName: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+});
+
+export type BatchGenerateCostumesInput = z.infer<typeof BatchGenerateCostumesParams>;
+
+export interface BatchGenerateCostumesResult {
+  results: Array<{
+    characterName: string;
+    status: "ok" | "error";
+    key?: string;
+    keyResourceId?: string;
+    imageUrl?: string;
+    version?: number;
+    error?: string;
+  }>;
+}
+
+export async function batchGenerateCostumes(
+  input: BatchGenerateCostumesInput,
+): Promise<BatchGenerateCostumesResult> {
+  const results = await Promise.allSettled(
+    input.characterNames.map((characterName) =>
+      generateCostume({
+        scriptId: input.scriptId,
+        characterName,
+        styleName: input.styleName,
+        model: input.model,
+      }),
+    ),
+  );
+
+  return {
+    results: results.map((result, index) => {
+      const characterName = input.characterNames[index]!;
+      if (result.status === "fulfilled") {
+        const data = result.value;
+        return {
+          characterName,
+          status: data.status,
+          key: data.key,
+          keyResourceId: data.keyResourceId,
+          imageUrl: data.imageUrl,
+          version: data.version,
+          error: data.error,
+        };
+      } else {
+        return {
+          characterName,
+          status: "error" as const,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        };
+      }
+    }),
+  };
+}
