@@ -242,6 +242,22 @@ const TOOLS: Tool[] = [
         prompt: { type: "string", description: "Reviewer 放行的视频 prompt" },
         definition: { type: "string", description: "素材定义，例如 '@图1 是 [场景X]，@图2 是 [人物A换装图]'" },
         duration: { type: "number", description: "Duration in seconds (4-15)" },
+        provider: {
+          type: "string",
+          enum: ["jimeng", "happyhorse"],
+          description: "视频生成 provider。默认 jimeng；快乐马测试传 happyhorse。两种 provider 都由工具套用 video_style。",
+        },
+        resolution: {
+          type: "string",
+          enum: ["1080P", "720P"],
+          description: "HappyHorse 可选分辨率",
+        },
+        ratio: {
+          type: "string",
+          enum: ["16:9", "9:16", "1:1", "4:3", "3:4"],
+          description: "HappyHorse 可选宽高比",
+        },
+        model: { type: "string", description: "HappyHorse 可选模型名" },
         previousVideoUrl: { type: "string", description: "可选：延续上一段视频时传入上一段 URL，工具会截取末帧/尾段" },
         title: { type: "string", description: "Human-readable label" },
       },

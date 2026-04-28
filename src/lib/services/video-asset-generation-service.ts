@@ -20,6 +20,11 @@ import type {
 } from "@/lib/video/asset-generation-types";
 import * as keyResourceService from "./key-resource-service";
 import { callFcGenerateVideo, callFcCropVideo } from "./fc-video-client";
+import {
+  callFcHappyHorseCreate,
+  callFcHappyHorseWait,
+  type MediaItem,
+} from "./fc-happyhorse-client";
 import { compileTemplate } from "@/lib/mcp/static/langfuse-helpers";
 import { getNovelLevelData } from "./novel-service";
 
@@ -432,6 +437,10 @@ export const ExecuteVideoPromptParams = z.object({
   prompt: z.string().min(1),
   definition: z.string().min(1),
   duration: z.number().min(4).max(15),
+  provider: z.enum(["jimeng", "happyhorse"]).optional().default("jimeng"),
+  resolution: z.enum(["1080P", "720P"]).optional(),
+  ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional(),
+  model: z.string().min(1).optional(),
   previousVideoUrl: z.string().url().optional(),
   title: z.string().optional(),
 });
@@ -501,11 +510,21 @@ export async function executeVideoPrompt(
     prompt: input.prompt,
   });
 
-  const videoUrl = await callFcGenerateVideo({
-    prompt: compiledPrompt,
-    referenceImageUrls: refImageUrls.length > 0 ? refImageUrls : undefined,
-    sourceVideoUrls,
-  });
+  const videoUrl = input.provider === "happyhorse"
+    ? await generateHappyHorseVideo({
+      prompt: compiledPrompt,
+      referenceImageUrls: refImageUrls,
+      sourceVideoUrls: sourceVideoUrls ?? [],
+      duration: input.duration,
+      resolution: input.resolution,
+      ratio: input.ratio,
+      model: input.model,
+    })
+    : await callFcGenerateVideo({
+      prompt: compiledPrompt,
+      referenceImageUrls: refImageUrls.length > 0 ? refImageUrls : undefined,
+      sourceVideoUrls,
+    });
 
   const kr = await keyResourceService.upsertResource(
     "script",
@@ -516,7 +535,10 @@ export async function executeVideoPrompt(
       prompt: compiledPrompt,
       url: videoUrl,
       refUrls: [...refImageUrls, ...(sourceVideoUrls ?? [])],
-      data: { duration: input.duration } as Prisma.InputJsonValue,
+      data: {
+        duration: input.duration,
+        provider: input.provider,
+      } as Prisma.InputJsonValue,
     },
   );
   await setKeyResourceMetadata(kr.id, "视频", input.title ?? input.key);
@@ -530,6 +552,49 @@ export async function executeVideoPrompt(
     referenceImageCount: refImageUrls.length,
     prompt: compiledPrompt,
   };
+}
+
+async function generateHappyHorseVideo(input: {
+  prompt: string;
+  referenceImageUrls: string[];
+  sourceVideoUrls: string[];
+  duration: number;
+  resolution?: "1080P" | "720P";
+  ratio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
+  model?: string;
+}): Promise<string> {
+  if (input.prompt.length > 2500) {
+    throw new Error(
+      `HappyHorse prompt exceeds 2500 characters after video_style compilation: ${input.prompt.length}`,
+    );
+  }
+
+  const media: MediaItem[] = [
+    ...input.sourceVideoUrls.map((url): MediaItem => ({ type: "video", url })),
+    ...input.referenceImageUrls.map((url): MediaItem => ({ type: "reference_image", url })),
+  ];
+
+  if (media.length === 0) {
+    throw new Error("HappyHorse requires at least one video or reference image");
+  }
+
+  const created = await callFcHappyHorseCreate({
+    prompt: input.prompt,
+    media,
+    duration: input.duration,
+    resolution: input.resolution,
+    ratio: input.ratio,
+    model: input.model,
+  });
+
+  const completed = await callFcHappyHorseWait(created.taskId);
+  if (completed.status !== "SUCCEEDED" || !completed.videoUrl) {
+    throw new Error(
+      completed.errorMessage ?? `HappyHorse task ${created.taskId} ended with ${completed.status}`,
+    );
+  }
+
+  return completed.videoUrl;
 }
 
 /* ------------------------------------------------------------------ */
