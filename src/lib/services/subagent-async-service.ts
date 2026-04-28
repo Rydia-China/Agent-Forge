@@ -29,7 +29,11 @@ async function runAsyncSubAgent(
     await markTaskRunning(taskId);
 
     const progressCbs = createProgressCallbacks(toolContext, taskIndex);
-    const result = await runSubAgent(task, toolContext, progressCbs);
+    const result = await runSubAgent(
+      { ...task, persistentAgentId: taskId },
+      toolContext,
+      progressCbs,
+    );
     await persistResult(taskId, result);
 
     emitTaskDone(toolContext, taskIndex, result, taskId);

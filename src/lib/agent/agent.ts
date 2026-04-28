@@ -100,6 +100,10 @@ export interface AgentConfig {
   mcpScope?: string[];
   /** LLM model id to use for this run (must be in MODEL_OPTIONS). */
   model?: string;
+  /** Persisted SubAgent row for this agent run, used as parent for nested traces. */
+  persistentSubAgentId?: string;
+  /** Persisted SubAgent nesting depth for this agent run. */
+  subAgentDepth?: number;
 }
 
 
@@ -276,7 +280,12 @@ async function runAgentInner(
   images?: string[],
   config?: AgentConfig,
 ): Promise<AgentResponse> {
-  const toolCtx: ToolContext = { sessionId: session.id, userName };
+  const toolCtx: ToolContext = {
+    sessionId: session.id,
+    userName,
+    persistentParentAgentId: config?.persistentSubAgentId,
+    agentDepth: config?.subAgentDepth,
+  };
   return runAgentInnerCore(userMessage, session, toolCtx, images, config);
 }
 
@@ -548,7 +557,12 @@ async function runAgentStreamInner(
   images?: string[],
   config?: AgentConfig,
 ): Promise<AgentResponse> {
-  const toolCtx: ToolContext = { sessionId: session.id, userName };
+  const toolCtx: ToolContext = {
+    sessionId: session.id,
+    userName,
+    persistentParentAgentId: config?.persistentSubAgentId,
+    agentDepth: config?.subAgentDepth,
+  };
   return runAgentStreamInnerCore(userMessage, session, toolCtx, callbacks, signal, images, config);
 }
 

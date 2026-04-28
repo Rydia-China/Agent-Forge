@@ -61,6 +61,25 @@ async function getSessionResolver() {
   return service.getOrCreateSession;
 }
 
+async function resolvePersistedParent(
+  context?: ToolContext,
+): Promise<{ parentAgentId: string | null; depth: number }> {
+  const parentAgentId = context?.persistentParentAgentId;
+  if (!parentAgentId) {
+    return { parentAgentId: null, depth: context?.agentDepth ?? 0 };
+  }
+
+  const prisma = await getPrisma();
+  const parent = await prisma.subAgent.findUnique({
+    where: { id: parentAgentId },
+    select: { depth: true },
+  });
+  if (!parent) {
+    return { parentAgentId: null, depth: context?.agentDepth ?? 0 };
+  }
+  return { parentAgentId, depth: parent.depth + 1 };
+}
+
 function dbStatusFromResult(status: SubAgentResult["status"]): string {
   return status;
 }
@@ -96,16 +115,25 @@ export async function createAsyncRecord(
   task: TaskInput,
   context?: ToolContext,
 ): Promise<string> {
+  return createSubAgentTaskRecord(task, context);
+}
+
+export async function createSubAgentTaskRecord(
+  task: TaskInput,
+  context?: ToolContext,
+): Promise<string> {
   const getOrCreateSession = await getSessionResolver();
   const prisma = await getPrisma();
   const session = await getOrCreateSession(
     context?.sessionId,
     context?.userName,
   );
+  const parent = await resolvePersistedParent(context);
   const row = await prisma.subAgent.create({
     data: {
       sessionId: session.id,
-      depth: context?.agentDepth ?? 0,
+      parentAgentId: parent.parentAgentId,
+      depth: parent.depth,
       status: "pending",
       config: normalizeJsonObject({ source: "mcp.subagent", task }),
     },

@@ -405,7 +405,7 @@ export const subagentMcp: McpProvider = {
               return { ...formatResult(result, task.includeTrace), promoted: false as const };
             }
 
-            const agentPromise = runSubAgentTask(task, context, callbacks);
+            const agentPromise = runSubAgentTask(task, context, callbacks, { persist: false });
             const race = await raceTimeout(agentPromise, timeoutSec * 1000);
 
             if (!race.timedOut) {

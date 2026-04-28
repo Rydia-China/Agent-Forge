@@ -201,7 +201,7 @@ export async function submitSubAgent(
   });
 
   // Fire-and-forget: start execution on next tick
-  void executeSubAgent(subagent.id, session.id, input).catch((err: unknown) => {
+  void executeSubAgent(subagent.id, session.id, subagent.depth, input).catch((err: unknown) => {
     console.error(`[subagent:${subagent.id}] background execution leaked error:`, err);
   });
 
@@ -215,6 +215,7 @@ export async function submitSubAgent(
 async function executeSubAgent(
   subagentId: string,
   sessionId: string,
+  subagentDepth: number,
   input: SubmitSubAgentInput,
 ): Promise<void> {
   const ac = new AbortController();
@@ -294,6 +295,8 @@ async function executeSubAgent(
     const agentConfig: AgentConfig = {
       ...input.agentConfig,
       ...(input.model ? { model: input.model } : {}),
+      persistentSubAgentId: subagentId,
+      subAgentDepth: subagentDepth,
     };
 
     const result = await runAgentStream(
