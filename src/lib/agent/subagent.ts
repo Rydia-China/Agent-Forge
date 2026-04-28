@@ -34,6 +34,8 @@ export interface SubAgentConfig {
   usageType?: ModelUsageType;
   /** Max tool-use iterations (tool-loop mode). Default 20. */
   maxIterations?: number;
+  /** Delay in seconds after each tool-call round (tool-loop mode). */
+  delayTime?: number;
   /** Additional context injected into the system prompt. */
   context?: string;
   /** Skill names whose content is injected as reference material. */
@@ -55,7 +57,10 @@ export interface ToolCallTrace {
   args: Record<string, unknown>;
   result: string;
   error?: string;
+  startedAt: string;
+  endedAt: string;
   durationMs: number;
+  delayAfterMs?: number;
   iteration: number;
 }
 
@@ -222,12 +227,78 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseToolArgs(raw: string): Record<string, unknown> {
+  const parseCandidate = (candidate: string): Record<string, unknown> | null => {
+    try {
+      const parsed: unknown = JSON.parse(candidate);
+      return isRecord(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const parsedRaw = parseCandidate(raw);
+  if (parsedRaw) return parsedRaw;
+
+  const candidates: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (ch === "\\") {
+      escaped = inString;
+      continue;
+    }
+
+    if (ch === "\"") {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+      continue;
+    }
+
+    if (ch === "}") {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        candidates.push(raw.slice(start, i + 1));
+        start = -1;
+      }
+    }
+  }
+
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const parsed = parseCandidate(candidates[i]!);
+    if (parsed && Object.keys(parsed).length > 0) return parsed;
+  }
+
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const parsed = parseCandidate(candidates[i]!);
+    if (parsed) return parsed;
+  }
   try {
     const parsed: unknown = JSON.parse(raw);
     return isRecord(parsed) ? parsed : {};
   } catch {
     return {};
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function toolResultToText(result: CallToolResult): string {
@@ -568,15 +639,24 @@ export class SubAgent {
       }
 
       const assistantMsg = choice.message;
+      const normalizedToolCalls = assistantMsg.tool_calls?.map((tc) => {
+        if (tc.type !== "function") return tc;
+        return {
+          ...tc,
+          function: {
+            ...tc.function,
+            arguments: JSON.stringify(parseToolArgs(tc.function.arguments)),
+          },
+        };
+      });
       const assistantLlm: LlmMessage = {
         role: "assistant",
         content: assistantMsg.content ?? null,
-        ...(assistantMsg.tool_calls?.length ? { tool_calls: assistantMsg.tool_calls } : {}),
+        ...(normalizedToolCalls?.length ? { tool_calls: normalizedToolCalls } : {}),
       };
       this.messages.push(assistantLlm);
       this.iterations = iteration + 1;
-
-      if (!assistantMsg.tool_calls?.length) {
+      if (!normalizedToolCalls?.length) {
         const finalOutput = assistantMsg.content ?? "";
         if (!this.config.outputSchema) {
           return this.completedResult(t0, finalOutput);
@@ -601,16 +681,26 @@ export class SubAgent {
         });
         continue;
       }
-
-      const functionToolCalls = assistantMsg.tool_calls.filter(
+      const functionToolCalls = normalizedToolCalls.filter(
         (tc): tc is Extract<typeof tc, { type: "function" }> => tc.type === "function",
       );
 
-      for (const tc of functionToolCalls) {
+      const delayTime = this.config.delayTime ?? 0;
+      const delayAfterMs = delayTime * 1000;
+
+      for (let toolIndex = 0; toolIndex < functionToolCalls.length; toolIndex++) {
+        if (toolIndex > 0 && delayAfterMs > 0) {
+          const previousTrace = this.toolCallTraces[this.toolCallTraces.length - 1];
+          if (previousTrace) previousTrace.delayAfterMs = delayAfterMs;
+          await sleep(delayAfterMs);
+        }
+
+        const tc = functionToolCalls[toolIndex]!;
         this.totalToolCalls++;
         progress?.onToolStart?.(tc.function.name, iteration);
 
         const args = parseToolArgs(tc.function.arguments);
+        const startedAt = new Date();
         const t1 = Date.now();
         let toolError: string | undefined;
         let resultText = "";
@@ -640,15 +730,24 @@ export class SubAgent {
         });
 
         const callDuration = Date.now() - t1;
+        const endedAt = new Date();
         progress?.onToolEnd?.(tc.function.name, callDuration, toolError);
         this.toolCallTraces.push({
           name: tc.function.name,
           args,
           result: resultText,
           error: toolError,
+          startedAt: startedAt.toISOString(),
+          endedAt: endedAt.toISOString(),
           durationMs: callDuration,
           iteration,
         });
+      }
+
+      if (functionToolCalls.length > 0 && delayTime > 0 && localIteration < maxIterations - 1) {
+        const lastTrace = this.toolCallTraces[this.toolCallTraces.length - 1];
+        if (lastTrace) lastTrace.delayAfterMs = delayAfterMs;
+        await sleep(delayAfterMs);
       }
     }
 

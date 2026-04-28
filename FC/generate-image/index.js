@@ -10,6 +10,16 @@ const getGoogleGenAI = async () => {
   return GoogleGenAI
 }
 
+const DEFAULT_GEMINI_MODEL = 'google/gemini-3-pro-image-preview'
+
+const resolveGeminiModel = (model) => {
+  const requestedModel = typeof model === 'string' ? model.trim() : ''
+  if (!requestedModel || requestedModel.toLowerCase() === 'gemini') {
+    return process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
+  }
+  return requestedModel
+}
+
 const downloadImageAsBase64 = async (url) => {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 30000)
@@ -195,7 +205,8 @@ exports.handler = async (event, context) => {
     
     console.log('Parsed request body:', JSON.stringify(body))
 
-    const { prompt, referenceImageUrls, model: bodyModel } = body
+    const { prompt, referenceImageUrls, refUrls, model: bodyModel } = body
+    const effectiveReferenceImageUrls = referenceImageUrls || refUrls
 
     if (!prompt || prompt.trim() === '') {
       return {
@@ -207,7 +218,7 @@ exports.handler = async (event, context) => {
 
     const baseURL = process.env.GEMINI_BASE_URL
     const apiKey = process.env.GEMINI_API_KEY
-    const model = bodyModel || process.env.GEMINI_MODEL || 'google/gemini-3-pro-image-preview'
+    const model = resolveGeminiModel(bodyModel || process.env.GEMINI_MODEL)
 
     if (!baseURL || !apiKey) {
       return {
@@ -220,10 +231,10 @@ exports.handler = async (event, context) => {
     console.log('Image generation request:', {
       model,
       promptLength: prompt.length,
-      referenceImageCount: referenceImageUrls?.length || 0
+      referenceImageCount: effectiveReferenceImageUrls?.length || 0
     })
 
-    const result = await generateImage(prompt, baseURL, apiKey, model, referenceImageUrls)
+    const result = await generateImage(prompt, baseURL, apiKey, model, effectiveReferenceImageUrls)
 
     return {
       statusCode: 200,

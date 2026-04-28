@@ -18,6 +18,7 @@ export interface TaskInput {
   model?: string;
   usageType?: "task-execution" | "prompt-execution" | "controller" | "utility";
   maxIterations?: number;
+  delayTime?: number;
   timeout?: number;
   context?: string;
   skills?: string[];
@@ -309,6 +310,7 @@ export function describeTask(task: TaskInput, index: number): Record<string, unk
     usageType,
     mcpScope: task.mcpScope ?? [],
     mode,
+    delayTime: task.delayTime ?? 0,
   };
 }
 

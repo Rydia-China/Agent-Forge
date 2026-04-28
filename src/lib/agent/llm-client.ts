@@ -56,11 +56,32 @@ export async function chatCompletion(
   model?: string,
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const client = getClient();
-  return client.chat.completions.create({
+  const rawRes: unknown = await client.chat.completions.create({
     model: model ?? DEFAULT_MODEL,
     messages,
     tools: tools?.length ? tools : undefined,
   });
+
+  let res: ChatCompletion;
+  if (typeof rawRes === "string") {
+    try {
+      res = JSON.parse(rawRes) as ChatCompletion;
+    } catch (parseErr) {
+      throw new Error(
+        `Failed to parse chat completion string response: ${
+          parseErr instanceof Error ? parseErr.message : String(parseErr)
+        }`,
+      );
+    }
+  } else {
+    res = rawRes as ChatCompletion;
+  }
+
+  if (!res.choices || res.choices.length === 0) {
+    throw new Error("No choices returned from LLM");
+  }
+
+  return res;
 }
 
 export async function chatCompletionStream(

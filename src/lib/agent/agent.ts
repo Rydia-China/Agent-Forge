@@ -1,6 +1,5 @@
 import { registry } from "@/lib/mcp/registry";
-import { type ToolContext, parseToolName } from "@/lib/mcp/types";
-import { getSkill } from "@/lib/services/skill-service";
+import { type ToolContext } from "@/lib/mcp/types";
 import {
   chatCompletion,
   chatCompletionStream,
@@ -97,6 +96,8 @@ export interface AgentConfig {
   contextProvider?: ContextProvider;
   /** Skill names whose full content should be injected into the system prompt. */
   skills?: string[];
+  /** Optional MCP provider scope. Omit to expose all registered providers. */
+  mcpScope?: string[];
   /** LLM model id to use for this run (must be in MODEL_OPTIONS). */
   model?: string;
 }
@@ -250,6 +251,13 @@ function chatMsgToLlm(msg: ChatMessage): LlmMessage {
   return base as unknown as LlmMessage;
 }
 
+async function listAgentTools(config?: AgentConfig) {
+  if (config?.mcpScope?.length) {
+    return registry.listToolsForProviders(config.mcpScope);
+  }
+  return registry.listAllTools();
+}
+
 async function runAgentInner(
   userMessage: string,
   session: { id: string; messages: ChatMessage[] },
@@ -313,7 +321,7 @@ async function runAgentInnerCore(
       ...compressed.map(chatMsgToLlm),
     ];
 
-    const mcpTools = await registry.listAllTools();
+    const mcpTools = await listAgentTools(config);
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
 
     const completion = await chatCompletion(llmMessages, openaiTools, config?.model);
@@ -486,7 +494,7 @@ async function runAgentStreamInnerCore(
       ...compressed.map(chatMsgToLlm),
     ];
 
-    const mcpTools = await registry.listAllTools();
+    const mcpTools = await listAgentTools(config);
     const openaiTools = mcpTools.map(mcpToolToOpenAI);
 
     if (mcpTools.length === 0) {

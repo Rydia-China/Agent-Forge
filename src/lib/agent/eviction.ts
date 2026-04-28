@@ -116,13 +116,6 @@ function generateSummary(
     return `langfuse.list_prompts: ${count} 个`;
   }
 
-  /* video_mgr — keep URLs in summary */
-  if (
-    toolName === "video_mgr__generate_image" ||
-    toolName === "video_mgr__generate_video"
-  ) {
-    return `${toolName.split("__")[1]}: ${truncate(result, 150)}`;
-  }
 
   /* oss — keep URLs */
   if (toolName === "oss__upload_from_url" || toolName === "oss__upload_base64") {

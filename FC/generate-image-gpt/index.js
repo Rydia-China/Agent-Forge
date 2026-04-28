@@ -255,7 +255,8 @@ exports.handler = async (event, context) => {
     
     console.log('Parsed request body:', JSON.stringify(body))
 
-    const { prompt, referenceImageUrls, skipDownload } = body
+    const { prompt, referenceImageUrls, refUrls, skipDownload } = body
+    const effectiveReferenceImageUrls = referenceImageUrls || refUrls
 
     if (!prompt || prompt.trim() === '') {
       return {
@@ -278,11 +279,11 @@ exports.handler = async (event, context) => {
 
     console.log('Image generation request:', {
       promptLength: prompt.length,
-      referenceImageCount: referenceImageUrls?.length || 0,
+      referenceImageCount: effectiveReferenceImageUrls?.length || 0,
       skipDownload: skipDownload || false
     })
 
-    const result = await generateImage(prompt, baseURL, token, referenceImageUrls, skipDownload)
+    const result = await generateImage(prompt, baseURL, token, effectiveReferenceImageUrls, skipDownload)
 
     return {
       statusCode: 200,

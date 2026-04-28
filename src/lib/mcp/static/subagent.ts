@@ -11,7 +11,6 @@ import {
   describeTask,
   createProgressCallbacks,
   formatResult,
-  type TaskInput,
 } from "@/lib/services/subagent-task-service";
 import { launchAsyncTask } from "@/lib/services/subagent-async-service";
 import {
@@ -88,6 +87,7 @@ const TaskSchema = z.object({
   model: z.string().optional(),
   usageType: z.enum(USAGE_TYPES).optional(),
   maxIterations: z.number().int().min(1).max(100).optional(),
+  delayTime: z.number().min(0).max(300).optional(),
   timeout: z.number().positive().optional(),
   context: z.string().optional(),
   skills: z.array(z.string()).optional(),
@@ -161,6 +161,12 @@ const TASK_ITEM_SCHEMA = {
     maxIterations: {
       type: "number",
       description: "Max tool-use iterations in tool-loop mode (default 20, max 100)",
+    },
+    delayTime: {
+      type: "number",
+      description:
+        "Delay in seconds after each tool-call round before the subagent continues. " +
+        "Useful for polling status tools without exhausting iterations immediately.",
     },
     timeout: {
       type: "number",
