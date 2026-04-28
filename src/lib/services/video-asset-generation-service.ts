@@ -529,3 +529,127 @@ export async function executeVideoShot(
     prompt: shotPromptCompiled,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/*  Batch generation                                                   */
+/* ------------------------------------------------------------------ */
+
+export const BatchGeneratePortraitsParams = z.object({
+  novelId: z.string().min(1),
+  characterNames: z.array(z.string().min(1)),
+  styleName: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+});
+
+export type BatchGeneratePortraitsInput = z.infer<typeof BatchGeneratePortraitsParams>;
+
+export interface BatchGeneratePortraitsResult {
+  results: Array<{
+    characterName: string;
+    status: "ok" | "error";
+    key?: string;
+    keyResourceId?: string;
+    imageUrl?: string;
+    version?: number;
+    error?: string;
+  }>;
+}
+
+export async function batchGeneratePortraits(
+  input: BatchGeneratePortraitsInput,
+): Promise<BatchGeneratePortraitsResult> {
+  const results = await Promise.allSettled(
+    input.characterNames.map((characterName) =>
+      generatePortrait({
+        novelId: input.novelId,
+        characterName,
+        styleName: input.styleName,
+        model: input.model,
+      }),
+    ),
+  );
+
+  return {
+    results: results.map((result, index) => {
+      const characterName = input.characterNames[index]!;
+      if (result.status === "fulfilled") {
+        const data = result.value;
+        return {
+          characterName,
+          status: data.status,
+          key: data.key,
+          keyResourceId: data.keyResourceId,
+          imageUrl: data.imageUrl,
+          version: data.version,
+          error: data.error,
+        };
+      } else {
+        return {
+          characterName,
+          status: "error" as const,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        };
+      }
+    }),
+  };
+}
+
+export const BatchGenerateScenesParams = z.object({
+  novelId: z.string().min(1),
+  sceneNames: z.array(z.string().min(1)),
+  mode: z.enum(["single", "grid", "hd"]).default("single"),
+  model: z.string().min(1).optional(),
+});
+
+export type BatchGenerateScenesInput = z.infer<typeof BatchGenerateScenesParams>;
+
+export interface BatchGenerateScenesResult {
+  results: Array<{
+    sceneName: string;
+    status: "ok" | "error";
+    key?: string;
+    keyResourceId?: string;
+    imageUrl?: string;
+    version?: number;
+    error?: string;
+  }>;
+}
+
+export async function batchGenerateScenes(
+  input: BatchGenerateScenesInput,
+): Promise<BatchGenerateScenesResult> {
+  const results = await Promise.allSettled(
+    input.sceneNames.map((sceneName) =>
+      generateScene({
+        novelId: input.novelId,
+        sceneName,
+        mode: input.mode,
+        model: input.model,
+      }),
+    ),
+  );
+
+  return {
+    results: results.map((result, index) => {
+      const sceneName = input.sceneNames[index]!;
+      if (result.status === "fulfilled") {
+        const data = result.value;
+        return {
+          sceneName,
+          status: data.status,
+          key: data.key,
+          keyResourceId: data.keyResourceId,
+          imageUrl: data.imageUrl,
+          version: data.version,
+          error: data.error,
+        };
+      } else {
+        return {
+          sceneName,
+          status: "error" as const,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        };
+      }
+    }),
+  };
+}
