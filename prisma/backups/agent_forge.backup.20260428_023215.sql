@@ -1,0 +1,1109 @@
+--
+-- PostgreSQL database dump
+--
+
+\restrict 3HXpIoKLqxfEd3nb9AgmWHfM9rsYLwL3vMTRm7jIT4mzhs1Zyhc4ICPG6VAtoiJ
+
+-- Dumped from database version 16.13
+-- Dumped by pg_dump version 16.13
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: postgres
+--
+
+-- *not* creating schema, since initdb creates it
+
+
+ALTER SCHEMA public OWNER TO postgres;
+
+--
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: postgres
+--
+
+COMMENT ON SCHEMA public IS '';
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: BizSchema; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."BizSchema" (
+    id text NOT NULL,
+    "tableName" text NOT NULL,
+    "productionVersion" integer DEFAULT 1 NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."BizSchema" OWNER TO postgres;
+
+--
+-- Name: BizSchemaVersion; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."BizSchemaVersion" (
+    id text NOT NULL,
+    "bizSchemaId" text NOT NULL,
+    version integer NOT NULL,
+    columns jsonb NOT NULL,
+    constraints jsonb,
+    description text,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public."BizSchemaVersion" OWNER TO postgres;
+
+--
+-- Name: BizTableMapping; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."BizTableMapping" (
+    id text NOT NULL,
+    "userName" text NOT NULL,
+    "logicalName" text NOT NULL,
+    "physicalName" text NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public."BizTableMapping" OWNER TO postgres;
+
+--
+-- Name: ChatMessage; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."ChatMessage" (
+    id text NOT NULL,
+    "sessionId" text NOT NULL,
+    role text NOT NULL,
+    content text,
+    images text[],
+    "toolCalls" jsonb,
+    "toolCallId" text,
+    hidden boolean DEFAULT false NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public."ChatMessage" OWNER TO postgres;
+
+--
+-- Name: ChatSession; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."ChatSession" (
+    id text NOT NULL,
+    title text,
+    "userId" text NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."ChatSession" OWNER TO postgres;
+
+--
+-- Name: DomainResource; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."DomainResource" (
+    id text NOT NULL,
+    "scopeType" text NOT NULL,
+    "scopeId" text NOT NULL,
+    category text NOT NULL,
+    "mediaType" text NOT NULL,
+    title text,
+    url text,
+    data jsonb,
+    "keyResourceId" text,
+    "sortOrder" integer DEFAULT 0 NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."DomainResource" OWNER TO postgres;
+
+--
+-- Name: ImageGeneration; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."ImageGeneration" (
+    id text NOT NULL,
+    "sessionId" text NOT NULL,
+    key text NOT NULL,
+    "currentVersion" integer DEFAULT 0 NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."ImageGeneration" OWNER TO postgres;
+
+--
+-- Name: ImageGenerationVersion; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."ImageGenerationVersion" (
+    id text NOT NULL,
+    "imageGenId" text NOT NULL,
+    version integer NOT NULL,
+    prompt text NOT NULL,
+    "imageUrl" text,
+    "refUrls" text[],
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public."ImageGenerationVersion" OWNER TO postgres;
+
+--
+-- Name: KeyResource; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."KeyResource" (
+    id text NOT NULL,
+    "scopeType" text NOT NULL,
+    "scopeId" text NOT NULL,
+    key text NOT NULL,
+    "mediaType" text NOT NULL,
+    category text,
+    title text,
+    "currentVersion" integer DEFAULT 0 NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."KeyResource" OWNER TO postgres;
+
+--
+-- Name: KeyResourceVersion; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."KeyResourceVersion" (
+    id text NOT NULL,
+    "keyResourceId" text NOT NULL,
+    version integer NOT NULL,
+    title text,
+    url text,
+    data jsonb,
+    prompt text,
+    "refUrls" text[],
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public."KeyResourceVersion" OWNER TO postgres;
+
+--
+-- Name: Novel; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."Novel" (
+    id text NOT NULL,
+    name text NOT NULL,
+    "episodeCount" integer DEFAULT 0 NOT NULL,
+    synopsis jsonb,
+    "characterArcs" jsonb,
+    "locationBible" jsonb,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."Novel" OWNER TO postgres;
+
+--
+-- Name: NovelScript; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."NovelScript" (
+    id text NOT NULL,
+    "novelId" text NOT NULL,
+    "scriptKey" text NOT NULL,
+    "scriptName" text,
+    "scriptContent" text,
+    "initResult" jsonb,
+    characters jsonb,
+    costumes jsonb,
+    "storyboardRaw" text,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."NovelScript" OWNER TO postgres;
+
+--
+-- Name: Skill; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."Skill" (
+    id text NOT NULL,
+    name text NOT NULL,
+    version integer NOT NULL,
+    description text NOT NULL,
+    tags text[],
+    "ossKey" text NOT NULL,
+    "isProduction" boolean DEFAULT false NOT NULL,
+    metadata jsonb,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."Skill" OWNER TO postgres;
+
+--
+-- Name: StylePreset; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."StylePreset" (
+    id text NOT NULL,
+    name text NOT NULL,
+    prompt text NOT NULL,
+    "referenceImageUrl" text,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."StylePreset" OWNER TO postgres;
+
+--
+-- Name: SubAgent; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."SubAgent" (
+    id text NOT NULL,
+    "sessionId" text NOT NULL,
+    "parentAgentId" text,
+    depth integer DEFAULT 0 NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    config jsonb NOT NULL,
+    output text,
+    error text,
+    trace jsonb,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updatedAt" timestamp(3) without time zone NOT NULL
+);
+
+
+ALTER TABLE public."SubAgent" OWNER TO postgres;
+
+--
+-- Name: SubAgentEvent; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."SubAgentEvent" (
+    id integer NOT NULL,
+    "subagentId" text NOT NULL,
+    type text NOT NULL,
+    data jsonb NOT NULL,
+    "createdAt" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public."SubAgentEvent" OWNER TO postgres;
+
+--
+-- Name: SubAgentEvent_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public."SubAgentEvent_id_seq"
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public."SubAgentEvent_id_seq" OWNER TO postgres;
+
+--
+-- Name: SubAgentEvent_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public."SubAgentEvent_id_seq" OWNED BY public."SubAgentEvent".id;
+
+
+--
+-- Name: User; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public."User" (
+    id text NOT NULL,
+    name text NOT NULL
+);
+
+
+ALTER TABLE public."User" OWNER TO postgres;
+
+--
+-- Name: SubAgentEvent id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."SubAgentEvent" ALTER COLUMN id SET DEFAULT nextval('public."SubAgentEvent_id_seq"'::regclass);
+
+
+--
+-- Data for Name: BizSchema; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."BizSchema" (id, "tableName", "productionVersion", "createdAt", "updatedAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: BizSchemaVersion; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."BizSchemaVersion" (id, "bizSchemaId", version, columns, constraints, description, "createdAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: BizTableMapping; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."BizTableMapping" (id, "userName", "logicalName", "physicalName", "createdAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: ChatMessage; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."ChatMessage" (id, "sessionId", role, content, images, "toolCalls", "toolCallId", hidden, "createdAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: ChatSession; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."ChatSession" (id, title, "userId", "createdAt", "updatedAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: DomainResource; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."DomainResource" (id, "scopeType", "scopeId", category, "mediaType", title, url, data, "keyResourceId", "sortOrder", "createdAt", "updatedAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: ImageGeneration; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."ImageGeneration" (id, "sessionId", key, "currentVersion", "createdAt", "updatedAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: ImageGenerationVersion; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."ImageGenerationVersion" (id, "imageGenId", version, prompt, "imageUrl", "refUrls", "createdAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: KeyResource; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."KeyResource" (id, "scopeType", "scopeId", key, "mediaType", category, title, "currentVersion", "createdAt", "updatedAt") FROM stdin;
+48a19979-f19a-44cd-9eac-85c0898a3cfc	script	cmohj1z9k000gtocibi0oypa7	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.363	2026-04-27 18:25:16.363
+71b2f9f3-c4a2-4c84-a90c-9155d888143e	script	cmohj1z9k000gtocibi0oypa7	costume_james	image	换装	James	0	2026-04-27 18:25:16.363	2026-04-27 18:25:16.363
+bfe6df04-8f7c-4f53-b301-dd7677175340	script	cmohj1z9k000gtocibi0oypa7	costume_kennedy	image	换装	Kennedy	0	2026-04-27 18:25:16.363	2026-04-27 18:25:16.363
+2f862a9e-9e2c-4f5d-9d3c-ce897e768dfd	script	cmohj1z9y000itoci5o92e2k4	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.364	2026-04-27 18:25:16.364
+0d47c179-1735-415d-8603-abdcc930bd90	script	cmohj1z9y000itoci5o92e2k4	costume_james	image	换装	James	0	2026-04-27 18:25:16.364	2026-04-27 18:25:16.364
+1f224c25-bbef-4e32-9f3a-70a08a9e9c13	script	cmohj1z9y000itoci5o92e2k4	costume_kennedy	image	换装	Kennedy	0	2026-04-27 18:25:16.365	2026-04-27 18:25:16.365
+59659497-4eb5-403e-bd0d-ecba36cf50a8	script	cmohj1z9y000itoci5o92e2k4	costume_daisy	image	换装	Daisy	0	2026-04-27 18:25:16.365	2026-04-27 18:25:16.365
+c8537158-7709-4a05-8e47-63425132b90d	script	cmohj1z9y000itoci5o92e2k4	costume_luna_miller	image	换装	Luna Miller	0	2026-04-27 18:25:16.365	2026-04-27 18:25:16.365
+d71bedea-70d2-47de-8f07-848cd1da4f6c	script	cmohj1z9y000itoci5o92e2k4	costume_huxley	image	换装	Huxley	0	2026-04-27 18:25:16.366	2026-04-27 18:25:16.366
+ab21e079-b7af-463b-8564-b85b5a9faaec	script	cmohj1za3000ktocij9m1uhd2	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.367	2026-04-27 18:25:16.367
+ad657d99-09e7-4538-8030-1cfd6a0db3da	script	cmohj1za3000ktocij9m1uhd2	costume_daisy	image	换装	Daisy	0	2026-04-27 18:25:16.377	2026-04-27 18:25:16.377
+1cdaf1a9-3655-4211-82b4-b72ab4d1278c	script	cmohj1za8000mtoci25z774v4	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.378	2026-04-27 18:25:16.378
+9504a9a8-813b-42aa-81de-6ac210fc4f93	script	cmohj1za8000mtoci25z774v4	costume_cynthia	image	换装	Cynthia	0	2026-04-27 18:25:16.378	2026-04-27 18:25:16.378
+446bc32c-d798-4db8-9ac6-73dad88cc48d	script	cmohj1za8000mtoci25z774v4	costume_james	image	换装	James	0	2026-04-27 18:25:16.379	2026-04-27 18:25:16.379
+4f436b8e-c5f4-48c6-a87e-c86a08481e3c	script	cmohj1za8000mtoci25z774v4	costume_luna_miller	image	换装	Luna Miller	0	2026-04-27 18:25:16.379	2026-04-27 18:25:16.379
+2ce961cc-1a06-4087-8225-34939faf1b03	script	cmohj1zab000otocizzoqda4y	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.379	2026-04-27 18:25:16.379
+1d315b94-7fae-4191-af7f-54496e7479f4	script	cmohj1zab000otocizzoqda4y	costume_huxley	image	换装	Huxley	0	2026-04-27 18:25:16.38	2026-04-27 18:25:16.38
+128b80f9-0dd6-476f-8ae5-e5e863faa165	script	cmohj1zab000otocizzoqda4y	costume_elara_vance	image	换装	Elara Vance	0	2026-04-27 18:25:16.38	2026-04-27 18:25:16.38
+abfee862-de51-4bf6-9fea-2faa0cddedc9	script	cmohj1zae000qtoci5enws9dv	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.381	2026-04-27 18:25:16.381
+7d165f67-10fc-44b5-93f1-34d7ab37f26b	novel	cmohj1z87000etocihnpez3b5	char_huxley_portrait	image	角色立绘	Huxley	0	2026-04-27 18:25:16.35	2026-04-27 18:25:16.831
+088eca4c-aa78-44cf-89a1-831a7c633259	novel	cmohj1z87000etocihnpez3b5	char_kennedy_barnes_portrait	image	角色立绘	Kennedy Barnes	0	2026-04-27 18:25:16.351	2026-04-27 18:25:16.833
+3ff6ef56-a75e-4650-8fd3-6027378c97df	novel	cmohj1z87000etocihnpez3b5	char_luna_miller_portrait	image	角色立绘	Luna Miller	0	2026-04-27 18:25:16.351	2026-04-27 18:25:16.841
+35d3a182-97dd-41c3-aeb4-2eeae3c8a125	novel	cmohj1z87000etocihnpez3b5	char_lyra_portrait	image	角色立绘	Lyra	0	2026-04-27 18:25:16.352	2026-04-27 18:25:16.845
+59933efa-4203-4508-ba3f-a97804c6e320	novel	cmohj1z87000etocihnpez3b5	char_daisy_portrait	image	角色立绘	Daisy	0	2026-04-27 18:25:16.352	2026-04-27 18:25:16.848
+d9886d38-033d-4e53-8b93-93c7e48f04b8	novel	cmohj1z87000etocihnpez3b5	char_elara_vance_portrait	image	角色立绘	Elara Vance	0	2026-04-27 18:25:16.352	2026-04-27 18:25:16.85
+c23b4367-f670-479c-bf47-6bea53f77b6b	novel	cmohj1z87000etocihnpez3b5	char_iris_blackwood_portrait	image	角色立绘	Iris Blackwood	0	2026-04-27 18:25:16.353	2026-04-27 18:25:16.853
+cb754280-268e-4a0e-b442-fe901f17b3c7	novel	cmohj1z87000etocihnpez3b5	char_kayden_portrait	image	角色立绘	Kayden	0	2026-04-27 18:25:16.353	2026-04-27 18:25:16.855
+d42918d6-4ffb-4953-ab02-86e20ed27717	novel	cmohj1z87000etocihnpez3b5	char_cynthia_portrait	image	角色立绘	Cynthia	0	2026-04-27 18:25:16.354	2026-04-27 18:25:16.861
+ce0bf7bd-5d30-4776-9748-13dda17cf931	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅	image	场景	银月领地 豪宅	0	2026-04-27 18:25:16.354	2026-04-27 18:25:16.866
+37ad5d14-0d7c-4020-a663-c2878a8dfea9	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅_grid	image	场景	银月领地 豪宅 (grid)	0	2026-04-27 18:25:16.362	2026-04-27 18:25:16.869
+8012c452-203e-42c9-bf7c-e41d318b5564	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅_客厅	image	场景	银月领地 豪宅 客厅	0	2026-04-27 18:25:16.355	2026-04-27 18:25:16.874
+a4ad19d5-5ae3-45da-ae86-090f2d34b3f8	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅_走廊	image	场景	银月领地 豪宅 走廊	0	2026-04-27 18:25:16.355	2026-04-27 18:25:16.877
+f9aca814-43d7-41e8-a935-dc1bc8a5ce59	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅_行政办公室	image	场景	银月领地 豪宅 行政办公室	0	2026-04-27 18:25:16.357	2026-04-27 18:25:16.878
+4d9798b0-b24c-4e48-b735-623a8e70247a	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅_Luna书房	image	场景	银月领地 豪宅 Luna书房	0	2026-04-27 18:25:16.357	2026-04-27 18:25:16.88
+b09e1d22-85b9-498a-99cb-5d57ca8b3c1c	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅_主卧	image	场景	银月领地 豪宅 主卧	0	2026-04-27 18:25:16.358	2026-04-27 18:25:16.882
+a9cdebf4-3dc0-4b91-87ae-23034e45fd49	novel	cmohj1z87000etocihnpez3b5	scene_新月领地_公墓	image	场景	新月领地 公墓	0	2026-04-27 18:25:16.359	2026-04-27 18:25:16.883
+668f6b49-bc70-4639-a741-d6290569d032	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_治疗师小屋	image	场景	银月领地 治疗师小屋	0	2026-04-27 18:25:16.359	2026-04-27 18:25:16.883
+0b9739cc-ee1c-4968-9bab-0601b7c3913c	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_东部边界	image	场景	银月领地 东部边界	0	2026-04-27 18:25:16.36	2026-04-27 18:25:16.884
+7edee02e-7c3c-4d11-9aa6-fedc816d805a	novel	cmohj1z87000etocihnpez3b5	scene_河谷领地_豪宅	image	场景	河谷领地 豪宅	0	2026-04-27 18:25:16.36	2026-04-27 18:25:16.885
+f21ff028-35b1-4145-afe1-4bba4344cfb8	novel	cmohj1z87000etocihnpez3b5	scene_河谷领地_豪宅_客厅	image	场景	河谷领地 豪宅 客厅	0	2026-04-27 18:25:16.36	2026-04-27 18:25:16.886
+452de982-445a-4046-ac65-af4d06e8e64a	novel	cmohj1z87000etocihnpez3b5	scene_中立区_咖啡馆	image	场景	中立区 咖啡馆	0	2026-04-27 18:25:16.361	2026-04-27 18:25:16.887
+6233d98c-d6d2-40d4-862f-774844b470ce	novel	cmohj1z87000etocihnpez3b5	scene_中立区_草地	image	场景	中立区 草地	0	2026-04-27 18:25:16.361	2026-04-27 18:25:16.888
+5f1cb80d-c072-4a24-b101-6b02b4e651cf	novel	cmohj1z87000etocihnpez3b5	char_kennedy_portrait	image	角色立绘	Kennedy	0	2026-04-27 18:25:16.362	2026-04-27 18:25:16.888
+cd28ff56-44d0-4ec6-991a-81c046a20dd9	novel	cmohj1z87000etocihnpez3b5	char_james_portrait	image	角色立绘	James	0	2026-04-27 18:25:16.349	2026-04-27 18:25:16.828
+51d6e394-c11a-43e3-ba23-ccdd5ca75293	script	cmohj1zae000qtoci5enws9dv	costume_huxley	image	换装	Huxley	0	2026-04-27 18:25:16.381	2026-04-27 18:25:16.381
+1fc87cb3-031c-4eca-ae58-02ecf623088d	script	cmohj1zae000qtoci5enws9dv	costume_elara_vance	image	换装	Elara Vance	0	2026-04-27 18:25:16.383	2026-04-27 18:25:16.383
+04e3a71b-8358-4682-9319-cd70805c7a54	script	cmohj1zae000qtoci5enws9dv	costume_luna_miller	image	换装	Luna Miller	0	2026-04-27 18:25:16.384	2026-04-27 18:25:16.384
+56b51b1d-d9eb-4d04-95d2-2551c76b8190	script	cmohj1zah000stoci02s4s5du	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.384	2026-04-27 18:25:16.384
+db85261c-24c0-4f97-a917-771de4c7c487	script	cmohj1zah000stoci02s4s5du	costume_james	image	换装	James	0	2026-04-27 18:25:16.385	2026-04-27 18:25:16.385
+ef17d0d6-04f2-43ef-8cf3-df27c3ab1688	script	cmohj1zah000stoci02s4s5du	costume_huxley	image	换装	Huxley	0	2026-04-27 18:25:16.385	2026-04-27 18:25:16.385
+aea308b2-364c-470d-97a1-4005a317ab3a	script	cmohj1zah000stoci02s4s5du	costume_kennedy	image	换装	Kennedy	0	2026-04-27 18:25:16.386	2026-04-27 18:25:16.386
+a17dee0a-63df-49bf-9bc4-39fdf4d0796e	script	cmohj1zam000utocian4iv7mr	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.386	2026-04-27 18:25:16.386
+9bd4feec-1921-4057-a251-2b0692b456e7	script	cmohj1zam000utocian4iv7mr	costume_james	image	换装	James	0	2026-04-27 18:25:16.387	2026-04-27 18:25:16.387
+b5c2bbef-083b-4fbb-bc6d-3a0e1db4eddf	script	cmohj1zap000wtocihyi4kvwe	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.388	2026-04-27 18:25:16.388
+a2a26c69-c664-4dad-8f10-885da8de6654	script	cmohj1zap000wtocihyi4kvwe	costume_elara_vance	image	换装	Elara Vance	0	2026-04-27 18:25:16.388	2026-04-27 18:25:16.388
+3d9bcd22-a6ec-48e0-ba72-0265044a53c1	script	cmohj1zaw000ytociaif5uzen	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.388	2026-04-27 18:25:16.388
+30e3713a-4d74-4012-b032-d7f2301fe8cb	script	cmohj1zaw000ytociaif5uzen	costume_james	image	换装	James	0	2026-04-27 18:25:16.389	2026-04-27 18:25:16.389
+cb760116-5e8a-4262-84c9-1e1dd0fb6537	script	cmohj1zb30010tocipilm6ln3	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.389	2026-04-27 18:25:16.389
+21dfaf17-5443-4e34-a9ed-d80cdbc15224	script	cmohj1zb30010tocipilm6ln3	costume_james	image	换装	James	0	2026-04-27 18:25:16.39	2026-04-27 18:25:16.39
+091c4d5c-61ef-4939-a07f-1b2e533d9ddc	script	cmohj1zb30010tocipilm6ln3	costume_huxley	image	换装	Huxley	0	2026-04-27 18:25:16.39	2026-04-27 18:25:16.39
+11792712-dcd0-4a4f-9d2b-3cbc12fad2d9	script	cmohj1zb30010tocipilm6ln3	costume_cynthia	image	换装	Cynthia	0	2026-04-27 18:25:16.391	2026-04-27 18:25:16.391
+b7ec4ee0-0580-4e72-a18f-ae92cf117e3f	script	cmohj1zbc0012tociaa6i9p2l	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.391	2026-04-27 18:25:16.391
+f646e5e3-9e4e-4154-97b1-fd78dff98267	script	cmohj1zbc0012tociaa6i9p2l	costume_james	image	换装	James	0	2026-04-27 18:25:16.391	2026-04-27 18:25:16.391
+9e9e9273-eef8-4a2e-ac9d-4c1b749ad50a	script	cmohj1zbc0012tociaa6i9p2l	costume_daisy	image	换装	Daisy	0	2026-04-27 18:25:16.392	2026-04-27 18:25:16.392
+906e713f-2c0e-4ccb-8330-270bc0e6a41b	script	cmohj1zbc0012tociaa6i9p2l	costume_kennedy	image	换装	Kennedy	0	2026-04-27 18:25:16.392	2026-04-27 18:25:16.392
+26fbb31b-f479-49c2-9c50-b856aad3bbcf	script	cmohj1zbi0014tocia70xkrl2	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.393	2026-04-27 18:25:16.393
+54e5fca5-6eba-414b-88f4-d79901591945	script	cmohj1zbi0014tocia70xkrl2	costume_james	image	换装	James	0	2026-04-27 18:25:16.393	2026-04-27 18:25:16.393
+e031d6b1-2f90-4281-af15-18f76bc9cf4a	script	cmohj1zbi0014tocia70xkrl2	costume_kennedy	image	换装	Kennedy	0	2026-04-27 18:25:16.394	2026-04-27 18:25:16.394
+6a9f00aa-b920-4eff-9442-6c7f81f7a19f	script	cmohj1zbi0014tocia70xkrl2	costume_cynthia	image	换装	Cynthia	0	2026-04-27 18:25:16.394	2026-04-27 18:25:16.394
+0e88286d-e45d-4e1e-941e-91b5b4382c0c	script	cmohj1zbo0016tociepmv2tbh	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.395	2026-04-27 18:25:16.395
+bcc4e92d-9d20-4088-ad9a-38386136bac9	script	cmohj1zbo0016tociepmv2tbh	costume_daisy	image	换装	Daisy	0	2026-04-27 18:25:16.395	2026-04-27 18:25:16.395
+90155958-247f-4b35-af45-8d5487e0e628	script	cmohj1zbo0016tociepmv2tbh	costume_kayden	image	换装	Kayden	0	2026-04-27 18:25:16.396	2026-04-27 18:25:16.396
+95d49382-993d-4efb-8668-93207987c6ee	script	cmohj1zbo0016tociepmv2tbh	costume_huxley	image	换装	Huxley	0	2026-04-27 18:25:16.396	2026-04-27 18:25:16.396
+23ad1c42-f1a6-4734-9a71-e16bd953725c	script	cmohj1zbs0018toci9wjqvx8r	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.397	2026-04-27 18:25:16.397
+9657d800-5490-4289-a5a3-054cf0265d0e	script	cmohj1zbs0018toci9wjqvx8r	costume_james	image	换装	James	0	2026-04-27 18:25:16.398	2026-04-27 18:25:16.398
+df08db73-0c65-4d8c-80ee-6d4b2f54b61c	script	cmohj1zbs0018toci9wjqvx8r	costume_huxley	image	换装	Huxley	0	2026-04-27 18:25:16.399	2026-04-27 18:25:16.399
+4e3d63dc-5175-4c8c-9f01-9e84a0b8456f	script	cmohj1zbs0018toci9wjqvx8r	costume_cynthia	image	换装	Cynthia	0	2026-04-27 18:25:16.399	2026-04-27 18:25:16.399
+81c77e0f-95c6-4f53-ad22-bc8a28d50733	script	cmohj1zbs0018toci9wjqvx8r	costume_daisy	image	换装	Daisy	0	2026-04-27 18:25:16.4	2026-04-27 18:25:16.4
+a0470750-7302-437f-bb28-c0ab5f6667fe	script	cmohj1zbw001atoci70dzg7em	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.401	2026-04-27 18:25:16.401
+8d8c4329-9613-4628-9dbf-9cb35bdea4a1	script	cmohj1zbw001atoci70dzg7em	costume_iris_blackwood	image	换装	Iris Blackwood	0	2026-04-27 18:25:16.401	2026-04-27 18:25:16.401
+d4181a2c-da71-405c-965b-6143b66fb657	script	cmohj1zbz001ctoci5kwotwk0	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.403	2026-04-27 18:25:16.403
+9fde2723-d36c-4f35-a0ea-2b12a56f1edf	script	cmohj1zbz001ctoci5kwotwk0	costume_iris_blackwood	image	换装	Iris Blackwood	0	2026-04-27 18:25:16.403	2026-04-27 18:25:16.403
+7410c6cb-e593-4d3f-a597-eae9f154b7e0	script	cmohj1zc2001etocivmrnd9rf	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.404	2026-04-27 18:25:16.404
+5d2d3111-33b6-476e-932a-5c39bf58f8ed	script	cmohj1zc2001etocivmrnd9rf	costume_iris_blackwood	image	换装	Iris Blackwood	0	2026-04-27 18:25:16.405	2026-04-27 18:25:16.405
+3a5434da-611a-49d2-9216-a7874d9f5392	script	cmohj1zc5001gtoci71je3e9j	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.405	2026-04-27 18:25:16.405
+df0a59ea-5ae2-492c-8df5-16e2b1309252	script	cmohj1zc5001gtoci71je3e9j	costume_iris_blackwood	image	换装	Iris Blackwood	0	2026-04-27 18:25:16.406	2026-04-27 18:25:16.406
+4bb00b3f-57d3-479e-97f3-8279714154b6	novel	cmohj1z87000etocihnpez3b5	scene_中立区_溪流旁	image	场景	中立区 溪流旁	0	2026-04-27 18:25:16.401	2026-04-27 18:25:16.891
+d52c62a5-6197-4a1e-82de-df2b90809fef	novel	cmohj1z87000etocihnpez3b5	scene_中立区_无名溪流旁	image	场景	中立区 无名溪流旁	0	2026-04-27 18:25:16.402	2026-04-27 18:25:16.891
+6310f776-4140-40a2-8a8b-cf71bfb72024	novel	cmohj1z87000etocihnpez3b5	scene_河谷领地_疗养小屋	image	场景	河谷领地 疗养小屋	0	2026-04-27 18:25:16.402	2026-04-27 18:25:16.892
+b321b8a9-52fc-488c-920d-d50346d63749	novel	cmohj1z87000etocihnpez3b5	scene_河谷领地_疗养草地	image	场景	河谷领地 疗养草地	0	2026-04-27 18:25:16.404	2026-04-27 18:25:16.893
+8e6d3b9f-a756-4d37-b2c4-72ed1417263d	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅_外小路	image	场景	银月领地 豪宅 外小路	0	2026-04-27 18:25:16.387	2026-04-27 18:25:16.902
+ae67b234-c5fc-41e2-8879-1677dc1fb045	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅_侧廊	image	场景	银月领地 豪宅 侧廊	0	2026-04-27 18:25:16.397	2026-04-27 18:25:16.89
+2e645bba-0699-4b6d-aa3a-1cf3b59003c9	script	cmohj1zc8001itocizknmw7fj	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.406	2026-04-27 18:25:16.406
+aaba5bd8-66e4-439b-b42a-3dd227c3f09c	script	cmohj1zc8001itocizknmw7fj	costume_huxley	image	换装	Huxley	0	2026-04-27 18:25:16.406	2026-04-27 18:25:16.406
+f4f407dd-56e5-41f1-b21c-a90d4a265d96	script	cmohj1zcb001ktocidvrm28ed	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.407	2026-04-27 18:25:16.407
+ca19abc2-6457-4cb8-a5d8-293c8c104ad4	script	cmohj1zcb001ktocidvrm28ed	costume_huxley	image	换装	Huxley	0	2026-04-27 18:25:16.407	2026-04-27 18:25:16.407
+e3bccbbe-20c3-48f8-ae92-7edfe07d38ca	script	cmohj1zce001mtocijz3nuglp	costume_sylvia	image	换装	Sylvia	0	2026-04-27 18:25:16.409	2026-04-27 18:25:16.409
+7c4c3233-cb80-46a1-9f0d-3eb41a13661a	script	cmohj1zce001mtocijz3nuglp	costume_huxley	image	换装	Huxley	0	2026-04-27 18:25:16.41	2026-04-27 18:25:16.41
+5d398c19-134d-4e88-8ad0-1fdd4bb95a9a	script	cmohj1zce001mtocijz3nuglp	costume_daisy	image	换装	Daisy	0	2026-04-27 18:25:16.41	2026-04-27 18:25:16.41
+4e5197b8-b27a-4efb-9032-0b1470c73714	script	cmohj1zce001mtocijz3nuglp	costume_alpha_morgan	image	换装	Alpha Morgan	0	2026-04-27 18:25:16.411	2026-04-27 18:25:16.411
+60b463cd-e1b5-430e-b39f-10d3c2fe7138	novel	cmohj1z87000etocihnpez3b5	char_sylvia_portrait	image	角色立绘	Sylvia	0	2026-04-27 18:25:16.345	2026-04-27 18:25:16.823
+6087ae71-4ef5-45ac-a240-7380642a90d7	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅_厨房	image	场景	银月领地 豪宅 厨房	0	2026-04-27 18:25:16.355	2026-04-27 18:25:16.872
+37165dbc-2f7b-4ddc-9025-5809f5ef66e4	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅_议事厅	image	场景	银月领地 豪宅 议事厅	0	2026-04-27 18:25:16.358	2026-04-27 18:25:16.881
+d99922eb-d038-44aa-b3ee-fee976baaef1	novel	cmohj1z87000etocihnpez3b5	scene_银月领地_豪宅外围	image	场景	银月领地 豪宅外围	0	2026-04-27 18:25:16.395	2026-04-27 18:25:16.889
+8c135b83-bf8a-424b-8eae-b178e60f7677	novel	cmohj1z87000etocihnpez3b5	scene_河谷领地_行政室	image	场景	河谷领地 行政室	0	2026-04-27 18:25:16.403	2026-04-27 18:25:16.893
+0ad7335d-8260-431a-9f17-8428f62d177a	novel	cmohj1z87000etocihnpez3b5	char_alpha_morgan_portrait	image	角色立绘	Alpha Morgan	0	2026-04-27 18:25:16.408	2026-04-27 18:25:16.894
+d70c2fae-4ef2-49ac-a2af-6b74d8002e08	novel	cmohj1z87000etocihnpez3b5	scene_北极光领地_边界	image	场景	北极光领地 边界	0	2026-04-27 18:25:16.408	2026-04-27 18:25:16.895
+fe8a9662-6fe7-4bad-8118-bacf42a42384	novel	cmohj1z87000etocihnpez3b5	scene_北极光领地_主屋_书桌	image	场景	北极光领地 主屋 书桌	0	2026-04-27 18:25:16.409	2026-04-27 18:25:16.896
+0b767ebd-ea94-49bf-a75d-455ecac36df4	novel	cmohj1z87000etocihnpez3b5	scene_北极光领地_北侧开阔地	image	场景	北极光领地 北侧开阔地	0	2026-04-27 18:25:16.409	2026-04-27 18:25:16.896
+9d2e1fd4-62f8-49ae-b0ee-6401dd946cd7	novel	cmohj1z87000etocihnpez3b5	scene_北极光领地_主屋_办公室	image	场景	北极光领地 主屋 办公室	0	2026-04-27 18:25:16.408	2026-04-27 18:25:16.901
+\.
+
+
+--
+-- Data for Name: KeyResourceVersion; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."KeyResourceVersion" (id, "keyResourceId", version, title, url, data, prompt, "refUrls", "createdAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: Novel; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."Novel" (id, name, "episodeCount", synopsis, "characterArcs", "locationBible", "createdAt", "updatedAt") FROM stdin;
+cmohj1z87000etocihnpez3b5	Abandoned by My Alpha Mate	22	{"plot summary": "Sylvia以为自己拥有一段命运赐予的婚姻——她是银月领地Alpha James的Luna，怀有七个月身孕。然而一场公墓偶遇将一切击碎：James跪在前任爱人Kennedy的父亲墓前，以从未给过Sylvia的温柔将她拥入怀，两人的精神连结冰冷如死水。\\n\\n真相一层层被剥开：这段命运连结从一开始就是婆婆Luna Miller为解决继承难题而设计的政治安排。Kennedy因遗传缺陷无法生育，被强行拆散；Sylvia的唯一价值，是她能替James生下继承人。James心中从未有过她，却也不愿放手，反以Alpha权威强压她就范。\\n\\n在命运折磨肉身的至暗时刻，Sylvia做出了最决绝的选择：亲手熄灭腹中的生命，以避免孩子在破碎连结的阴影中成长，随后当众宣读拒绝誓词，在议事厅正面硬扛James的Alpha命令，宁愿被压跪在地也不撤回。最终在闺蜜Daisy与战士Huxley的庇护下，她以流浪狼身份只身出逃。\\n\\n在河谷领地Alpha Iris的收容下，Sylvia用十个月愈合了破碎的连结，重新找回自我与内狼Lyra。流亡近一年后，她与一直在中立区等候的Huxley重逢——那个三年前便认出她是自己命运伴侣、却为尊重她的选择而沉默的男人。这一次，没有命令，没有强迫，只有双向平等的给予与接纳。两只狼在满月下正式相认，Sylvia与Huxley共同北上，奔赴属于他们的全新开始。", "worldBuilding": "故事发生在一个人类与狼性共存的变形者世界。每个人体内居住着一只内狼（Sylvia的内狼名为Lyra），在特定条件下可变形为狼。社会以\\"领地\\"为基本单位，由最强大的雄性或雌性担任Alpha，统御整个Pack（狼群）。Alpha配偶称为Luna，地位仅次于Alpha，负责狼群内部事务与凝聚力。\\n\\n核心机制有三：\\n① 命运连结（Fate Bond）：月神赐予的精神链接，将两只命运中属于彼此的狼绑定。连结建立后，双方可感知对方的情绪与位置；若一方持续选择他人，连结将进入\\"近拒绝\\"状态，以缓慢折磨双方为代价悬而未决，对弱势方造成生理损伤。正式解除需通过当众宣读拒绝誓词（Rejection Vow）完成。\\n② 选择配偶（Chosen Mate）：区别于月神命运连结，由Alpha主动以意志和誓言选择的伴侣，不受月神约束，但同样具有神圣性。\\n③ Alpha权威：Alpha可对Pack成员发出强制命令，迫使其身体服从，凌驾于个人意志之上。\\n\\n关键术语：Pack = 狼群氏族；Lyra/Kael = 主角内狼与男二内狼的名字；Luna = Alpha配偶头衔；近拒绝（Near Rejection）= 连结悬而未决的折磨状态。"}	[{"age": "23", "name": "Sylvia", "gender": "女", "arcType": "protagonist", "appearance": "二十三岁女性，深棕色波浪长发，琥珀色瞳孔，身形纤细，深灰色粗棉长外套，黑色修身长裤，黑色系带短靴，肩背军绿色大背包。", "arcSummary": "月神的赐予可以是牢笼，但打碎牢笼的钥匙，始终只在自己手中。", "familyRole": "工具性妻子 -> 背叛的受害者 -> 主动终结者 -> 平等关系中的伴侣", "resolution": {"characterGrowth": "从隐忍等待他人给予价值认可，到亲手定义自身价值；从在命运连结的框架内寻求被爱，到主动选择以平等为前提的真实连结；Lyra从濒死边缘重焕生机，成为Sylvia内在力量复苏的最直接象征。", "externalOutcome": "单方面完成拒绝誓词、切断命运连结，出逃银月领地，在河谷领地痊愈后与Huxley在中立区重建平等连结，共赴北极光领地开始全新生活。James威信崩塌，Luna Miller的政治算计彻底落空。"}, "keyConflict": ["外部：James以命运连结与Alpha权威的双重枷锁拒绝放手；Luna Miller自始至终将她视为可操控的政治工具；银月领地的等级制度将个人意志系统性压制", "内部：对\\"命运安排\\"的最后一丝期盼与已摧枯拉朽的清醒之间的拉锯；对主动终结孩子生命这一抉择的道德重量的独自承担；在长期被工具化后重建对真实情感的信任能力"], "personality": "隐忍却有底线，情感细腻敏锐，外表克制内里有烈火；在极度压迫下反而愈发冷静清醒；对真实的善意怀有极强的感知力，一旦确认便全然托付。性格缺陷：长期被驯化为\\"工具\\"，起初倾向于自我消化痛苦而非主动抗争，需要彻底的至暗时刻方能触发破釜沉舟的决断。", "narrativeArc": "从被政治设计的命运囚徒，经由最决绝的自我牺牲与抗争，蜕变为以自身意志重新定义命运连结的自由者。", "socialStatus": "银月领地Luna（Alpha之妻）-> 被政治利用的弃妇 -> 流浪狼 -> 河谷领地重建者 -> 北极光领地新生者", "coreObjective": {"externalGoal": "解除被政治设计的命运连结，带着完整的自我离开银月领地，在一个真正以平等为基础的领地开始新生活。", "internalMotivation": ["证明自己的价值从不依附于任何连结或命令", "让内狼Lyra在真实的平等中重燃生机，而非在权威的压制下消亡", "第一次为自己做选择，而非成为他人政治棋局中的棋子"]}, "keyRelationships": [{"target": "James", "targetRole": "核心反派 / 命运连结的持有者 / 银月领地Alpha", "relationshipTrack": "被月神赐予命运连结、以为是真实婚姻的丈夫 -> 公墓目击其对Kennedy温柔、确认情感背叛 -> 遭其以Alpha权威强压、人身囚禁，彻底认清其本质 -> 当众宣读拒绝誓词、正面对抗、单方面斩断连结的前夫与宿敌"}, {"target": "Luna Miller", "targetRole": "幕后反派 / 婆婆 / 银月领地前任Luna", "relationshipTrack": "表面上的婆婆与领地权威 -> 被揭穿是拆散James与Kennedy、强行安排命运连结的幕后推手 -> 亲口承认Sylvia不过是\\"继承问题的解决方案\\"的政治操纵者 -> Sylvia出逃后成为其永久切割的过去"}, {"target": "Huxley", "targetRole": "男主角 / 银月领地战士 / 真命伴侣（内狼Kael的主人）", "relationshipTrack": "领地内沉默守护的存在、其气息令Lyra异常平静 -> 昏倒后将她抱往治疗师、全程守候并表达陪伴意愿 -> 议事厅当众挑战James权威为她撑腰、出逃夜在边界等候交予物资与承诺 -> 流亡一年后中立区重逢，两狼正式相认，以平等追求建立真实连结，共赴北方新生"}, {"target": "Daisy", "targetRole": "挚友 / 助攻 / 救命恩人", "relationshipTrack": "Sylvia在银月领地最亲近的姐妹与信息来源 -> 被James以Alpha权威强制噤声，亲身展示了压迫的残酷 -> 危急时刻秘密潜入囚禁卧室、组织出逃 -> 流亡期间持续传递情报的后方支柱"}, {"target": "Kennedy", "targetRole": "直接导火索 / James的前任\\"选择配偶\\" / 新月领地成员", "relationshipTrack": "从未谋面的情感威胁 -> 公墓目击其被James拥抱，成为婚姻崩塌的具象化符号 -> 被Sylvia彻底清算后黯然离开新月领地，间接成为James威信崩塌的导火索"}, {"target": "Iris Blackwood", "targetRole": "庇护者 / 河谷领地Alpha / 精神引路人", "relationshipTrack": "初见时救起溪流旁昏倒的流浪狼 -> 以\\"母狼价值不依附于命运连结\\"为信念庇护Sylvia -> 在其治下用十个月完成愈合与自我重建的见证者与守护者"}, {"target": "Elara Vance", "targetRole": "关键配角 / 银月领地治疗师", "relationshipTrack": "诊断出近拒绝状态对Sylvia肉体的侵蚀 -> 如实告知终止妊娠的连锁反应 -> 仍将草药交到Sylvia手中，尊重她的自主抉择"}], "progressiveActions": [{"phase": "Phase 1 起", "sequence": 1, "description": "Alpha Barnes去世，Sylvia感知到精神连结骤然冰冷，James以\\"身体不宜\\"为由拒绝她同行，独自赶赴新月领地 -> Sylvia等待数小时后独自追往公墓 -> 在公墓角落亲眼目睹James将Kennedy揽入怀中、给予从未给过自己的温柔，婚姻裂痕彻底曝光。"}, {"phase": "Phase 1 起", "sequence": 2, "description": "Sylvia追问James与Kennedy的关系 -> James以Alpha命令强压她并强制噤声护姐的Daisy -> Sylvia第一次以愤怒而非隐忍直面Alpha权威的本质。"}, {"phase": "Phase 1 起", "sequence": 3, "description": "婆婆Luna Miller介入，以\\"Alpha的复杂过去\\"与\\"狼群利益优先\\"为由要求Sylvia接受现实 -> Sylvia逼问其是否早知内情 -> Luna Miller神情中闪过满意，Sylvia彻底意识到这桩婚姻从一开始便是政治安排。"}, {"phase": "Phase 1 起", "sequence": 4, "description": "Daisy告知James本周已第三次前往新月领地 -> 走廊偷听到狼群成员谈及Luna Miller当年以\\"Alpha配偶必须能延续血脉\\"为由强制拆散James与Kennedy的真相 -> Sylvia确认自己不过是政治替代品。"}, {"phase": "Phase 2 承", "sequence": 5, "description": "精神连结持续恶化引发剧烈眩晕，Sylvia在行政办公室昏倒 -> Huxley将她抱往治疗师，Lyra对其气息异常平静 -> 治疗师Elara确诊近拒绝状态正在摧毁Sylvia与Lyra，Huxley在窗边守候全程，表示愿陪在身边。"}, {"phase": "Phase 2 承", "sequence": 6, "description": "Luna Miller召见Sylvia，亲口披露当年James以放弃Alpha继承权威胁换取Kennedy、自己强制终止后月神赐予命运连结的完整真相 -> Sylvia得到最后一块证据：她从未被爱过，命运连结本身也不过是\\"继承问题的解决方案\\"。"}, {"phase": "Phase 2 承", "sequence": 7, "description": "全体集会上James携Kennedy气味入场 -> Sylvia身体失控启动变形，Huxley及时以气息压制帮她渡过危机 -> James目睹后嫉妒，却对自身的Kennedy气味只字不提，坦然落座主持会议，自私本质毕露。"}, {"phase": "Phase 3 转", "sequence": 8, "description": "Sylvia在卧室直接质问James身上的Kennedy气味与全部行踪，逐条列举他每次选择Kennedy而非自己的事实 -> James沉默，无法否认 -> Sylvia当众宣告：她明白自己从一开始就只是政治解决方案，他的心从未属于过她，内心决断已成。"}, {"phase": "Phase 3 转", "sequence": 9, "description": "Sylvia夜访Elara，表明无法再将孩子带入破碎连结 -> Elara确认终止妊娠将令连结瞬间撕裂、James会立刻感知，仍将草药交予她，尊重其决定 -> Sylvia返回卧室独自服下草药茶，在剧烈痛苦中亲手熄灭腹中生命，于黎明前感受到连结松弛，以最决绝的代价宣告彻底清醒。"}, {"phase": "Phase 3 转", "sequence": 10, "description": "James冲破卧室门质问Sylvia，扑前欲掐其咽喉 -> Sylvia平静对视，眼中毫无惧色，James双手震慑于她神情停在半空 -> 随后Sylvia在全体长老面前当众宣读拒绝誓词，遭James以Alpha命令强压跪地，仍拒绝撤回；Huxley当众走出，挑战James滥用权威，议事厅正面对峙，誓词悬而未决。"}, {"phase": "Phase 4 合", "sequence": 11, "description": "James以拒绝誓词悬而未决为由将Sylvia锁入主卧、命令Kennedy出席集会期间她不得露面 -> Sylvia被困期间因不完整的拒绝状态开始高烧，Lyra存在感濒临消亡 -> Daisy秘密潜入，断言若不立即出逃二者皆亡，当机立断组织今夜行动。"}, {"phase": "Phase 4 合", "sequence": 12, "description": "Daisy与Kayden趁巡逻换班护送虚弱的Sylvia出逃至东部边界 -> Huxley早已等候，将装有地图、物资与中立区联络人信息的大背包交予她，坦言内狼Kael三年前便认出她是命运伴侣，却因她已与James连结而选择沉默 -> Sylvia第一次感受到真实的希望，踏过边界线，独自走入黑暗森林。"}, {"phase": "Phase 5 终", "sequence": 13, "description": "以流浪狼身份独自流亡一个月后在河谷领地溪流旁昏倒，被Alpha Iris Blackwood救回 -> Iris以平等与慈悲治理领地，告知\\"母狼价值不依附于命运连结\\" -> Sylvia在其庇护下协助领地行政、与Lyra重学变形，历时十个月彻底愈合破碎连结，重拾完整自我；期间获悉Kennedy已离开、James因拒绝接受拒绝誓词而威信扫地。"}, {"phase": "Phase 5 终", "sequence": 14, "description": "流亡近一年后赴中立区咖啡馆与Huxley重逢，Lyra轻唤\\"Kael\\"，对方以绵延多年的情感回应 -> Huxley以正式追求方式提出建立关系，每一步以Sylvia意愿为先，Sylvia接受 -> 满月之夜两狼在中立区草地建立连结，如归家般温暖平等，共同决定北上北极光领地，在以平等为核心的新狼群中开始真正属于自己的生活。"}]}, {"age": "28", "bio": "James是Sylvia痛苦的直接制造者。十七岁时便认定Kennedy为一生所爱，在Luna Miller以遗传缺陷为由强行拆散两人后，他被迫接受了月神赐予的命运连结，娶Sylvia为伴侣，却从未将心交出。整段婚姻期间，他频繁奔赴新月领地陪伴Kennedy，以Alpha命令压制追问的Sylvia，甚至在Sylvia昏倒、高烧危及生命时将Kennedy请入集会，将妻子锁入卧室。Sylvia当众宣读拒绝誓词时，他以Alpha权威强制逼她跪地撤回，彻底暴露其本质。Sylvia出逃后，因无法重新接受命运连结而威信扫地，Kennedy亦随之离开，最终落得双失的结局——既未能守护真爱，也亲手毁掉了本可能拥有的一切。", "name": "James", "gender": "男", "arcType": "supporting", "appearance": "二十八岁男性，深棕色短发，冷灰色瞳孔，身形高大魁梧，深色剪裁西装，黑色高领衬衫，皮带扣金属质感，黑色皮鞋。", "familyRole": "Luna Miller之子 / Sylvia名义上的命运伴侣", "personality": "专制，掌控欲极强，情感上懦弱逃避，习惯以Alpha权威代替真正的沟通；对Kennedy执念入骨，对Sylvia则始终保持距离。", "socialStatus": "银月领地 Alpha / 因拒绝接受拒绝誓词而威信扫地的领主"}, {"age": "35", "bio": "Huxley是贯穿全剧的隐线与情感终点。三年前Sylvia初抵银月领地，他的狼Kael便已认出她是命运伴侣，但因她已与James连结，他选择了彻底沉默。整段时间里，他以旁观者身份见证了Sylvia所受的一切伤害，始终以行动而非言语守护：在行政办公室将晕倒的Sylvia抱去就医，在集会上以气息帮她压制失控的狼性冲动，在议事厅公开挑战James的Alpha权威为她发声，最终在东部边界备好地图、物资与联络人信息，让她有能力独自离开。他从不要求回报，只告知她：若有一天愿意回来，他会在此等候。近一年后在中立区咖啡馆重逢，他以正式追求而非命运强制的方式开始两人的关系，与Sylvia共赴北极光领地，成为她真正意义上的归宿。", "name": "Huxley", "gender": "男", "arcType": "supporting", "appearance": "三十五岁男性，深色短发鬓角染霜白，深灰色瞳孔，身形高大沉稳，深灰色厚实军事夹克，黑色战术长裤，黑色军靴。", "familyRole": "Sylvia真正命运伴侣的主人 / 守候者", "personality": "沉默隐忍，极具原则，将对方的意愿置于自身渴望之上；在关键时刻敢于正面挑战权威，忠诚而有力量。", "socialStatus": "银月领地高阶成员 / 北极光领地准成员"}, {"age": "26", "bio": "Kennedy是整个故事悲剧的起点，却几乎从未真正出场。她与James的青梅竹马之情被Luna Miller以\\"无法生育\\"为由强行斩断，命运将她与James永久隔开，却未能斩断James对她的执念。父亲Barnes Alpha去世后，她的悲痛成为James一次次出走新月领地的理由，她身上的气味频繁附着在James身上归来，成为刺入Sylvia心口的利刃。然而最终，James对她的执念并未为她换来任何结果——Sylvia出走后，她同样离开了新月领地，James的一意孤行换来的是双线皆空。", "name": "Kennedy Barnes", "gender": "女", "arcType": "supporting", "appearance": "二十六岁女性，浅棕色波浪长发，浅绿色瞳孔，身形娇小纤细，素色深灰长裙，黑色针织开衫，黑色平底鞋。", "familyRole": "James执念所系的旧爱", "personality": "深陷悲痛，被动承受，似乎并未主动破坏Sylvia的婚姻，却是整段关系破裂的核心诱因。", "socialStatus": "新月领地故Alpha Barnes之女 / 无法生育的遗传缺陷携带者 / 已离开新月领地的流亡者"}, {"age": "52", "bio": "Luna Miller是Sylvia命运的终极幕后推手。她查明Kennedy携带遗传缺陷、无法生育后，动用Alpha权威强制拆散了James与Kennedy，随后将月神赐予的命运连结视为\\"解决继承问题的完美方案\\"，主动撮合并巩固了James与Sylvia的婚姻。当Sylvia追问时，她以\\"狼群利益优先\\"作答，神情中闪过满意；当Sylvia的精神连结近乎断裂时，她不但不制止儿子，反劝Sylvia\\"专注于Luna与母亲的职责\\"。她亲口向Sylvia揭露了这一切的真相，而这份揭露本身也带着居高临下的控制意味——她从未认为自己有任何错。Sylvia的出逃与James威信扫地，是她精密棋局最终崩盘的代价。", "name": "Luna Miller", "gender": "女", "arcType": "supporting", "appearance": "五十二岁女性，银灰色发丝梳为盘发，冷灰色瞳孔，身形端庄挺拔，深色合身套装，珍珠耳钉，黑色细跟高跟鞋。", "familyRole": "James之母 / Sylvia婚姻的幕后设计者", "personality": "冷酷理性，以狼群利益为最高准则，将人视为棋子，擅长以道德与家族话语体系包装权力意志。", "socialStatus": "银月领地前Luna / 家族实际操控者"}, {"age": "23", "bio": "Lyra作为Sylvia的内在狼，是贯穿全剧的情感晴雨表。她在James与Kennedy的气息中焦躁不安，在精神连结恶化时愈发微弱，在Huxley靠近时却出乎意料地平静——这份本能的识别，远早于Sylvia的意识层面。草药茶服下后，连结骤然松弛，Lyra的存在感几近消散。流亡期间，在Iris Blackwood的庇护下，Sylvia与Lyra重新学习变形，历经十个月共同愈合。中立区的满月夜，Lyra轻唤\\"Kael\\"，正式确认了这段迟到三年的命运，与Sylvia一同踏向北方的新生。", "name": "Lyra", "gender": "女", "arcType": "supporting", "appearance": "Sylvia的内狼，狼形体型纤长，深银灰色毛色，琥珀色狼眸，连结受损时毛色黯淡消沉，痊愈后毛色重焕光泽。", "familyRole": "Sylvia的内在自我与直觉投射", "personality": "本能敏锐，情感忠诚，比Sylvia更早感知到真正的命运连结；在痛苦中愈发焦躁，在希望中逐渐苏醒。", "socialStatus": "Sylvia的内在狼 / 与Kael（Huxley之狼）相互认定的命运伴侣"}, {"age": "22", "bio": "Daisy是Sylvia在银月领地最可靠的后盾。James以Alpha命令强压Sylvia时，她第一个冲入客厅护姐，随即被James的Alpha权威强制噤声，身体僵直，却仍用眼神传递忠诚。她暗中告知Sylvia James频繁出走的次数，在厨房将走廊偷听来的真相转述给她。在Sylvia因不完整的拒绝状态高烧危及生命、被困卧室时，Daisy秘密潜入，当机立断与Kayden联手将她护送至东部边界。出逃后，她仍保持与Sylvia的秘密联络，带来Kennedy已离开、James威信扫地的消息，成为Sylvia在银月领地内部最后的眼与耳。", "name": "Daisy", "gender": "女", "arcType": "supporting", "appearance": "二十二岁女性，棕色中长直发，暖棕色瞳孔，身形娇小，米白色针织上衣，深色修身牛仔裤，白色运动鞋。", "familyRole": "Sylvia的妹妹/挚友", "personality": "忠诚护主，行动力强，敢于与强权正面冲撞，在Sylvia最危险的时刻始终第一个出现。", "socialStatus": "银月领地普通成员 / Sylvia的贴身支持者"}, {"age": "35", "bio": "Elara Vance是Sylvia在银月领地内少数不带立场的声音。她诊断出Sylvia正遭受\\"近拒绝\\"状态的侵蚀——James选择了另一个人却未正式解除连结，这种悬而未决的状态正在缓慢摧毁Sylvia与Lyra。她不回避James的责任，直言\\"那是他自己的选择\\"。当Sylvia夜访表明终止妊娠的意志时，Elara如实告知后果与风险，却未以任何道德话语阻拦，而是将草药交到她手中，叮嘱她用沸水冲泡后迅速饮尽。在Sylvia做出一生中最沉重的决定的那一夜，Elara是唯一真正尊重她意志的人。", "name": "Elara Vance", "gender": "女", "arcType": "supporting", "appearance": "三十五岁女性，深棕色发丝束成低髻，深绿色瞳孔，身形沉静匀称，浅灰色麻布长裙，白色短围裙，腰间挂草药香囊，棕色平底鞋。", "familyRole": "Sylvia出逃前的最后守护者", "personality": "客观冷静，尊重自主意志，不以道德施压，以真相而非安慰对待求助者。", "socialStatus": "银月领地治疗师"}, {"age": "40", "bio": "Iris Blackwood是Sylvia重生路上的关键摆渡人。她收容各类被狼群驱逐或遗弃的狼，以平等与慈悲治理河谷领地。在Sylvia流亡一个月、于边境溪流旁昏倒时，Iris亲自将她救回，并在庇护期间告诉她：母狼的价值不依附于命运连结而存在。这句话成为Sylvia重建自我认知的核心锚点。在Iris的庇护下，Sylvia重新参与领地行政管理，与Lyra共同愈合，历经十个月彻底从破碎的连结中恢复。Iris并不强留，也不索取，只是以自身领地的存在方式，向Sylvia证明了另一种狼群秩序的可能性。", "name": "Iris Blackwood", "gender": "女", "arcType": "supporting", "appearance": "四十岁女性，栗棕色波浪长发发梢微卷，深绿色瞳孔，身形沉稳温柔，暖棕色皮质夹克，米白色宽松长裤，棕色皮靴。", "familyRole": "Sylvia流亡期间的庇护者与精神引路人", "personality": "平等，慈悲，以接纳代替审判；将领地建立在包容被驱逐者的理念之上，以实际行动践行\\"母狼的价值不依附于命运连结\\"。", "socialStatus": "河谷领地 Alpha"}, {"age": "28", "bio": "Kayden在剧情中戏份精炼却不可或缺。在Sylvia被困卧室、高烧危及生命的那一夜，Kayden与Daisy默契配合，精准利用巡逻换班的空档，将虚弱的Sylvia经豪宅侧门护送至东部边界，与已提前等候在那里的Huxley完成交接。这场出逃行动的成功，依赖于Kayden对领地布防的熟悉与执行时的沉稳判断。他的选择本身，也是银月领地内部对James行为的一次无声表态。", "name": "Kayden", "gender": "男", "arcType": "supporting", "appearance": "二十八岁男性，深棕色短发，深棕色瞳孔，体型精干中等，深灰色战术夹克，黑色长裤，黑色军靴。", "familyRole": "出逃行动的执行协助者", "personality": "沉稳可靠，行动优先于言语，在关键时刻选择以实际行动支持正义一方。", "socialStatus": "银月领地成员"}, {"age": "55", "bio": "Cynthia是银月领地内部裂缝的早期显现者。她在Luna Miller书房当面指责James频繁出入新月领地、与无法生育的Kennedy纠缠，指出此举正在危及家族声誉。然而她的批评出发点并非Sylvia所受的伤害，而是家族形象与Alpha合法性的动摇。她的存在揭示了一个关键事实：James与Kennedy的纠缠已从私人痛苦升级为公开的家族危机，即便家族内部也无法继续粉饰太平。她在书房被Luna Miller以\\"狼群需要稳定\\"压制后沉默，折射出整个权力结构中，所有人都服从于Luna Miller的最终裁量。", "name": "Cynthia", "gender": "女", "arcType": "supporting", "appearance": "五十五岁女性，银白色发丝盘为正式发髻，深褐色瞳孔，身形高挑挺拔，深酒红色合身套装，金色胸针，黑色高跟鞋。", "familyRole": "家族内部的利益批评者", "personality": "务实，以家族声誉与利益为核心考量，直言不讳，却并非真正站在Sylvia一边——她的不满根源是James的行为危及门面，而非对Sylvia的同情。", "socialStatus": "银月领地家族核心成员 / 疑为长老级人物"}]	[{"id": "silver_moon_manor", "name": "银月领地 豪宅", "description": "银月领地权力核心，Sylvia婚姻囚笼与抗争爆发的主要舞台，几乎所有关键冲突与背叛均发生于此。", "sub_locations": [{"id": "silver_moon_manor_kitchen", "name": "银月领地 豪宅 厨房", "description": "日常生活空间，Sylvia获知关键情报与感知连结变化的私密场所。", "visual_prompt": "宽敞厨房，哑光深灰橱柜，白色大理石台面，岛台中央，吊灯暖黄，窗外针叶林树影，空间整洁但气氛压抑。"}, {"id": "silver_moon_manor_living_room", "name": "银月领地 豪宅 客厅", "description": "家族成员冲突爆发与Alpha权威施压的主要空间。", "visual_prompt": "高挑客厅，深色实木地板，落地壁炉，皮质厚重沙发组，墙面深灰石材，吊灯冷光，窗帘厚重半遮，强调等级压迫感的空间布局。"}, {"id": "silver_moon_manor_corridor", "name": "银月领地 豪宅 走廊", "description": "信息流通与偷听关键对话的过渡空间。", "visual_prompt": "长廊，深色实木护壁板，壁灯昏黄间距排列，地面深色地毯吸音，走廊尽头光线减弱，形成视觉纵深。"}, {"id": "silver_moon_manor_admin_office", "name": "银月领地 豪宅 行政办公室", "description": "Sylvia处理领地行政事务的工作空间，亦是她因连结恶化昏倒的地点。", "visual_prompt": "功能性办公空间，深色实木办公桌，文件架与资料柜靠墙排列，台灯暖光，窗外庭院，整体风格严肃克制。"}, {"id": "silver_moon_manor_luna_study", "name": "银月领地 豪宅 Luna书房", "description": "Luna Miller的私人据点，关键真相被揭露与密谋被偷听的场所。", "visual_prompt": "私密书房，整面书架，深绿绒布窗帘，实木圆桌，皮质高背椅，台灯聚光，空气中有旧书与香料气息感，光线局促昏暗。"}, {"id": "silver_moon_manor_council_hall", "name": "银月领地 豪宅 议事厅", "description": "狼群集会与权力运作的核心场所，Sylvia宣读拒绝誓词并遭Alpha强压的决战之地。", "visual_prompt": "宽阔石材厅堂，长形会议桌，高背木椅，石材地面，穹顶高挑，壁灯排列，主位设有凸起台阶强调等级，整体色调冷灰庄严。"}, {"id": "silver_moon_manor_master_bedroom", "name": "银月领地 豪宅 主卧", "description": "Sylvia与James婚姻关系的私密空间，亦是她服药、被囚禁、发高烧的至暗场所。", "visual_prompt": "大型卧室，深色实木四柱床，厚重深色床帘，地毯柔暗，落地窗俯瞰庭院，壁灯昏黄，床头有草药茶杯遗留痕迹，空间笼罩压抑沉默。"}], "visual_prompt": "北欧风格大型豪宅，灰白石材外墙，深色木质廊柱，铸铁围栏，茂密针叶林环绕，整体色调冷峻沉肃，常年笼罩于晨雾或夜色之中。"}, {"id": "new_moon_cemetery", "name": "新月领地 公墓", "description": "Sylvia目睹James对Kennedy深情告白的地点，婚姻崩塌的起点。", "sub_locations": [{"id": "new_moon_cemetery", "name": "新月领地 公墓", "description": "Sylvia目睹James对Kennedy深情告白的地点，婚姻崩塌的起点。", "visual_prompt": "户外公墓，灰色石碑排列于草地间，落叶覆盖土路，枯树枝桠交错，天空阴云低压，远处针叶林深暗，整体色调冷灰沉郁。"}], "visual_prompt": "户外公墓，灰色石碑排列于草地间，落叶覆盖土路，枯树枝桠交错，天空阴云低压，远处针叶林深暗，整体色调冷灰沉郁。"}, {"id": "silver_moon_healer_cottage", "name": "银月领地 治疗师小屋", "description": "Sylvia接受诊断、获悉身体真实状态并在Huxley陪伴下感受到首次真实希望的场所。", "sub_locations": [{"id": "silver_moon_healer_cottage", "name": "银月领地 治疗师小屋", "description": "Sylvia接受诊断、获悉身体真实状态并在Huxley陪伴下感受到首次真实希望的场所。", "visual_prompt": "独立木制小屋，低矮屋檐，草药束悬挂于横梁，木质药柜排列，烛光与草药气息弥漫，窗台摆放干花与陶罐，整体色调暖棕，与豪宅的冷峻形成对比。"}], "visual_prompt": "独立木制小屋，低矮屋檐，草药束悬挂于横梁，木质药柜排列，烛光与草药气息弥漫，窗台摆放干花与陶罐，整体色调暖棕，与豪宅的冷峻形成对比。"}, {"id": "silver_moon_east_border", "name": "银月领地 东部边界", "description": "Sylvia出逃的最终节点，Huxley等候交予物资并道出三年沉默真相的告别之地。", "sub_locations": [{"id": "silver_moon_east_border", "name": "银月领地 东部边界", "description": "Sylvia出逃的最终节点，Huxley等候交予物资并道出三年沉默真相的告别之地。", "visual_prompt": "领地边界线，密林边缘与开阔地交界，月光从树隙投落，地面杂草与碎石，夜色深蓝，远处森林漆黑深邃，边界感强烈。"}], "visual_prompt": "领地边界线，密林边缘与开阔地交界，月光从树隙投落，地面杂草与碎石，夜色深蓝，远处森林漆黑深邃，边界感强烈。"}, {"id": "river_valley_manor", "name": "河谷领地 豪宅", "description": "Alpha Iris Blackwood的领地核心，Sylvia流亡期间疗愈与重建自我的避风港。", "sub_locations": [{"id": "river_valley_manor_living_room", "name": "河谷领地 豪宅 客厅", "description": "Sylvia初抵河谷领地、被Iris接纳并开始重建生活的核心空间。", "visual_prompt": "宽敞客厅，浅色石材地面，棉麻质感沙发，落地窗引入充足自然光，书架与绿植点缀，无压迫性陈设，整体温暖开阔。"}], "visual_prompt": "河谷地带豪宅，浅色石材外墙，宽廊与拱门结构，庭院有流水声，植被茂盛温润，整体色调米白与暖棕，光线明亮柔和，与银月领地冷峻基调形成显著反差。"}, {"id": "neutral_zone_cafe", "name": "中立区 咖啡馆", "description": "Sylvia与Huxley流亡一年后重逢、两狼正式相认的地点。", "sub_locations": [{"id": "neutral_zone_cafe", "name": "中立区 咖啡馆", "description": "Sylvia与Huxley流亡一年后重逢、两狼正式相认的地点。", "visual_prompt": "中立区小型咖啡馆，砖墙裸露，木质吧台，吊灯暖黄，窗边卡座，桌面有陶瓷杯与蜡烛，整体氛围低调私密，色调暖棕米白。"}], "visual_prompt": "中立区小型咖啡馆，砖墙裸露，木质吧台，吊灯暖黄，窗边卡座，桌面有陶瓷杯与蜡烛，整体氛围低调私密，色调暖棕米白。"}, {"id": "neutral_zone_meadow", "name": "中立区 草地", "description": "Sylvia与Huxley两狼在满月下正式建立平等连结、共同决定北上的新生之地。", "sub_locations": [{"id": "neutral_zone_meadow", "name": "中立区 草地", "description": "Sylvia与Huxley两狼在满月下正式建立平等连结、共同决定北上的新生之地。", "visual_prompt": "开阔草地，无遮挡满月高悬，月光均匀铺洒，草地银白与深绿交织，远处树线轮廓低缓，夜风轻动草浪，空旷宁静，无人工建筑物。"}], "visual_prompt": "开阔草地，无遮挡满月高悬，月光均匀铺洒，草地银白与深绿交织，远处树线轮廓低缓，夜风轻动草浪，空旷宁静，无人工建筑物。"}]	2026-04-27 18:25:16.178	2026-04-27 18:25:16.178
+\.
+
+
+--
+-- Data for Name: NovelScript; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."NovelScript" (id, "novelId", "scriptKey", "scriptName", "scriptContent", "initResult", characters, costumes, "storyboardRaw", "createdAt", "updatedAt") FROM stdin;
+cmohj1z9k000gtocibi0oypa7	cmohj1z87000etocihnpez3b5	EP1	Kenny	（场景：银月领地 豪宅 厨房 — 日）\n\n画外音 — Sylvia:（低沉平静）"In our world, the Moon Goddess binds two wolves together — a Fate Bond. You feel everything your mate feels. But if he keeps choosing someone else, that bond doesn't just hurt. It slowly destroys you."\n\n字幕：【Sylvia：银月领地Luna，Alpha James之妻，怀孕七个月】\n\n（Sylvia 站在岛台旁切菜。腹部隆起，动作缓慢而小心。灶台上的火苗安静地燃着。）\n\n字幕：【James：银月领地Alpha（氏族首领）】\n\n（James 推门冲进厨房，外套半敞，神情慌乱，目光在她脸上停了不到一秒，立刻移开。）\n\nJames: Alpha Barnes passed. I have to go.\n\n（Sylvia 放下刀，手本能地覆上腹部，转过身。）\n\nSylvia: I'll come with you.\n\nJames:（摆手，已在往外走）Road's too long. You shouldn't travel.\n\n（他在门口停下，背对她，沉默了一秒。）\n\nJames: Don't wait up.\n\n（门关上。厨房里只剩切菜板上的食材和还亮着的灶台。Sylvia 的手仍压在腹部，一动不动。胸口某处骤然发凉，手指慢慢收紧了一下。）\n\n（她拿上车钥匙，朝门口走去。）\n\n---\n\n（场景：新月领地 公墓 — 日，数小时后）\n\n（Sylvia 将车停在公墓入口，下车，走到一排石碑后，手撑着碑沿，站定。）\n\n（三米外，James 单膝跪在新坟旁，双臂将身旁的女人揽住，低头靠近她的耳边。）\n\nJames:（极轻，像在哄）Shh. Kenny. I'm here.\n\n（Kennedy 把脸埋进他胸口。James 的手顺着她的头发慢慢往下压，动作熟稳，从容。）\n\n字幕：【Kennedy：新月领地已故Alpha Barnes之女】\n\n（风向变了。James 猛地抬头，与 Sylvia 对视。他的神情从温柔瞬间僵住——但双臂不仅没有松开，反而收紧了。）\n\n（Sylvia 从石碑后走出，脚步平稳，走到 James 面前，站定。）\n\nSylvia: James. We need to talk.\n\n（James 的目光从她脸上滑开，落在 Kennedy 的肩头。沉默。Kennedy 的哭声压住了风声。他没有开口，没有动。）\n\n（Sylvia 等着。）	{"characters": ["Sylvia", "James", "Kennedy"], "episode_id": "EP 1", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Stand still. Let the silence do the work.", "description": "James的目光从你脸上滑开了，落在Kennedy肩头，连看都不看你一眼。胸口那条连结冰凉得像一块死石。风把Kennedy的哭声送过来，你站在那里，三米远，挺着七个月的肚子。你不开口——让这份沉默替你逼他。"}, {"id": "B", "check": "WIL（意志）10", "content": "Say his name. Make him look at you.", "description": "他跪在那里，抱着另一个女人，用从未给过你的声音说\\"I'm here\\"。你的腹部还有重量，风把Kennedy的哭声送过来，James的手一直没有松开。你站在三米外，他的眼睛还是没有转过来。你张开嘴。"}]}, "episode_title": "Kenny", "scene_locations": {"新月领地 公墓": {"location_id": "new_moon_cemetery", "visual_prompt": "户外公墓，灰色石碑排列于草地间，新坟土色深暗，落叶覆盖土路，枯树枝桠交错，天空阴云低压，远处针叶林深暗，整体色调冷灰沉郁，风吹草动。", "parent_location_id": "new_moon_cemetery"}, "银月领地 豪宅 厨房": {"location_id": "silver_moon_manor_kitchen", "visual_prompt": "宽敞厨房，哑光深灰橱柜，白色大理石岛台，岛台上摆有切菜板与食材，灶台火苗亮着，吊灯暖黄，窗外针叶林树影，空气静止，光线沉郁。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"James": "三十岁左右男性，深色羊绒大衣半敞，内搭黑色高领毛衣，深色修身长裤，黑色皮鞋，领口微乱。", "Sylvia": "二十多岁女性，深色针织长袖上衣，深灰色宽腿长裤，腰腹处因孕肚微微撑起，黑色平底软鞋，左手腕细银手链。", "Kennedy": "二十多岁女性，黑色长款风衣，黑色高领内搭，黑色长裤，黑色低跟靴，头发散落。"}, "pre_choice_script": "（场景：银月领地 豪宅 厨房 — 日）\\n\\n画外音 — Sylvia:（低沉平静）\\"In our world, the Moon Goddess binds two wolves together — a Fate Bond. You feel everything your mate feels. But if he keeps choosing someone else, that bond doesn't just hurt. It slowly destroys you.\\"\\n\\n字幕：【Sylvia：银月领地Luna，Alpha James之妻，怀孕七个月】\\n\\n（Sylvia 站在岛台旁切菜。腹部隆起，动作缓慢而小心。灶台上的火苗安静地燃着。）\\n\\n字幕：【James：银月领地Alpha（氏族首领）】\\n\\n（James 推门冲进厨房，外套半敞，神情慌乱，目光在她脸上停了不到一秒，立刻移开。）\\n\\nJames: Alpha Barnes passed. I have to go.\\n\\n（Sylvia 放下刀，手本能地覆上腹部，转过身。）\\n\\nSylvia: I'll come with you.\\n\\nJames:（摆手，已在往外走）Road's too long. You shouldn't travel.\\n\\n（他在门口停下，背对她，沉默了一秒。）\\n\\nJames: Don't wait up.\\n\\n（门关上。厨房里只剩切菜板上的食材和还亮着的灶台。Sylvia 的手仍压在腹部，一动不动。胸口某处骤然发凉，手指慢慢收紧了一下。）\\n\\n（她拿上车钥匙，朝门口走去。）\\n\\n---\\n\\n（场景：新月领地 公墓 — 日，数小时后）\\n\\n（Sylvia 将车停在公墓入口，下车，走到一排石碑后，手撑着碑沿，站定。）\\n\\n（三米外，James 单膝跪在新坟旁，双臂将身旁的女人揽住，低头靠近她的耳边。）\\n\\nJames:（极轻，像在哄）Shh. Kenny. I'm here.\\n\\n（Kennedy 把脸埋进他胸口。James 的手顺着她的头发慢慢往下压，动作熟稳，从容。）\\n\\n字幕：【Kennedy：新月领地已故Alpha Barnes之女】\\n\\n（风向变了。James 猛地抬头，与 Sylvia 对视。他的神情从温柔瞬间僵住——但双臂不仅没有松开，反而收紧了。）\\n\\n（Sylvia 从石碑后走出，脚步平稳，走到 James 面前，站定。）\\n\\nSylvia: James. We need to talk.\\n\\n（James 的目光从她脸上滑开，落在 Kennedy 的肩头。沉默。Kennedy 的哭声压住了风声。他没有开口，没有动。）\\n\\n（Sylvia 等着。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia没有动，也没有再开口。她就那样站在三米外，手覆在腹部，风吹着她的头发。）\\n\\n（James的目光落在Kennedy肩头，不看她。Kennedy的哭声填满了两人之间的沉默。十秒，二十秒，没有人说话。）\\n\\n（Sylvia的眼眶慢慢发红。失落、愤怒、委屈涌上来——但她没有哭，没有求。她站在原地，等着一个他显然不打算给的回答。）\\n\\n黑屏字幕：He won't speak first. So you will.", "butterfly_effect": "Sylvia's silence registers as restraint, not surrender. James receives no confrontation but also no permission. WIL holds steady.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia 深吸一口气，开口。）\\n\\nSylvia: Kennedy.\\n\\n（声音比她预想的小了一号，被风压住，散在石碑之间。James 的目光慢慢移过来，落在她脸上，神情没有愧疚，只有一种沉默的、疲倦的拒绝。Kennedy 从他怀里微微抬头，眼圈红着，看了她一眼，又把脸埋回去。James 的手臂没有松。）\\n\\nJames:（低，像在结束一件事）Not now, Sylvia.\\n\\n（Sylvia 站在原地，嘴唇动了一下，没有声音出来。风继续吹。）\\n\\n黑屏字幕：\\"Not now\\" — but you're not going to wait until he's ready.", "butterfly_effect": "Sylvia attempted confrontation but her voice failed to land. James registers her as manageable. WIL marginally engaged but yields no immediate shift.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia 开口，声音平稳，一字一顿，落地有声。）\\n\\nSylvia: Kennedy.\\n\\n（Kennedy 从 James 怀里抬起头，眼圈红着，挑衅地看向 Sylvia。James 的目光终于转过来，落在她脸上——他的下颌绷紧了。）\\n\\nSylvia:（声音极平，没有起伏）What is the relationship between you and her?\\n\\n（沉默。风把 Kennedy 散落的发丝吹过来。James 的嘴唇动了一下，没有开口。他的双臂仍揽着 Kennedy，但手指不自觉地收紧了一下。）\\n\\n黑屏字幕：He doesn't answer. But you don't need his answer anymore.", "butterfly_effect": "Sylvia held her ground and forced James to register her presence. WIL gains traction; James can no longer treat her silence as consent.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "James", "Kennedy"]	{"James": "三十岁左右男性，深色羊绒大衣半敞，内搭黑色高领毛衣，深色修身长裤，黑色皮鞋，领口微乱。", "Sylvia": "二十多岁女性，深色针织长袖上衣，深灰色宽腿长裤，腰腹处因孕肚微微撑起，黑色平底软鞋，左手腕细银手链。", "Kennedy": "二十多岁女性，黑色长款风衣，黑色高领内搭，黑色长裤，黑色低跟靴，头发散落。"}	\N	2026-04-27 18:25:16.232	2026-04-27 18:25:16.232
+cmohj1z9y000itoci5o92e2k4	cmohj1z87000etocihnpez3b5	EP2	工具	（场景：新月领地 公墓 — 日）\n（Sylvia 的手指在腹部收紧，然后松开。她抬起头，直视James。）\n\nSylvia:（声音极平，一字一顿）I need an answer, James.\n\n（James 的下颌绷紧。他没有开口，也没有松手。Kennedy 从 James 怀中抬起头，挑衅地看向 Sylvia。）\n（Sylvia 看了两人三秒，转身往停车场走。）\n\nJames: Sylvia. Stop.\n\n（她没有停。脚步稳，不快，没有回头。）\n\n（场景：银月领地 豪宅 客厅 — 日）\n（Sylvia 推开大门走进客厅。James 从她身后进来，带上门，在壁炉前站定，背对她。）\n\nSylvia: Our bond is almost gone. You feel it. Tell me who she is.\n\nJames: You followed me. You have no right.\n\nSylvia: Answer the question.\n\n（James 猛地转身，眼睛骤然变深。Alpha 命令砸下来——Sylvia 的双腿往下沉，她攥住椅背，指节泛白，硬撑着没有跪，全身在抖。）\n\n字幕：【Daisy：Sylvia 的妹妹，Pack 普通成员】\n\n（Daisy 从走廊冲进来，挡在 Sylvia 前面。）\n\nDaisy: How could you suppress her using the Alpha command?\n\n（James 的视线扫过去。Daisy 的喉咙里发出一声哽住的声音，身体僵直，双手撑着空气，嘴唇动了动，一个字都出不来。她的眼睛睁大，死死盯着 Sylvia。）\n\n字幕：【Huxley：银月领地高阶战士】\n\n（Huxley 站在客厅门口，视线落在 Sylvia 身上，停住。）\n\n字幕：【Luna Miller：银月领地前任 Luna，James 之母】\n\n（Luna Miller 从走廊推门进来，扫了一眼 Daisy 僵在原地的样子，又看了看 Sylvia 攥着椅背的手，神情没有变。）\n\nLuna Miller: Enough.\n\n（James 收回 Alpha 命令。Daisy 猛地吸了口气，膝盖软了一下，扶着墙站稳。Sylvia 的手没有松开椅背。）\n\nLuna Miller: Focus on your duties. Luna. Mother. That is all.\n\nSylvia: You knew Kennedy couldn't have children. You arranged this. Didn't you.\n\n（Luna Miller 没有否认。她的嘴角动了一下，像是某个答案终于被说出来让她满意。）\n\nLuna Miller: The Pack needed an heir. You were the solution.\n\n（客厅里没有人说话。Daisy 的手死死捏住墙边的壁灯架。James 看向地板，没有开口。）\n（Sylvia 站在原地，手从椅背上慢慢松开，垂在身侧。）\n（Luna Miller 转身走出客厅。James 跟着进了走廊，带上门。Alpha 命令的压力彻底散去。）\n（Daisy 猛地喘了口气，扑过来抓住 Sylvia 的手臂。两人对视。）\n（Huxley 向 Sylvia 走来，脚步刚迈出，走廊里传来 James 喊他名字的声音。他的脚步顿了一下，只好转身朝走廊走去。）\n（特写 — 客厅里只剩 Sylvia 和 Daisy。Sylvia 低下头，视线落在刚才 Daisy 撑着空气的那双手上。）	{"characters": ["Sylvia", "James", "Kennedy", "Daisy", "Luna Miller", "Huxley"], "episode_id": "EP 2", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Say nothing. Lower your eyes.", "description": "Daisy 的手还攥着你的手臂，她的手腕上有一道浅红的压痕——Alpha 命令留下的。你的嘴唇动了一下，又合上。\\"The Pack needed an heir. You were the solution.\\"那句话还在客厅里，像烟一样散不掉。"}, {"id": "B", "check": "WIL（意志）10", "content": "\\"I heard every word. And I remember.\\"", "description": "Daisy 的眼睛还是红的，她刚才一个字都说不出来——你替她开口。壁炉的火烧得很低，James 带上门的声音还没有散尽，你的腿还在抖，但你把它压住了。"}]}, "episode_title": "工具", "scene_locations": {"新月领地 公墓": {"location_id": "new_moon_cemetery", "visual_prompt": "户外公墓，灰色石碑排列于草地间，落叶覆盖土路，枯树枝桠交错，天空阴云低压，远处针叶林深暗，整体色调冷灰沉郁，无风，空气凝滞。", "parent_location_id": "new_moon_cemetery"}, "银月领地 豪宅 客厅": {"location_id": "silver_moon_manor_living_room", "visual_prompt": "高挑客厅，深色实木地板，落地壁炉火焰低燃，皮质厚重沙发组，墙面深灰石材，吊灯冷光，窗帘厚重拉合，一把单人椅椅背朝向壁炉，空间压迫感强烈。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"Daisy": "二十多岁女性，私立领地日常便装，浅蓝色衬衫，米白色阔腿裤，白色运动鞋，头发简单扎起。", "James": "三十岁左右男性，深色修身西装外套，白色衬衫未系领带，黑色皮鞋，整体利落但略显凌乱。", "Huxley": "三十岁左右男性，银月领地战士装束，深橄榄色战术夹克，黑色修身长裤，军靴，手腕皮革护腕。", "Sylvia": "二十多岁女性，深色长发，穿着简洁深灰色长袖连衣裙，腰部因孕期微微隆起，黑色平底皮鞋，左手腕细银手链。", "Kennedy": "二十多岁女性，新月领地休闲装束，米色针织上衣，深色修身长裤，棕色短靴，发丝散落。", "Luna Miller": "五十岁左右女性，深酒红色长款羊绒大衣，黑色高领毛衣，黑色直筒裤，深色低跟皮鞋，颈间细金项链。"}, "pre_choice_script": "（场景：新月领地 公墓 — 日）\\n（Sylvia 的手指在腹部收紧，然后松开。她抬起头，直视James。）\\n\\nSylvia:（声音极平，一字一顿）I need an answer, James.\\n\\n（James 的下颌绷紧。他没有开口，也没有松手。Kennedy 从 James 怀中抬起头，挑衅地看向 Sylvia。）\\n（Sylvia 看了两人三秒，转身往停车场走。）\\n\\nJames: Sylvia. Stop.\\n\\n（她没有停。脚步稳，不快，没有回头。）\\n\\n（场景：银月领地 豪宅 客厅 — 日）\\n（Sylvia 推开大门走进客厅。James 从她身后进来，带上门，在壁炉前站定，背对她。）\\n\\nSylvia: Our bond is almost gone. You feel it. Tell me who she is.\\n\\nJames: You followed me. You have no right.\\n\\nSylvia: Answer the question.\\n\\n（James 猛地转身，眼睛骤然变深。Alpha 命令砸下来——Sylvia 的双腿往下沉，她攥住椅背，指节泛白，硬撑着没有跪，全身在抖。）\\n\\n字幕：【Daisy：Sylvia 的妹妹，Pack 普通成员】\\n\\n（Daisy 从走廊冲进来，挡在 Sylvia 前面。）\\n\\nDaisy: How could you suppress her using the Alpha command?\\n\\n（James 的视线扫过去。Daisy 的喉咙里发出一声哽住的声音，身体僵直，双手撑着空气，嘴唇动了动，一个字都出不来。她的眼睛睁大，死死盯着 Sylvia。）\\n\\n字幕：【Huxley：银月领地高阶战士】\\n\\n（Huxley 站在客厅门口，视线落在 Sylvia 身上，停住。）\\n\\n字幕：【Luna Miller：银月领地前任 Luna，James 之母】\\n\\n（Luna Miller 从走廊推门进来，扫了一眼 Daisy 僵在原地的样子，又看了看 Sylvia 攥着椅背的手，神情没有变。）\\n\\nLuna Miller: Enough.\\n\\n（James 收回 Alpha 命令。Daisy 猛地吸了口气，膝盖软了一下，扶着墙站稳。Sylvia 的手没有松开椅背。）\\n\\nLuna Miller: Focus on your duties. Luna. Mother. That is all.\\n\\nSylvia: You knew Kennedy couldn't have children. You arranged this. Didn't you.\\n\\n（Luna Miller 没有否认。她的嘴角动了一下，像是某个答案终于被说出来让她满意。）\\n\\nLuna Miller: The Pack needed an heir. You were the solution.\\n\\n（客厅里没有人说话。Daisy 的手死死捏住墙边的壁灯架。James 看向地板，没有开口。）\\n（Sylvia 站在原地，手从椅背上慢慢松开，垂在身侧。）\\n（Luna Miller 转身走出客厅。James 跟着进了走廊，带上门。Alpha 命令的压力彻底散去。）\\n（Daisy 猛地喘了口气，扑过来抓住 Sylvia 的手臂。两人对视。）\\n（Huxley 向 Sylvia 走来，脚步刚迈出，走廊里传来 James 喊他名字的声音。他的脚步顿了一下，只好转身朝走廊走去。）\\n（特写 — 客厅里只剩 Sylvia 和 Daisy。Sylvia 低下头，视线落在刚才 Daisy 撑着空气的那双手上。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia 的视线从 Daisy 的手腕上移开，低下头，沉默。）\\n（Daisy 看着她，慢慢松开手，嘴唇抿紧，没有说话。）\\n（壁炉里的火烧得更低了。客厅里只剩两个人的呼吸声。）\\n\\n（厨房那边，灶台上的锅沸腾的声音穿过门缝传来，匀速，不停。Sylvia抬起头，看了一眼厨房的方向，走过去。Daisy跟在后面。）\\n\\n黑屏字幕：You said nothing. But you didn't forget a single word Luna Miller said.", "butterfly_effect": "Sylvia's silence in the face of Luna Miller's admission registers as submission. WIL loses traction; her agency in the household is further eroded.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（话出了口，但声音比预想的低了一档，带着一丝颤。）\\n（Daisy 猛地抬起头，眼睛睁大。）\\n\\nDaisy: （压低声音，急）Sylvia, not here—\\n\\n（走廊里传来脚步声，两人同时闭嘴。脚步声经过门口，没有停，渐渐远去。）\\n\\nSylvia: I heard every word. And I remember.\\n\\n（Daisy 看了她一会儿，慢慢点头，没有多说。厨房那边，灶台上的锅沸腾的声音穿过门缝传来，匀速，不停。两人一前一后走回厨房，谁都没有再开口。）\\n\\n黑屏字幕：You said it — too quiet, maybe. But Daisy heard you.", "butterfly_effect": "Sylvia speaks, but her voice falters under pressure. WIL registers a marginal gain; the words were said, though their weight did not fully land.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Daisy 的手在 Sylvia 手臂上猛地收紧了一下。）\\n\\nDaisy: （愣了整整两秒，声音压得极低）You're serious.\\n\\nSylvia: （平静，不重复）I heard every word. And I remember.\\n\\n（Daisy 看着她，眼眶慢慢红了，但她没有哭。她松开 Sylvia 的手臂，把自己的手背在身后，攥成拳。）\\n\\nDaisy: （轻，但很稳）Then we remember together.\\n\\n（两人没有再说话。壁炉的火烧得很低。厨房那边，灶台上的锅沸腾的声音穿过门缝传来，匀速，不停。Sylvia先转身往厨房走，Daisy跟上。）\\n\\n黑屏字幕：You and Daisy remember the same thing now. You're not alone in this anymore.", "butterfly_effect": "Sylvia names what was done to her, and Daisy witnesses it. WIL solidifies; the bond between them shifts from comfort to alliance.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "James", "Kennedy", "Daisy", "Luna Miller", "Huxley"]	{"Daisy": "二十多岁女性，私立领地日常便装，浅蓝色衬衫，米白色阔腿裤，白色运动鞋，头发简单扎起。", "James": "三十岁左右男性，深色修身西装外套，白色衬衫未系领带，黑色皮鞋，整体利落但略显凌乱。", "Huxley": "三十岁左右男性，银月领地战士装束，深橄榄色战术夹克，黑色修身长裤，军靴，手腕皮革护腕。", "Sylvia": "二十多岁女性，深色长发，穿着简洁深灰色长袖连衣裙，腰部因孕期微微隆起，黑色平底皮鞋，左手腕细银手链。", "Kennedy": "二十多岁女性，新月领地休闲装束，米色针织上衣，深色修身长裤，棕色短靴，发丝散落。", "Luna Miller": "五十岁左右女性，深酒红色长款羊绒大衣，黑色高领毛衣，黑色直筒裤，深色低跟皮鞋，颈间细金项链。"}	\N	2026-04-27 18:25:16.247	2026-04-27 18:25:16.247
+cmohj1za3000ktocij9m1uhd2	cmohj1z87000etocihnpez3b5	EP3	替代品	（场景：银月领地 豪宅 厨房 — 夜）\n\n（灶台上的锅沸腾着，热气贴着橱柜散开。Sylvia站在砧板前切菜，动作匀速，眼神没有落在手上。）\n\n（Daisy凑近，声音压到最低。）\n\nDaisy: This week. He's gone to Crescent territory three times.\n\n（Sylvia的手停了一下。菜刀放回砧板，没有声音。她没有转头。）\n\n（特写——她的手覆上腹部。孩子踢了一下，然后停了。）\n\n（走廊里传来两个人的说话声，随意、毫不压低，穿过门缝一字不漏。）\n\n走廊声音 A: Luna Miller found out Kennedy can't have children. Genetic defect.\n\n走廊声音 B: So she broke them apart herself. "An Alpha's mate must carry the bloodline" — her exact words.\n\n走廊声音 A: And then the Moon Goddess gave James a Fate Bond with Sylvia. Luna Miller just... used her.\n\n（脚步声渐远。厨房重新安静，只剩锅里的沸腾声。）\n\n（特写——Sylvia的眼睛。她没有眨眼。）\n\n（Daisy轻唤她的名字，她没有回应。她拿起菜刀，把它放回砧板，转身往厨房门口走去。）\n\nDaisy: Sylvia.\n\n（她没有停。）\n\n（场景：银月领地 豪宅 走廊 — 夜）\n\n（Sylvia走进走廊，脚步平稳，没有停顿。壁灯昏黄，走廊尽头光线减弱。她经过Luna Miller书房门口，脚步停下来。）\n\n（门缝透出一条光。里面有说话声——Luna Miller的声音，低沉稳定。然后是另一个女声，语气硬，每一个字咬得很紧，像是在质问什么。）\n\n（特写——那条光打在Sylvia的侧脸上。她的眼睛微微收窄，盯着门缝。）	{"characters": ["Sylvia", "Daisy"], "episode_id": "EP 3", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Stay in the corridor. Listen to everything.", "description": "那条门缝里的光打在你侧脸上，Luna Miller的声音低而稳，另一个女声每个字都咬得很紧——她们在谈你，谈这个孩子，谈一个你不在场的安排。你的手按在腹部，走廊里只有你一个人。每多听一句，你手里的牌就多一张。"}, {"id": "B", "check": "WIL（意志）12", "content": "Push the door open. Walk in.", "description": "你的手已经抬起来了。门缝里那条光窄得像一把刀，Luna Miller的声音还没停。那两句话在你脑子里转了一遍又一遍——'used her'——你的手指碰到了门板。你不想再做被谈论的那个人。"}]}, "episode_title": "替代品", "scene_locations": {"银月领地 豪宅 厨房": {"location_id": "silver_moon_manor_kitchen", "visual_prompt": "宽敞厨房，哑光深灰橱柜，白色大理石台面，岛台中央砧板上摆着半切的蔬菜，灶台上锅中热气翻腾，吊灯暖黄，窗外针叶林树影沉暗，厨房门虚掩，走廊灯光从门缝透入。", "parent_location_id": "silver_moon_manor"}, "银月领地 豪宅 走廊": {"location_id": "silver_moon_manor_corridor", "visual_prompt": "长廊，深色实木护壁板，壁灯昏黄间距排列，地面深色地毯，走廊尽头光线减弱，书房门缝透出一线暖光，打在对面墙壁上。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"Daisy": "二十多岁女性，米白色圆领卫衣，深色紧身牛仔裤，白色运动鞋，头发扎成低马尾。", "Sylvia": "二十多岁女性，深色针织长袖上衣，深灰色宽腿长裤，腹部微隆，黑色软底平底鞋，深色长发松散垂落，左手腕一条细银手链。"}, "pre_choice_script": "（场景：银月领地 豪宅 厨房 — 夜）\\n\\n（灶台上的锅沸腾着，热气贴着橱柜散开。Sylvia站在砧板前切菜，动作匀速，眼神没有落在手上。）\\n\\n（Daisy凑近，声音压到最低。）\\n\\nDaisy: This week. He's gone to Crescent territory three times.\\n\\n（Sylvia的手停了一下。菜刀放回砧板，没有声音。她没有转头。）\\n\\n（特写——她的手覆上腹部。孩子踢了一下，然后停了。）\\n\\n（走廊里传来两个人的说话声，随意、毫不压低，穿过门缝一字不漏。）\\n\\n走廊声音 A: Luna Miller found out Kennedy can't have children. Genetic defect.\\n\\n走廊声音 B: So she broke them apart herself. \\"An Alpha's mate must carry the bloodline\\" — her exact words.\\n\\n走廊声音 A: And then the Moon Goddess gave James a Fate Bond with Sylvia. Luna Miller just... used her.\\n\\n（脚步声渐远。厨房重新安静，只剩锅里的沸腾声。）\\n\\n（特写——Sylvia的眼睛。她没有眨眼。）\\n\\n（Daisy轻唤她的名字，她没有回应。她拿起菜刀，把它放回砧板，转身往厨房门口走去。）\\n\\nDaisy: Sylvia.\\n\\n（她没有停。）\\n\\n（场景：银月领地 豪宅 走廊 — 夜）\\n\\n（Sylvia走进走廊，脚步平稳，没有停顿。壁灯昏黄，走廊尽头光线减弱。她经过Luna Miller书房门口，脚步停下来。）\\n\\n（门缝透出一条光。里面有说话声——Luna Miller的声音，低沉稳定。然后是另一个女声，语气硬，每一个字咬得很紧，像是在质问什么。）\\n\\n（特写——那条光打在Sylvia的侧脸上。她的眼睛微微收窄，盯着门缝。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia侧身靠在走廊墙上，没有走开。）\\n\\n（书房里的声音继续穿过门缝传出来——那个硬声调的女声语气越来越紧，每一个字都像在逼问什么，Luna Miller始终低沉稳定，不急不缓地回应。Sylvia一句一句听着，眼睛盯着那条光，一动不动。）\\n\\n（特写——她的手指在裤缝边收紧，又慢慢松开。）\\n\\n（走廊里传来另一侧的脚步声。Sylvia没有抬头，只是悄无声息地从书房门口退开一步，背贴着护壁板，融进昏黄的壁灯阴影里。脚步声从她身旁经过，消失在走廊尽头。）\\n\\n（她重新侧身靠回墙上。书房里的声音还没有停。）\\n\\n（特写——门缝里那条光，打在Sylvia的侧脸上。她的眼睛微微眯起，盯着门缝，没有动。）\\n\\n黑屏字幕：You didn't miss a word. The door hasn't opened yet. You're still listening.", "butterfly_effect": "Sylvia chooses concealment over confrontation. WIL remains static; her awareness of the room's power dynamics sharpens without her presence being registered.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia的手抬起来，指尖碰到门板。）\\n\\n（里面Luna Miller的声音停了一拍——像是感知到了什么。那个硬声调的女声也跟着静了一秒。）\\n\\n（Sylvia的手停在门板上，没有推下去。）\\n\\n（书房里的声音重新响起，Luna Miller语气平稳，像什么都没有发生。Sylvia慢慢把手放下来，退后半步，背贴上走廊的护壁板。）\\n\\n（特写——她的手指松开，掌心贴着深色木板，呼吸放平。）\\n\\n（她没有离开。她重新侧身靠在门旁的墙上，眼睛盯着那条门缝里透出的光。书房里的对话还在继续，她一句一句听着。）\\n\\n（特写——门缝里那条光，打在Sylvia的侧脸上。她的眼睛微微眯起，盯着门缝，没有动。）\\n\\n黑屏字幕：You didn't push the door open. But you didn't leave either.", "butterfly_effect": "Sylvia's impulse surfaces but does not land. WIL takes no damage; her presence outside the door remains unconfirmed by those inside.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia的手推开了门。）\\n\\n（书房里三个人的目光同时转过来。Luna Miller坐在皮质高背椅后，表情没有变，只是慢慢放下手中的茶杯。那个硬声调的女声停在嘴边，没有说完。）\\n\\n（Sylvia站在门口，没有进去，也没有退。她的眼神从那个陌生女人脸上扫过去，落在Luna Miller身上，平静，没有颤动。）\\n\\nSylvia: I heard enough.\\n\\n（Luna Miller盯着她，沉默了两秒，嘴角微微动了一下。）\\n\\nLuna Miller: Get out! This is not the place for you.\\n\\n（Sylvia走出房间，把门重新带上。走廊里只剩她一个人，壁灯昏黄，书房的声音被关在门后。）\\n\\n（她没有走远。她重新侧身靠在书房门旁的墙上，背贴着护壁板，眼睛盯着前方，门缝里那条光还打在她的侧脸上。她的眼睛微微眯起，没有动。）\\n\\n黑屏字幕：They threw you out. But you didn't go far.", "butterfly_effect": "Sylvia makes her presence known to Luna Miller directly. Luna Miller registers that Sylvia is no longer passive. CHA gains marginal traction in future confrontations with the study's occupants.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Daisy"]	{"Daisy": "二十多岁女性，米白色圆领卫衣，深色紧身牛仔裤，白色运动鞋，头发扎成低马尾。", "Sylvia": "二十多岁女性，深色针织长袖上衣，深灰色宽腿长裤，腹部微隆，黑色软底平底鞋，深色长发松散垂落，左手腕一条细银手链。"}	\N	2026-04-27 18:25:16.252	2026-04-27 18:25:16.252
+cmohj1za8000mtoci25z774v4	cmohj1z87000etocihnpez3b5	EP4	打量	（场景：银月领地 豪宅 走廊 — 夜）\n（走廊壁灯昏黄，Sylvia背靠护壁板，侧身立在书房门旁。门缝透出一线暖光，压在她脚边的地毯上。她没有动。）\n\n字幕：【Cynthia：银月领地长老议会成员】\n\nCynthia: (门内，声音一字一顿，压着怒气) Every member knows, James. Every. Single. One.\n\nJames: (强硬) My bond is not your business.\n\nCynthia: (声音抬高) She can't give you an heir. You know that. We all know that.\n\n（特写——Sylvia的手指在护壁板上慢慢收紧，指节泛白。）\n\nJames: (音量上来) Don't tell me what I know—\n\nLuna Miller: (打断，声音比两人都低，却让走廊里的空气也跟着凝住) Enough.\n\n（书房里彻底静了两秒。）\n\nLuna Miller: (慢，每个字都落地) I will handle this. Both of you, sit down.\n\n（特写——Sylvia的喉结轻轻滚动一下。她把每一句话在脑子里过了一遍，嘴唇抿成一条直线。）\n\n（书房门从里面被推开。Cynthia先走出来，抬头，和Sylvia正面撞上视线。）\n\n（两人对视。Cynthia没有说话。她的目光从Sylvia的脸往下移，停在隆起的腹部，又抬回来，在她眼睛上停了整整三秒。）	{"characters": ["Sylvia", "Cynthia", "James", "Luna Miller"], "episode_id": "EP 4", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Hold Cynthia's gaze. Let her see you heard everything.", "description": "Cynthia的视线从你的脸移到腹部，又移回来。她刚才在书房里替你说了那些你自己没有资格坐在桌边说的话。走廊里只有你们两个，书房门还开着一道缝，Luna Miller的声音在里面低低地继续。你不避开眼睛。"}, {"id": "B", "check": "WIL（意志）12", "content": "Push past Cynthia. Walk into the study.", "description": "Cynthia刚走出来，书房门还没合上，里面的灯光漏了一道宽缝。Luna Miller还在说话，James还坐在里面。Cynthia的眼神落在你腹部的那一秒像在说什么——但你不需要别人替你说。你自己走进去。"}]}, "episode_title": "打量", "scene_locations": {"银月领地 豪宅 走廊": {"location_id": "silver_moon_manor_corridor", "visual_prompt": "长廊，深色实木护壁板，壁灯昏黄间距排列，地面深色地毯吸音，走廊尽头光线减弱。书房门虚掩，门缝透出一线暖光，门框投落细长光带于地毯上。", "parent_location_id": "silver_moon_manor"}, "银月领地 豪宅 Luna书房": {"location_id": "silver_moon_manor_luna_study", "visual_prompt": "私密书房，整面书架，深绿绒布窗帘全部拉合，实木圆桌旁三把椅子，台灯聚光打亮桌面，书房门内侧可见门把手，门缝向外透出暖黄光线。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"James": "三十岁左右男性，深色修身衬衫，深灰西裤，黑色皮带，皮鞋。", "Sylvia": "二十多岁女性，深色针织长裙，腰线以下因孕肚微微撑起，外搭深灰色薄款开衫，黑色平底软底鞋，左手腕细银手链。", "Cynthia": "五十岁左右女性，深酒红色合身西装外套，黑色直筒长裤，低跟皮鞋，发髻盘高，细金项链。", "Luna Miller": "六十岁左右女性，烟灰色长款羊绒外套，黑色高领毛衣，深色长裤，低跟踝靴，手腕宽版金手镯。"}, "pre_choice_script": "（场景：银月领地 豪宅 走廊 — 夜）\\n（走廊壁灯昏黄，Sylvia背靠护壁板，侧身立在书房门旁。门缝透出一线暖光，压在她脚边的地毯上。她没有动。）\\n\\n字幕：【Cynthia：银月领地长老议会成员】\\n\\nCynthia: (门内，声音一字一顿，压着怒气) Every member knows, James. Every. Single. One.\\n\\nJames: (强硬) My bond is not your business.\\n\\nCynthia: (声音抬高) She can't give you an heir. You know that. We all know that.\\n\\n（特写——Sylvia的手指在护壁板上慢慢收紧，指节泛白。）\\n\\nJames: (音量上来) Don't tell me what I know—\\n\\nLuna Miller: (打断，声音比两人都低，却让走廊里的空气也跟着凝住) Enough.\\n\\n（书房里彻底静了两秒。）\\n\\nLuna Miller: (慢，每个字都落地) I will handle this. Both of you, sit down.\\n\\n（特写——Sylvia的喉结轻轻滚动一下。她把每一句话在脑子里过了一遍，嘴唇抿成一条直线。）\\n\\n（书房门从里面被推开。Cynthia先走出来，抬头，和Sylvia正面撞上视线。）\\n\\n（两人对视。Cynthia没有说话。她的目光从Sylvia的脸往下移，停在隆起的腹部，又抬回来，在她眼睛上停了整整三秒。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia没有动，也没有避开视线。Cynthia和她对视了整整三秒。）\\n\\n（Cynthia的嘴唇动了一下，像是要说什么，最终只是微微摇了摇头——那个摇头不是否定，更像是某种无声的确认。她转身，朝走廊另一头走去，脚步声均匀，没有回头。）\\n\\n（Sylvia站在原地，没有追，也没有进书房。她的手抬起来，覆上腹部，按住，手心传来一点温度。里面还有说话声，低而模糊，是Luna Miller的声音。）\\n\\n（特写——书房门缝的那一线暖光，照在Sylvia脸侧。她的眼睛没有眨，直视着走廊深处Cynthia消失的方向。）\\n\\n黑屏字幕：You went back to your room and closed the door. You spent the whole night thinking about what Cynthia's headshake meant.", "butterfly_effect": "Sylvia chose to stay outside the room. Her absence from the table registers as compliance. WIL gains no traction; Cynthia's assessment of her as a passive figure is reinforced.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia的手按上书房门板，推开一道缝——）\\n（门轴发出一声轻响。书房里三个人同时转过头来。）\\n（James的椅子腿在地板上划出一声钝响，他站起来，眉头皱死。）\\n\\nJames: (低，压着) What are you doing here?\\n\\n（Sylvia站在门口，光从身后的走廊打来，她的手还扶着门框。她张嘴，声音比预想的低了一个调。）\\n\\nSylvia: I heard everything.\\n\\n（Luna Miller没有动，只是把手放在桌面上，目光落在她身上，像在等一个她早就知道答案的问题。Cynthia已经站起来，从Sylvia身边走出去，经过时目光在她腹部停了一秒，没有说话，脚步声消失在走廊里。）\\n\\nLuna Miller: (平静) Close the door, Sylvia.\\n\\n（Sylvia把门带上，站在书房里，书架和深绿窗帘把外面的夜色全部隔绝在外。台灯的光打在她脸上，她的手垂下来，覆上腹部，按住。）\\n\\n黑屏字幕：You stayed in the study until Luna Miller dismissed you. You went back to your room. You didn't sleep.", "butterfly_effect": "Sylvia stepped in but lost the initiative. Luna Miller registers her as reactive rather than threatening. WIL shows marginal presence but CHA gains no ground.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia推开书房门，走进去，把门在身后带上。）\\n（三双眼睛转过来。James从椅子上站起来，嘴唇动了动，没有发出声音。Cynthia的视线落在她腹部，停了一秒，随即站起身，从她身边走出去，把书房门重新带上，脚步声消失在走廊里。）\\n（书房里只剩三个人。台灯的光打在实木圆桌上，Sylvia走到桌边那把空椅子前，站定，没有坐下。）\\n\\nSylvia: (平，字句清晰) If this is about me, I should be in the room.\\n\\n（Luna Miller看了她整整三秒，嘴角微动，像是某个早就预备好的判断得到了印证。）\\n\\nLuna Miller: (慢，不动声色) Sit down, but don't speak.\\n\\n（Sylvia没有动。她的手垂在身侧，指尖贴着腹部侧面，眼睛直视着Luna Miller，没有低头。）\\n\\n黑屏字幕：You sat in that study until everyone left. You memorized Luna Miller's expression. You didn't sleep.", "butterfly_effect": "Sylvia claimed a seat at the table on her own terms. Luna Miller registers a shift in her as a variable rather than a given. WIL and CHA both gain marginal traction.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Cynthia", "James", "Luna Miller"]	{"James": "三十岁左右男性，深色修身衬衫，深灰西裤，黑色皮带，皮鞋。", "Sylvia": "二十多岁女性，深色针织长裙，腰线以下因孕肚微微撑起，外搭深灰色薄款开衫，黑色平底软底鞋，左手腕细银手链。", "Cynthia": "五十岁左右女性，深酒红色合身西装外套，黑色直筒长裤，低跟皮鞋，发髻盘高，细金项链。", "Luna Miller": "六十岁左右女性，烟灰色长款羊绒外套，黑色高领毛衣，深色长裤，低跟踝靴，手腕宽版金手镯。"}	\N	2026-04-27 18:25:16.256	2026-04-27 18:25:16.256
+cmohj1zab000otocizzoqda4y	cmohj1z87000etocihnpez3b5	EP5	撑不住	字幕：次日清晨。（场景：银月领地 豪宅 行政办公室 — 日）\n（清晨光线从庭院窗斜入，Sylvia坐在办公桌前，桌面摊开一叠物资订单。她的笔停在某一行数字上，没有落下去。）\n（特写——她的手背上有一道昨夜靠墙时留下的压痕，还没有消。她低头，重新把笔对准那一行数字。）\n（连结那一端，死寂。Sylvia的眼睫微动，她把笔放下，抬手按了按太阳穴。）\n（眩晕来得没有任何预兆。文件从桌边滑落，她伸手去抓，整个人随着椅子往侧面倒下去，手肘先撞上地板，下意识双臂交叉护住腹部。）\n（门从外面被推开。Huxley站在门口，视线落在地板上的她，两步跨过来，单膝跪地，一只手托住她的背。）\n\nSylvia: (喘着气，手撑地想起来) I'm fine. Just—\n\nHuxley: (已经将她抱起，声音平) You're not. You need treatment.\n\n（他抱着她走出办公室，没有回头。特写——她的手指攥住他外套的衣领，指节泛白。）\n\n（场景：银月领地 治疗师小屋 — 日）\n\n字幕：【Elara Vance：银月领地治疗师】\n\n（Elara将Huxley挥手请出，关上小屋的门。她在Sylvia对面坐下，不说话，先检查脉搏，再检查眼睛，动作快而专注。）\n（窗外，Huxley站在廊下没有离开。特写——他的背影，肩膀绷直，一动不动。）\n（Elara放下听诊器，在药柜前停了一下，把一个陶罐放到桌上，转过来看Sylvia。）\n\nElara: (直接，没有铺垫) Do you know what near rejection is?\n\nSylvia: (声音很轻) He chose someone else. Hasn't let go.\n\nElara: That line — it's tearing you apart. Both of you. But you're the weaker side right now.\n\n（特写——Sylvia的手放在腹部，手指收紧，没有松开。）\n\nElara: (把陶罐推向她，每个字都清晰) One more full moon. You only have so much time left. If it's not resolved before then, you will... die.\n\nSylvia: (喉结滚动，停顿一秒) When is the next full moon?\n\n（Elara在一张纸上写下了一个日期，推过去。）\n（特写——Sylvia的嘴唇抿紧。她盯着那个数字，没有说话，没有哭，只是低头看了一眼自己放在腹部的那只手。）	{"characters": ["Sylvia", "Huxley", "Elara Vance"], "episode_id": "EP 5", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Fold the paper and say nothing.", "description": "那个日期压在纸上，Elara的眼睛还看着你。陶罐就在桌上，草药的气味钻进鼻腔。你把纸折起来，折了一次，又折了一次，直到那个数字消失在掌心里。"}, {"id": "B", "check": "WIL（意志）10", "content": "\\"What are my options? All of them.\\"", "description": "纸还摊在桌上，那个日期你已经记住了。Elara把陶罐推过来的时候没有说话——那个沉默比任何解释都重。你的手还压在腹部，指尖感觉得到自己的心跳。"}]}, "episode_title": "撑不住", "scene_locations": {"银月领地 治疗师小屋": {"location_id": "silver_moon_healer_cottage", "visual_prompt": "独立木制小屋，低矮屋檐，草药束悬挂横梁，木质药柜排列，陶罐置于诊桌正中，烛光与草药气息弥漫，窗台干花与陶罐，整体色调暖棕，窗外廊下可见一道人影背光而立。", "parent_location_id": null}, "银月领地 豪宅 行政办公室": {"location_id": "silver_moon_manor_admin_office", "visual_prompt": "深色实木办公桌，台灯暖光低照，桌面散落物资订单与数字表格，一支钢笔横放于文件边缘，椅子侧翻倒在地板上，文件散落一地，晨光从窗外庭院斜入，光线冷白。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"Huxley": "三十岁左右男性，深橄榄色厚实外套，黑色高领毛衣，深色长裤，黑色皮靴。", "Sylvia": "二十多岁女性，深色针织毛衣，深灰色直筒长裤，黑色平底靴，左手腕细银手链，眼下有青黑，头发松散束于脑后。", "Elara Vance": "三十多岁女性，米白色亚麻长衫，深棕色皮质腰带，棕色低跟短靴，颈间挂木质听诊器，发髻低盘。"}, "pre_choice_script": "字幕：次日清晨。（场景：银月领地 豪宅 行政办公室 — 日）\\n（清晨光线从庭院窗斜入，Sylvia坐在办公桌前，桌面摊开一叠物资订单。她的笔停在某一行数字上，没有落下去。）\\n（特写——她的手背上有一道昨夜靠墙时留下的压痕，还没有消。她低头，重新把笔对准那一行数字。）\\n（连结那一端，死寂。Sylvia的眼睫微动，她把笔放下，抬手按了按太阳穴。）\\n（眩晕来得没有任何预兆。文件从桌边滑落，她伸手去抓，整个人随着椅子往侧面倒下去，手肘先撞上地板，下意识双臂交叉护住腹部。）\\n（门从外面被推开。Huxley站在门口，视线落在地板上的她，两步跨过来，单膝跪地，一只手托住她的背。）\\n\\nSylvia: (喘着气，手撑地想起来) I'm fine. Just—\\n\\nHuxley: (已经将她抱起，声音平) You're not. You need treatment.\\n\\n（他抱着她走出办公室，没有回头。特写——她的手指攥住他外套的衣领，指节泛白。）\\n\\n（场景：银月领地 治疗师小屋 — 日）\\n\\n字幕：【Elara Vance：银月领地治疗师】\\n\\n（Elara将Huxley挥手请出，关上小屋的门。她在Sylvia对面坐下，不说话，先检查脉搏，再检查眼睛，动作快而专注。）\\n（窗外，Huxley站在廊下没有离开。特写——他的背影，肩膀绷直，一动不动。）\\n（Elara放下听诊器，在药柜前停了一下，把一个陶罐放到桌上，转过来看Sylvia。）\\n\\nElara: (直接，没有铺垫) Do you know what near rejection is?\\n\\nSylvia: (声音很轻) He chose someone else. Hasn't let go.\\n\\nElara: That line — it's tearing you apart. Both of you. But you're the weaker side right now.\\n\\n（特写——Sylvia的手放在腹部，手指收紧，没有松开。）\\n\\nElara: (把陶罐推向她，每个字都清晰) One more full moon. You only have so much time left. If it's not resolved before then, you will... die.\\n\\nSylvia: (喉结滚动，停顿一秒) When is the next full moon?\\n\\n（Elara在一张纸上写下了一个日期，推过去。）\\n（特写——Sylvia的嘴唇抿紧。她盯着那个数字，没有说话，没有哭，只是低头看了一眼自己放在腹部的那只手。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia把折好的纸攥在手心，没有抬头。）\\n（Elara没有追问，只是把陶罐轻轻推得更近了一些，随后起身去整理药柜，背对着她。）\\n（沉默在小屋里拉长。窗外廊下，Huxley的背影还没有动。）\\n（Sylvia慢慢抬起头，直视前方，眼神里有什么东西在沉下去，又在沉下去。她把那张纸塞进外套口袋，手按在口袋外侧，没有移开。）\\n\\nElara: (没有转身，声音平) The door's open when you're ready.\\n\\n（窗外，连结那一端忽然传来一阵清晰的温柔。Sylvia的手指猛地收紧，把口袋里的纸攥皱了。）\\n\\n（门从外面推开。Huxley走进来，目光先落在Elara脸上，再转向Sylvia。两人对视，谁都没有先说话。）\\n\\n黑屏字幕：You memorized the date. The paper in your pocket is already crumpled.", "butterfly_effect": "Sylvia absorbs the deadline in silence without seeking agency. WIL registers no forward momentum; her passivity in the face of the verdict slightly deepens her sense of helplessness.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（话出了口，但声音比预想的低了一档，末尾轻微地抖了一下。）\\n（Elara转过身，看了她一秒，没有立刻回答。）\\n\\nElara: (声音平，但没有回避) There aren't many. And none of them are easy.\\n\\n（她在Sylvia对面重新坐下，把陶罐往旁边移开，腾出桌面，两手交叠，正视她。）\\n\\nElara: The bond can be broken — but only from your side. It will hurt. It will scar.\\n\\n（特写——Sylvia的手放在腹部，手指收紧，又松开。Elara在纸上写下了一个日期，推过去。Sylvia盯着那个数字，嘴唇抿紧。）\\n\\n（窗外，连结那一端忽然传来一阵清晰的温柔。Sylvia的手指猛地收紧，把口袋里的纸攥皱了。）\\n\\n（门从外面推开。Huxley走进来，目光先落在Elara脸上，再转向Sylvia。两人对视，谁都没有先说话。）\\n\\n黑屏字幕：Not many options. But at least you asked. The date is on the paper — and in your head.", "butterfly_effect": "Sylvia asks the question but cannot hold the answer. WIL shows a hairline crack of initiative, though the follow-through collapses under pressure.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Elara没有立刻回答。她在Sylvia对面重新坐下，把陶罐往旁边移开，腾出桌面，两手交叠，正视她。）\\n\\nElara: You're the first person who's asked me that.\\n\\nSylvia: Then be the first person who answers me straight.\\n\\n（Elara的嘴角极细微地动了一下。她没有回避。）\\n\\nElara: The bond can be broken — but only from your side. A rejection vow, spoken publicly, in front of the council. It will hurt. It will scar. And James will feel it the moment you say the words.\\n\\n（特写——Sylvia的眼神没有移开。她把那句话在脑子里过了一遍，手指在腹部慢慢松开。Elara在纸上写下了一个日期，推过去。Sylvia盯着那个数字。）\\n\\n（窗外，连结那一端忽然传来一阵清晰的温柔。Sylvia的手指猛地收紧，把口袋里的纸攥皱了。）\\n\\n（门从外面推开。Huxley走进来，目光先落在Elara脸上，再转向Sylvia。两人对视，谁都没有先说话。）\\n\\n黑屏字幕：You know every path now. None of them are easy. But you asked, and Elara answered.", "butterfly_effect": "Sylvia demands full information and holds steady through the answer. WIL gains measurable traction; her capacity to face unfiltered truth registers as a forward shift in agency.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Huxley", "Elara Vance"]	{"Huxley": "三十岁左右男性，深橄榄色厚实外套，黑色高领毛衣，深色长裤，黑色皮靴。", "Sylvia": "二十多岁女性，深色针织毛衣，深灰色直筒长裤，黑色平底靴，左手腕细银手链，眼下有青黑，头发松散束于脑后。", "Elara Vance": "三十多岁女性，米白色亚麻长衫，深棕色皮质腰带，棕色低跟短靴，颈间挂木质听诊器，发髻低盘。"}	\N	2026-04-27 18:25:16.259	2026-04-27 18:25:16.259
+cmohj1zae000qtoci5enws9dv	cmohj1z87000etocihnpez3b5	EP6	棋子	（场景：银月领地 治疗师小屋 — 日）\n（Sylvia坐在诊床边沿，手里攥着一张纸，视线钉在纸上，一动不动。Elara站在一侧，听诊器还挂在手里，没有开口。）\n（门开了。Huxley推门进来，目光先落在Elara脸上，再转向Sylvia。两人对视，谁都没有先说话。）\n（Elara把听诊器放回药柜，拿起外套，往门口走。经过Huxley时，她停了一步，声音压得极低。）\n\nElara: Don't push her.\n\n（Elara出去，带上门。Huxley走到窗边，背对Sylvia站着，没有靠近。）\n（沉默。Sylvia把那张纸慢慢折起来，塞进外套口袋，手按在口袋外侧，没有移开。）\n（连结那一端，忽然涌来一阵清晰的温柔——不属于这里，不属于她。Sylvia的手指猛地收紧，把口袋里的纸攥皱了。）\n\nHuxley: （没有转身，声音沉）He's with her right now, isn't he.\n\n（不是问句。Sylvia没有否认，只是低下头，喉结滚动了一下。）\n\nHuxley: （转过身，直视她）I'm not going anywhere. That's all.\n\n（Sylvia抬头看他，嘴唇抿紧，点了一下头。）\n（这时，小屋门外传来敲门声。一位成员在门外开口。）\n\n成员A: Luna Miller wants to see you right now.\n\n（场景：银月领地 豪宅 Luna书房 — 傍晚）\n（台灯聚光，深绿窗帘遮住最后一线天色。Luna Miller坐在高背椅里，茶杯在手，姿态从容，像是等了很久。）\n（Sylvia推门进来，在圆桌对面坐下，没有等对方开口。）\n\nSylvia: You asked to see me.\n\nLuna Miller: （不急，慢慢放下茶杯）James was seventeen. He threatened to renounce his Alpha title. For her.\n\n（Sylvia没有动，听着。）\n\nLuna Miller: Kennedy carries a genetic defect. No offspring. Ever. I ended it.\n\nSylvia: （声音很平）And then the Moon Goddess gave him me.\n\nLuna Miller: （眼神平静，像在确认一件事实）A solution. At exactly the right time.\n\n（特写——Sylvia的下颌绷紧了一秒，随即松开。她没有站起来，把Luna Miller剩下的话全部听完。）\n（Luna Miller端起茶杯，视线移向别处，像是这场谈话已经结束。）	{"characters": ["Sylvia", "Huxley", "Elara Vance", "Luna Miller"], "episode_id": "EP 6", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Leave without a word.", "description": "Luna Miller的茶杯轻轻落回碟子，那声瓷器相碰的声音像是一个句号。她的视线已经移开了，你坐在台灯的光圈边缘，那张折皱的纸在你口袋里硌着手。"}, {"id": "B", "check": "WIL（意志）10", "content": "\\"I'll remember every word you said tonight.\\"", "description": "Luna Miller把茶杯端起来，像是在等你起身离开。台灯把她半张脸照亮，另半张沉在阴影里。你口袋里那张纸被攥皱的折痕还没有散开。"}]}, "episode_title": "棋子", "scene_locations": {"银月领地 豪宅 走廊": {"location_id": "silver_moon_manor_corridor", "visual_prompt": "长廊，深色实木护壁板，壁灯昏黄间距排列，地面深色地毯吸音，走廊尽头光线减弱，夜色已至，廊灯是唯一光源。", "parent_location_id": "silver_moon_manor"}, "银月领地 治疗师小屋": {"location_id": "silver_moon_healer_cottage", "visual_prompt": "独立木制小屋，低矮屋檐，草药束悬挂于横梁，木质药柜排列，烛光与草药气息弥漫，窗台摆放干花与陶罐，诊床靠窗，整体色调暖棕昏黄，窗外日光已偏西。", "parent_location_id": "silver_moon_healer_cottage"}, "银月领地 豪宅 Luna书房": {"location_id": "silver_moon_manor_luna_study", "visual_prompt": "私密书房，整面书架，深绿绒布窗帘拉合遮光，实木圆桌，皮质高背椅，台灯聚光，茶杯置于桌面，光线局促昏暗，空气沉静。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"Huxley": "三十岁左右男性，深色厚实卫衣，黑色直筒长裤，深棕色工装靴。", "Sylvia": "二十多岁女性，深色修身长裤，暗灰色高领针织衫，深色外套，黑色平底踝靴，左手腕细银手链。", "Elara Vance": "三十岁左右女性，白色医用工作服，内搭浅灰衬衫，深色长裤，白色软底鞋，听诊器挂于颈间。", "Luna Miller": "五十岁左右女性，深酒红色修身长裙，黑色羊绒开衫，珍珠耳钉，黑色低跟皮鞋。"}, "pre_choice_script": "（场景：银月领地 治疗师小屋 — 日）\\n（Sylvia坐在诊床边沿，手里攥着一张纸，视线钉在纸上，一动不动。Elara站在一侧，听诊器还挂在手里，没有开口。）\\n（门开了。Huxley推门进来，目光先落在Elara脸上，再转向Sylvia。两人对视，谁都没有先说话。）\\n（Elara把听诊器放回药柜，拿起外套，往门口走。经过Huxley时，她停了一步，声音压得极低。）\\n\\nElara: Don't push her.\\n\\n（Elara出去，带上门。Huxley走到窗边，背对Sylvia站着，没有靠近。）\\n（沉默。Sylvia把那张纸慢慢折起来，塞进外套口袋，手按在口袋外侧，没有移开。）\\n（连结那一端，忽然涌来一阵清晰的温柔——不属于这里，不属于她。Sylvia的手指猛地收紧，把口袋里的纸攥皱了。）\\n\\nHuxley: （没有转身，声音沉）He's with her right now, isn't he.\\n\\n（不是问句。Sylvia没有否认，只是低下头，喉结滚动了一下。）\\n\\nHuxley: （转过身，直视她）I'm not going anywhere. That's all.\\n\\n（Sylvia抬头看他，嘴唇抿紧，点了一下头。）\\n（这时，小屋门外传来敲门声。一位成员在门外开口。）\\n\\n成员A: Luna Miller wants to see you right now.\\n\\n（场景：银月领地 豪宅 Luna书房 — 傍晚）\\n（台灯聚光，深绿窗帘遮住最后一线天色。Luna Miller坐在高背椅里，茶杯在手，姿态从容，像是等了很久。）\\n（Sylvia推门进来，在圆桌对面坐下，没有等对方开口。）\\n\\nSylvia: You asked to see me.\\n\\nLuna Miller: （不急，慢慢放下茶杯）James was seventeen. He threatened to renounce his Alpha title. For her.\\n\\n（Sylvia没有动，听着。）\\n\\nLuna Miller: Kennedy carries a genetic defect. No offspring. Ever. I ended it.\\n\\nSylvia: （声音很平）And then the Moon Goddess gave him me.\\n\\nLuna Miller: （眼神平静，像在确认一件事实）A solution. At exactly the right time.\\n\\n（特写——Sylvia的下颌绷紧了一秒，随即松开。她没有站起来，把Luna Miller剩下的话全部听完。）\\n（Luna Miller端起茶杯，视线移向别处，像是这场谈话已经结束。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia站起身，没有看Luna Miller，推开书房门走出去。）\\n（场景：银月领地 豪宅 走廊 — 傍晚）\\n（走廊壁灯昏黄，Sylvia在书房门外停下来。她站了几秒，没有动。）\\n（特写——她的手按在口袋外侧，把那张折皱的纸压了一下，又压了一下。她的手背绷着，指节没有松开。她转过身，往主卧方向走去。走廊尽头的灯光把她的影子拉得很长。）\\n\\n黑屏字幕：Luna Miller said there's a gathering tomorrow. You noted that.", "butterfly_effect": "Sylvia absorbed the truth in silence without claiming it. Luna Miller registers no resistance. WIL gains no traction this round.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia站起来，嘴唇动了一下——）\\n\\nSylvia: I'll remember every word—\\n\\n（声音在喉咙里断了一截，比她预想的低了一号。）\\n（Luna Miller终于抬起眼睛，看了她一秒，眼神里有什么东西一闪而过，像是评估，又像是确认。她没有回答，只是慢慢端起茶杯。）\\n\\nLuna Miller: We will hold a meeting tomorrow. Good luck.\\n\\n（Sylvia走出书房。走廊里只有壁灯的昏黄。她在门外停下来，背靠着走廊墙壁站了几秒，闭上眼睛，再睁开。）\\n（特写——她的手按在口袋外侧，把那张折皱的纸压了一下。她转过身，往主卧走去。）\\n\\n黑屏字幕：There's a gathering tomorrow. The way Luna Miller said it — it didn't sound like a notice. It sounded like a move.", "butterfly_effect": "Sylvia attempted to claim her voice but faltered under Luna Miller's gaze. Luna Miller registers a crack, not a wall. WIL marginally strained.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia站起身，声音清晰。）\\n\\nSylvia: I'll remember every word you said tonight.\\n\\n（Luna Miller的茶杯停在半空，第一次，她真正看向Sylvia。）\\n\\nLuna Miller: We will hold a meeting tomorrow. Good luck.\\n\\n（Sylvia转身，推开书房门走出去。）\\n（场景：银月领地 豪宅 走廊 — 傍晚）\\n（走廊壁灯昏黄。Sylvia在书房门外停下来，特写——她的手按在口袋外侧，把那张折皱的纸压了一下。她转过身，往主卧走去。走廊尽头的灯光把她的影子拉得很长。）\\n\\n黑屏字幕：There's a gathering tomorrow. You already know what you're going to do.", "butterfly_effect": "Sylvia named the truth back to Luna Miller on her feet. Luna Miller registers her as a variable, not a constant. WIL and CHA carry a measurable edge forward.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Huxley", "Elara Vance", "Luna Miller"]	{"Huxley": "三十岁左右男性，深色厚实卫衣，黑色直筒长裤，深棕色工装靴。", "Sylvia": "二十多岁女性，深色修身长裤，暗灰色高领针织衫，深色外套，黑色平底踝靴，左手腕细银手链。", "Elara Vance": "三十岁左右女性，白色医用工作服，内搭浅灰衬衫，深色长裤，白色软底鞋，听诊器挂于颈间。", "Luna Miller": "五十岁左右女性，深酒红色修身长裙，黑色羊绒开衫，珍珠耳钉，黑色低跟皮鞋。"}	\N	2026-04-27 18:25:16.262	2026-04-27 18:25:16.262
+cmohj1zah000stoci02s4s5du	cmohj1z87000etocihnpez3b5	EP7	嫉妒	（场景：银月领地 豪宅 议事厅 — 日）\n（字幕：次日）\n\n（议事厅内，成员们已陆续落座，低声交谈。Sylvia坐在席位上，双手平放桌面。）\n\n（大门推开。James走进来。）\n\n（Kennedy的气息随他入场——弥散，清晰，无处可躲。几个成员抬眼对视，没有人开口。）\n\n（特写——Sylvia的手指悄悄收紧，按上椅子扶手。她皮肤下有什么东西在涌动，手背上细密的狼人纹路开始浮现，从指节向上蔓延。）\n\n（Huxley从侧席起身，走到她身后，一只手稳稳落在她肩上。）\n\nHuxley: (极低，只她能听见) Breathe. I've got you.\n\n（特写——纹路慢慢退去。Sylvia的手一点一点松开扶手。）\n\n（James走向主位，落座前扫视全场。视线在Huxley的手上停了一秒——再移到Sylvia的脸上，又停了一秒。他的下颌绷紧，随即移开，坐下。）\n\nJames: (平稳，像什么都没发生) The meeting begins.\n\n（全场无人提那股气味。James始终没有提。）\n\n（快速镜头：集会上众人在激烈讨论，Sylvia也想开口却被Luna Miller瞪了一眼，Sylvia只好闭嘴，随后集会很快结束，众人散场离开。）\n\n（场景：银月领地 豪宅 主卧 — 日）\n（字幕：集会结束后）\n\n（Sylvia推开主卧门，进去，门在身后合上。）\n\n（走廊另一端，Kennedy的声音穿过门缝传进来——笑声，轻快，像在自己家里。）\n\nKennedy: (门外) James, you're impossible—\n\nJames: (门外，低笑) Come on.\n\n（Sylvia站在门边，没有动。特写——她的眼睫颤了一下，随即静止。）\n\n（她转身，走到窗边，站定，视线落在窗外庭院。）\n\n（特写——她的手缓缓覆上腹部，按住，停了两秒，然后放下来。）\n\n（Sylvia转过身，背对窗，面朝紧闭的卧室门。）	{"characters": ["Sylvia", "James", "Huxley", "Kennedy"], "episode_id": "EP 7", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Close the window. Shut it all out.", "description": "Kennedy的笑声从走廊穿进来，轻快得像在自己家里。James那声低笑跟在后面，你从来没听他用那个声调跟你说过话。窗边有风，如果你把窗户关上，至少能切掉一半声音。你的手已经放在窗框上了。"}, {"id": "B", "check": "WIL（意志）10", "content": "Sit down. Stay awake. Memorize everything.", "description": "Kennedy的声音说\\"James, you're impossible\\"，他的低笑跟上来。你可以把窗关上，把自己埋进被子里，假装听不见。但你没有——你把椅子转向门的方向，坐下来，把每一个声音、每一句话、每一个笑声都记在脑子里。明天你会用到它们。"}]}, "episode_title": "嫉妒", "scene_locations": {"银月领地 豪宅 主卧": {"location_id": "silver_moon_manor_master_bedroom", "visual_prompt": "大型卧室，深色实木四柱床，厚重深色床帘，落地窗俯瞰庭院，窗帘半开，庭院灯光从外透入，壁灯熄灭，房间笼罩在昏暗冷光中，床铺未动，窗边单椅空置。", "parent_location_id": "silver_moon_manor"}, "银月领地 豪宅 议事厅": {"location_id": "silver_moon_manor_council_hall", "visual_prompt": "宽阔石材厅堂，长形会议桌，高背木椅，石材地面，穹顶高挑，壁灯排列，主位设有凸起台阶，整体色调冷灰庄严，晨光从侧窗斜入，光带落在空置椅背上。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"James": "三十岁左右男性，深色剪裁西装外套，黑色衬衫，无领带，黑色皮鞋。", "Huxley": "三十岁左右男性，深橄榄色厚实衬衫，卷起袖口至肘部，深色长裤，棕色皮靴。", "Sylvia": "二十多岁女性，深色针织高领毛衣，深灰色直筒长裤，黑色低跟皮靴，左手腕细银手链。", "Kennedy": "二十多岁女性，米白色宽松针织上衣，浅灰色阔腿裤，裸色平底鞋，颈间细金项链。"}, "pre_choice_script": "（场景：银月领地 豪宅 议事厅 — 日）\\n（字幕：次日）\\n\\n（议事厅内，成员们已陆续落座，低声交谈。Sylvia坐在席位上，双手平放桌面。）\\n\\n（大门推开。James走进来。）\\n\\n（Kennedy的气息随他入场——弥散，清晰，无处可躲。几个成员抬眼对视，没有人开口。）\\n\\n（特写——Sylvia的手指悄悄收紧，按上椅子扶手。她皮肤下有什么东西在涌动，手背上细密的狼人纹路开始浮现，从指节向上蔓延。）\\n\\n（Huxley从侧席起身，走到她身后，一只手稳稳落在她肩上。）\\n\\nHuxley: (极低，只她能听见) Breathe. I've got you.\\n\\n（特写——纹路慢慢退去。Sylvia的手一点一点松开扶手。）\\n\\n（James走向主位，落座前扫视全场。视线在Huxley的手上停了一秒——再移到Sylvia的脸上，又停了一秒。他的下颌绷紧，随即移开，坐下。）\\n\\nJames: (平稳，像什么都没发生) The meeting begins.\\n\\n（全场无人提那股气味。James始终没有提。）\\n\\n（快速镜头：集会上众人在激烈讨论，Sylvia也想开口却被Luna Miller瞪了一眼，Sylvia只好闭嘴，随后集会很快结束，众人散场离开。）\\n\\n（场景：银月领地 豪宅 主卧 — 日）\\n（字幕：集会结束后）\\n\\n（Sylvia推开主卧门，进去，门在身后合上。）\\n\\n（走廊另一端，Kennedy的声音穿过门缝传进来——笑声，轻快，像在自己家里。）\\n\\nKennedy: (门外) James, you're impossible—\\n\\nJames: (门外，低笑) Come on.\\n\\n（Sylvia站在门边，没有动。特写——她的眼睫颤了一下，随即静止。）\\n\\n（她转身，走到窗边，站定，视线落在窗外庭院。）\\n\\n（特写——她的手缓缓覆上腹部，按住，停了两秒，然后放下来。）\\n\\n（Sylvia转过身，背对窗，面朝紧闭的卧室门。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia伸手把窗户拉上，玻璃碰框的声音很轻，走廊那边的笑声被切掉了一半。她拉上窗帘，退后一步，站在黑暗里。）\\n\\n（庭院灯光被挡在外面。房间越来越暗，只剩门缝底下的一线光。Kennedy的声音变得模糊、遥远，像隔了一层水。）\\n\\n（Sylvia没有躺下，也没有换衣服。她靠着墙慢慢滑坐下来，抱住膝盖，额头抵上去。）\\n\\n（特写——她的眼睫低垂，喉咙轻轻动了一下，什么都没有说出来。夜色渐深，她就那样坐在地板上。）\\n\\n（门把手转动的声音从走廊传来。）\\n\\n黑屏字幕：You shut yourself in the dark. You don't want to hear that laughter anymore.", "butterfly_effect": "Sylvia's silence tonight was chosen by exhaustion, not surrender. WIL holds but does not advance.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia走向窗边椅子，在那里坐下来，衣服没换，背脊挺直，手放在膝上。）\\n\\n（Kennedy的笑声还在穿过门缝传来，James的低笑跟在后面。Sylvia把每一句都听进去，试着把要说的话排成顺序——但那些笑声让她喉咙发紧，某几个字突然变得很重，压下来。她的手指在膝盖上收了一下。）\\n\\n（特写——她的眼睛没有闭上，视线钉在紧闭的卧室门上，眼眶慢慢发红，但眼泪没有落下来。她把嘴唇抿紧，把那些松散的话重新压回去。）\\n\\n（夜色越来越深。她还是坐在那里，背脊挺直，什么都没有说出来。）\\n\\n（门把手转动的声音从走廊传来。）\\n\\n黑屏字幕：You didn't say a word. But you remembered everything you needed to.", "butterfly_effect": "The words were ready but didn't hold under silence. WIL takes a small wound; the confrontation is not cancelled, only delayed to the edge.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia走向窗边椅子，在那里坐下来，衣服没换，背脊挺直，手放在膝上。）\\n\\n（Kennedy的笑声穿过门缝传来，James的声音跟在后面，她没有去想那些笑声意味着什么。她只是把要说的话在脑子里过了一遍，一条一条，清楚，有顺序，没有眼泪。三次去新月领地。集会上的气味。Elara的诊断。他一次都没有问过。）\\n\\n（特写——她的手指平放在膝盖上，没有收紧，呼吸平稳而缓慢。庭院灯光从窗外透进来，冷白地打在她侧脸上，眼神清醒，像在等一件早就算好了的事情发生。）\\n\\n（夜色深下去。她就这样坐着，不动，不睡，背脊始终是直的。）\\n\\n（门把手转动的声音从走廊传来。）\\n\\n黑屏字幕：Three trips to Crescent territory. The scent at the assembly. Elara's diagnosis. You're ready.", "butterfly_effect": "Sylvia held her ground in silence and arrived at the confrontation with full clarity. WIL strengthened; the words she prepared carry weight.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "James", "Huxley", "Kennedy"]	{"James": "三十岁左右男性，深色剪裁西装外套，黑色衬衫，无领带，黑色皮鞋。", "Huxley": "三十岁左右男性，深橄榄色厚实衬衫，卷起袖口至肘部，深色长裤，棕色皮靴。", "Sylvia": "二十多岁女性，深色针织高领毛衣，深灰色直筒长裤，黑色低跟皮靴，左手腕细银手链。", "Kennedy": "二十多岁女性，米白色宽松针织上衣，浅灰色阔腿裤，裸色平底鞋，颈间细金项链。"}	\N	2026-04-27 18:25:16.266	2026-04-27 18:25:16.266
+cmohj1zam000utocian4iv7mr	cmohj1z87000etocihnpez3b5	EP8	没有否认	（场景：银月领地 豪宅 主卧 — 深夜）\n（庭院灯光从半开的窗帘透进来，在地毯上压出一条细长亮带。Sylvia坐在窗边，背脊挺直，衣服没换，手平放在膝上，视线停在窗外。）\n（门把手转动的声音。James推门进来，脚步在看见她的瞬间顿了一下。随着门开，他身上的气息散进来——Kennedy的气味，清晰，不可回避。）\n（Sylvia没有站起来，也没有转头。）\n\nSylvia: This week. New Moon territory. Three times.\n\n（James把门带上，站在原地，没有说话。）\n\nSylvia: The assembly this morning. Her scent. On your clothes. Everyone smelled it.\n\n（特写——James的喉结动了一下，嘴唇没有张开。）\n\nSylvia: Elara's diagnosis. Six weeks ago. You never asked once.\n\n（她转过头，直视他。）\n\nSylvia: Not once, James.\n\n（James的下颌绷紧，视线落在她脸上，没有移开，也没有反驳。）\n（Sylvia从窗边站起来，走到房间中央，在他面前两步远的位置停下。）\n\nSylvia: I was never your mate. I was your mother's solution.\n\n（沉默压下来。James的手指慢慢收紧，垂在身侧。）	{"characters": ["Sylvia", "James"], "episode_id": "EP 8", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Turn away. There's nothing left to say.", "description": "你站在他面前两步远，他的手指收紧垂在身侧，连一个字的否认都没有给你。你的嘴唇动了一下，最终什么都没说出口——话到喉咙口，又咽回去了。"}, {"id": "B", "check": "WIL（意志）12", "content": "Say it. Tell me Kennedy is suffering too.", "description": "他的眼睛一直盯着你，下颌骨咬死，却没有一句反驳。你盯着他沉默的脸，Kennedy的气味还在这个房间里，你的手在开衫袖口里慢慢握紧。"}]}, "episode_title": "没有否认", "scene_locations": {"银月领地 豪宅 主卧": {"location_id": "silver_moon_manor_master_bedroom", "visual_prompt": "大型卧室，深色实木四柱床，厚重深色床帘，落地窗俯瞰庭院，庭院灯光从窗帘缝隙透入，壁灯调至最低亮度，房间中央地毯上光线昏暗，床边与窗边椅各形成独立光区，空间静谧压抑。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"James": "三十岁左右男性，深色休闲外套，深灰长裤，皮鞋，衣领微松。", "Sylvia": "二十多岁女性，深色针织长裙，外披深灰色开衫，赤脚，左手腕一圈细银链。"}, "pre_choice_script": "（场景：银月领地 豪宅 主卧 — 深夜）\\n（庭院灯光从半开的窗帘透进来，在地毯上压出一条细长亮带。Sylvia坐在窗边，背脊挺直，衣服没换，手平放在膝上，视线停在窗外。）\\n（门把手转动的声音。James推门进来，脚步在看见她的瞬间顿了一下。随着门开，他身上的气息散进来——Kennedy的气味，清晰，不可回避。）\\n（Sylvia没有站起来，也没有转头。）\\n\\nSylvia: This week. New Moon territory. Three times.\\n\\n（James把门带上，站在原地，没有说话。）\\n\\nSylvia: The assembly this morning. Her scent. On your clothes. Everyone smelled it.\\n\\n（特写——James的喉结动了一下，嘴唇没有张开。）\\n\\nSylvia: Elara's diagnosis. Six weeks ago. You never asked once.\\n\\n（她转过头，直视他。）\\n\\nSylvia: Not once, James.\\n\\n（James的下颌绷紧，视线落在她脸上，没有移开，也没有反驳。）\\n（Sylvia从窗边站起来，走到房间中央，在他面前两步远的位置停下。）\\n\\nSylvia: I was never your mate. I was your mother's solution.\\n\\n（沉默压下来。James的手指慢慢收紧，垂在身侧。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia转过身，走到卧室另一侧，在靠墙的椅子上坐下，背对他。）\\n（James站在原地，看着她的背影。沉默拉长。他走向床，在床沿坐下，没有再开口。）\\n（推镜头——两盏壁灯，一侧照着James坐在床边，一侧照着Sylvia坐在椅上，两人之间隔着整个房间的距离。）\\n\\n（字幕：天亮）\\n\\n（晨光从窗帘缝隙透进来。James从床上起身，拿起外套，走向门口。他在门口停了一下，手握着门把，没有回头，推门走出去。）\\n（门带上的声音，轻。）\\n（特写——Sylvia在椅子上坐直了身体，视线落在门上，停了三秒。她的手慢慢握成拳，放在膝上，没有松开。）\\n\\n黑屏字幕：You waited until deep night, then got up and walked to Elara's cottage. You've made your decision.", "butterfly_effect": "Sylvia swallowed the confrontation. Her silence registers as endurance, not surrender — but James leaves without cost. WIL holds, does not grow.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（话出了口，声音比预想的低了一个刻度，带着一丝裂缝。）\\n\\nSylvia: Go ahead. Say it. Tell me Kennedy is suffering too.\\n\\n（James的视线终于移开了，落在地板上。他开口，声音低，像在自言自语。）\\n\\nJames: Kennedy is suffering too.\\n\\n（特写——Sylvia的眼睫微颤，停了两秒。她看着他，把这句话听完了，没有哭，嘴唇抿紧。）\\n（她转过身，走到卧室另一侧，在靠墙的椅子上坐下，背对他。手搭在椅背上，指节白了一下，又松开。）\\n（James在床沿坐下，没有再开口。两人之间隔着整个房间的距离。）\\n\\n（字幕：凌晨）\\n\\n（窗外还是漆黑一片。James睡着了。Sylvia从椅子上起身，拿起外套，走向门口。她在门口停了一下，手握着门把，没有回头，推门走出去。她穿过走廊，走出豪宅大门，朝治疗师小屋走去。）\\n\\n黑屏字幕：\\"Kennedy is suffering too.\\" He said it. And that told you everything. You walked to Elara's cottage. You've made your decision.", "butterfly_effect": "Sylvia forced the words out but absorbed the blow alone. James named Kennedy's suffering without once naming hers. WIL tested, fractionally spent.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（话出了口，声音平稳，清楚。）\\n\\nSylvia: Go ahead. Say it. Tell me Kennedy is suffering too.\\n\\n（James的视线没有移开，他开口，声音低，像在自言自语。）\\n\\nJames: Kennedy is suffering too.\\n\\n（特写——Sylvia的眼睫微颤，停了两秒。她看着他，把这句话听完了，没有哭。她慢慢点了一下头，声音很轻，每个字都落地。）\\n\\nSylvia: I know she is. And you just told me everything I needed to hear.\\n\\n（James的手指收紧，没有说话。）\\n（Sylvia转过身，走到卧室另一侧，在靠墙的椅子上坐下，背对他。她的背脊是直的。）\\n（James在床沿坐下，没有再开口。两人之间隔着整个房间的距离。）\\n\\n（字幕：凌晨）\\n\\n（窗外还是漆黑一片。James睡着了。Sylvia从椅子上起身，拿起外套，走向门口。她在门口停了一下，手握着门把，没有回头，推门走出去。她穿过走廊，走出豪宅大门，朝治疗师小屋走去。）\\n\\n黑屏字幕：He told you everything you needed to hear. You walked to Elara's cottage. You've made your decision.", "butterfly_effect": "Sylvia extracted James's confession and named its meaning aloud. The clarity is hers now, not his to revoke. WIL and INT register a quiet, decisive gain.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "James"]	{"James": "三十岁左右男性，深色休闲外套，深灰长裤，皮鞋，衣领微松。", "Sylvia": "二十多岁女性，深色针织长裙，外披深灰色开衫，赤脚，左手腕一圈细银链。"}	\N	2026-04-27 18:25:16.27	2026-04-27 18:25:16.27
+cmohj1zap000wtocihyi4kvwe	cmohj1z87000etocihnpez3b5	EP9	给我	（场景：银月领地 治疗师小屋 — 凌晨）\n（外面星光闪闪，治疗师小屋窗口透出一线灯光。Sylvia推开门走进去，手边什么都没拿。）\n（Elara从药柜旁转过身，看见她，没有说话，等她开口。）\n\nSylvia: I've decided.I can't bring this child into a broken bond.\n\nSylvia: My child shouldn't live under the shadow of Kennedy.\n\n（Elara放下手里的陶罐，走到桌边，在她对面站定，目光直视。）\n\nElara: The moment it ends — James feels it. Instantly.\n\nElara: Lyra will feel it too. The pain is real.\n\nElara: There's no going back from this.\n\nSylvia: I know.\n\n（Elara沉默两秒，又开口。）\n\nElara: You know.\n\nSylvia: I know.\n\n（两个字落地，小屋里彻底静下来。烛火轻轻晃了一下。）	{"characters": ["Sylvia", "Elara Vance"], "episode_id": "EP 9", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Look away. Wait for her to decide.", "description": "Elara还站在桌对面，陶罐放下的声音还留在空气里。你没有再开口，眼神移开，落在桌角那支烛火上——火苗在动，你的手没有。"}, {"id": "B", "check": "WIL（意志）12", "content": "\\"Give it to me.\\"", "description": "Elara的眼睛还盯着你，\\"You know\\"这两个字刚落地。药柜最底层的暗格还没打开，你听见自己的声音从喉咙里出来，比你预想的更平稳。"}]}, "episode_title": "给我", "scene_locations": {"银月领地 治疗师小屋": {"location_id": "silver_moon_healer_cottage", "visual_prompt": "独立木制小屋，低矮屋檐，草药束悬挂于横梁，木质药柜排列，单支蜡烛燃于桌角，窗口透出一线昏黄灯光，桌面摆有陶罐与布包，深夜，草药气息浓重，空气静止。", "parent_location_id": "silver_moon_healer_cottage"}, "银月领地 豪宅 外小路": {"location_id": null, "visual_prompt": "豪宅通往外围的石板小路，两侧高大针叶林，树隙间月光碎落地面，夜色深蓝，路面无人，远处豪宅轮廓隐于暗中，冷寂无声。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"Sylvia": "二十多岁女性，深色长发散落，穿着深灰色宽松长袖上衣，黑色长裤，深色平底靴，左手腕无任何饰品，双手空握。", "Elara Vance": "三十多岁女性，深棕色亚麻长裙，米白色宽松外套，深色系围裙，头发盘起，颈间细绳挂着小陶瓶。"}, "pre_choice_script": "（场景：银月领地 治疗师小屋 — 凌晨）\\n（外面星光闪闪，治疗师小屋窗口透出一线灯光。Sylvia推开门走进去，手边什么都没拿。）\\n（Elara从药柜旁转过身，看见她，没有说话，等她开口。）\\n\\nSylvia: I've decided.I can't bring this child into a broken bond.\\n\\nSylvia: My child shouldn't live under the shadow of Kennedy.\\n\\n（Elara放下手里的陶罐，走到桌边，在她对面站定，目光直视。）\\n\\nElara: The moment it ends — James feels it. Instantly.\\n\\nElara: Lyra will feel it too. The pain is real.\\n\\nElara: There's no going back from this.\\n\\nSylvia: I know.\\n\\n（Elara沉默两秒，又开口。）\\n\\nElara: You know.\\n\\nSylvia: I know.\\n\\n（两个字落地，小屋里彻底静下来。烛火轻轻晃了一下。）", "post_choice_outcomes": [{"reaction_id": "Reaction 1", "story_content": "（Sylvia的视线落在桌角烛火上，没有再说话。）\\n（Elara看了她片刻，蹲下来，打开柜子最底层的暗格，取出一个深色布包，放到桌面上。布包落桌的声音很轻。）\\n（Sylvia的手没有动。Elara在她对面等着。）\\n\\nElara: （低声，字字清晰）Boiling water. Drink it fast. Don't be alone after.\\n\\n（Sylvia的手终于伸过来，覆上布包，停了一秒，才把它拿起来，攥进手心。她抬起头，看了Elara一眼。）\\n\\nSylvia: Thank you.\\n\\n（她转身，推开门走出去。）\\n\\n（场景：银月领地 豪宅 外小路 — 深夜）\\n（小路两侧是针叶林，月光从树隙落下来。Sylvia一个人走着，手里捏着那个布包。）\\n（特写——她的脚步，稳，没有停顿。月光打在她脸上，眼睛直视前方，嘴唇抿紧，没有回头。）\\n（远景——Sylvia的背影走进豪宅大门，门在她身后关上。月光留在空荡荡的小路上。她穿过走廊，推开主卧的门。）\\n\\n黑屏字幕：The bundle is warm in your hand. You push open the bedroom door, close it behind you. No lights.", "butterfly_effect": "Sylvia's silence before taking the herbs registers as a moment of hesitation absorbed alone. WIL holds but gains no forward momentum.", "trigger_condition": "选择选项 A"}, {"reaction_id": "Reaction 2", "story_content": "（\\"Give it to me.\\"）\\n（话出了口，声音比预想的小了半个音阶。Elara没有立刻动，只是静静看着她。）\\n（沉默拉长了两秒。Sylvia的手指微微收紧，她没有收回视线。）\\n（Elara蹲下来，打开柜子最底层的暗格，取出一个深色布包，放到桌面上。布包落桌的声音很轻。）\\n（Sylvia的手伸过来，覆上去，停了一秒，才攥进手心。）\\n\\nElara: （低声，字字清晰）Boiling water. Drink it fast. Don't be alone after.\\n\\nSylvia: （轻，但清楚）Thank you.\\n\\n（她转身，推开门走出去。）\\n\\n（场景：银月领地 豪宅 外小路 — 凌晨）\\n（月光从树隙落下来。Sylvia一个人走着，手里捏着那个布包，脚步稳，没有停顿。）\\n（特写——月光打在她脸上，眼睛直视前方，嘴唇抿紧，没有回头。）\\n（远景——Sylvia的背影走进豪宅大门，门在她身后关上。月光留在空荡荡的小路上。她穿过走廊，推开主卧的门。）\\n\\n黑屏字幕：The bundle is warm in your hand. You push open the bedroom door, close it behind you. No lights.", "butterfly_effect": "Sylvia spoke first but the voice faltered. The act of asking is logged; the steadiness is not yet earned. WIL registers minimal gain.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "Reaction 3", "story_content": "（\\"Give it to me.\\"）\\n（声音平，落地，不带一丝颤抖。）\\n（Elara看了她一秒，然后蹲下来，打开柜子最底层的暗格，取出一个深色布包，放到桌面上。布包落桌的声音很轻。）\\n（Sylvia的手伸过来，覆上去，没有停顿，直接攥进手心。）\\n\\nElara: （低声，字字清晰）Boiling water. Drink it fast. Don't be alone after.\\n\\n（Sylvia抬起头，和Elara的视线对了一秒。）\\n\\nSylvia: （轻，但清楚）Thank you.\\n\\n（她转身，推开门走出去。Elara站在原地，没有动，看着门口。）\\n\\n（场景：银月领地 豪宅 外小路 — 凌晨）\\n（月光从树隙落下来。Sylvia一个人走着，手里捏着那个布包。）\\n（特写——脚步，稳，没有停顿。月光打在她脸上，眼睛直视前方，嘴唇抿紧，没有回头。）\\n（远景——Sylvia的背影走进豪宅大门，门在她身后关上。月光留在空荡荡的小路上。她穿过走廊，推开主卧的门。）\\n\\n黑屏字幕：The bundle is still warm. You push open the bedroom door, close it behind you. No lights.", "butterfly_effect": "Sylvia named her need aloud without flinching. WIL gains a clear notch; her agency in this moment is self-authored.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Elara Vance"]	{"Sylvia": "二十多岁女性，深色长发散落，穿着深灰色宽松长袖上衣，黑色长裤，深色平底靴，左手腕无任何饰品，双手空握。", "Elara Vance": "三十多岁女性，深棕色亚麻长裙，米白色宽松外套，深色系围裙，头发盘起，颈间细绳挂着小陶瓶。"}	\N	2026-04-27 18:25:16.274	2026-04-27 18:25:16.274
+cmohj1zaw000ytociaif5uzen	cmohj1z87000etocihnpez3b5	EP10	熄灭	（场景：银月领地 豪宅 主卧 — 深夜）\n（Sylvia推开主卧门，把布包放到床头柜上。她去卫生间接了水，放进电热壶，按下开关，退后一步，背靠墙站着等。壁灯是灭的，只有床头柜的台灯亮着，把她的影子拉得很长。）\n（水沸了。她把草药倒进杯里，看着水色一点一点变深，端起来，一口喝尽。）\n（特写——空杯放回桌面。她的手没有抖。）\n（时间流逝。Sylvia慢慢滑落到地板上，双臂抱住膝盖，额头抵在膝上。特写——她的牙关咬紧，指甲掐进掌心，没有发出任何声音。）\n（字幕：黎明前）\n（特写——她的手慢慢松开，掌心留下四道红痕。她的眼睛睁开，直视前方，喉结滚动一下。腹中那点温热悄然消失。同一瞬间，她的肩膀微微下沉，像什么东西断了。）\n（豪宅远端传来一声低沉的Alpha怒吼，随即是沉重的脚步声。主卧门被撞开。）\n（James冲进来，扫到地板上的Sylvia，眼睛骤然变深。他猛地走上前，蹲下来，抓住她的肩膀。）\n\nJames: (声音撕裂) What did you do? I felt it — I felt my child die.\n\n（Sylvia撑着地板站起来，拍开他的手。她直视他，嘴唇抿紧，没有后退。）\n\nSylvia: (声音极平) I spared him. From this. From you.\n\n（James腾地站起来，双手直接扼向她的咽喉——手指触到她颈侧皮肤的瞬间，他停住了。）\n（特写——Sylvia的眼睛。没有恐惧，没有求饶，只是看着他，平静得像一块石头。）\n（James的双手悬在她颈侧，没有继续动。他的下颌绷紧，喉咙里发出一声低哑的声音，却没有一个字成形。）\n（两人对视。James的手还没有收回去。）	{"characters": ["Sylvia", "James"], "episode_id": "EP 10", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Turn away. Don't give him the last word.", "description": "他的手指还贴着你颈侧，掌心的温度透过皮肤传进来。你的四道指甲痕还在发烫，地板上那个坐压的浅痕就在你脚边。你把视线移开——不是因为怕，是因为你已经没有什么要给他了。"}, {"id": "B", "check": "WIL（意志）12", "content": "Say the words. Now. To his face.", "description": "他的手还没有放下来，你能感觉到他的呼吸打在你额头上。空杯还在床头柜上，草药的苦味还在你喉咙里。你张开嘴——不是明天，不是在长老面前，就是现在，就是对着这双手。"}]}, "episode_title": "熄灭", "scene_locations": {"银月领地 豪宅 主卧": {"location_id": "silver_moon_manor_master_bedroom", "visual_prompt": "大型卧室，深色实木四柱床，厚重深色床帘半敞，地毯柔暗，落地窗帘拉合，壁灯熄灭，仅床头柜台灯亮着昏黄光晕，床头柜上有空陶杯与布包，地板中央有一处坐压的浅痕，空气中残留草药气息，黎明前天色漆黑。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"James": "三十岁左右男性，黑色厚实睡裤，深色无袖上衣，赤足，发型凌乱。", "Sylvia": "二十多岁女性，深色宽松长袖上衣，深灰色长裤，赤脚，头发散落，左掌心有四道浅红压痕。"}, "pre_choice_script": "（场景：银月领地 豪宅 主卧 — 深夜）\\n（Sylvia推开主卧门，把布包放到床头柜上。她去卫生间接了水，放进电热壶，按下开关，退后一步，背靠墙站着等。壁灯是灭的，只有床头柜的台灯亮着，把她的影子拉得很长。）\\n（水沸了。她把草药倒进杯里，看着水色一点一点变深，端起来，一口喝尽。）\\n（特写——空杯放回桌面。她的手没有抖。）\\n（时间流逝。Sylvia慢慢滑落到地板上，双臂抱住膝盖，额头抵在膝上。特写——她的牙关咬紧，指甲掐进掌心，没有发出任何声音。）\\n（字幕：黎明前）\\n（特写——她的手慢慢松开，掌心留下四道红痕。她的眼睛睁开，直视前方，喉结滚动一下。腹中那点温热悄然消失。同一瞬间，她的肩膀微微下沉，像什么东西断了。）\\n（豪宅远端传来一声低沉的Alpha怒吼，随即是沉重的脚步声。主卧门被撞开。）\\n（James冲进来，扫到地板上的Sylvia，眼睛骤然变深。他猛地走上前，蹲下来，抓住她的肩膀。）\\n\\nJames: (声音撕裂) What did you do? I felt it — I felt my child die.\\n\\n（Sylvia撑着地板站起来，拍开他的手。她直视他，嘴唇抿紧，没有后退。）\\n\\nSylvia: (声音极平) I spared him. From this. From you.\\n\\n（James腾地站起来，双手直接扼向她的咽喉——手指触到她颈侧皮肤的瞬间，他停住了。）\\n（特写——Sylvia的眼睛。没有恐惧，没有求饶，只是看着他，平静得像一块石头。）\\n（James的双手悬在她颈侧，没有继续动。他的下颌绷紧，喉咙里发出一声低哑的声音，却没有一个字成形。）\\n（两人对视。James的手还没有收回去。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia把视线从James脸上移开，转向落地窗的方向。窗帘拉合，什么也看不见，但她就这样站着，背脊是直的。）\\n（James的手悬了很久，慢慢垂落。他的嘴唇动了动，没有发出声音。）\\n\\nJames: (声音低沉，像压着什么) You can't just—\\n\\nSylvia: (不转头，声音平静) Tomorrow. In front of every Elder. I will say the words. Get ready.\\n\\n（沉默。James站在原地，拳头攥紧又松开。Sylvia没有再开口，也没有动。她的手垂在身侧，掌心的红痕朝下。）\\n（James最终转身，沉重的脚步声走向门口。门没有关上，走廊里透进一线灰白的黎明前光线。）\\n\\n黑屏字幕：Tomorrow. The council hall. In front of every Elder. You will say the words yourself.", "butterfly_effect": "Sylvia withholds the final confrontation, preserving her declaration for the council. WIL holds steady but gains no forward momentum.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia深吸一口气，开口——）\\n\\nSylvia: I, Sylvia—\\n\\n（声音在第一个字之后断了。她的喉咙发紧，草药的苦味还压在舌根，身体在这一刻背叛了她的意志。）\\n（James的眼睛骤然锁住她，手指微微收紧，随即又停住。）\\n\\nJames: (声音低沉，像压着什么) You don't even know what you're doing.\\n\\n（Sylvia闭上眼睛，一秒，两秒。她重新睁开，下颌骨咬紧，声音比刚才低，但稳住了。）\\n\\nSylvia: Tomorrow. In front of every Elder. I will say the words. Get ready.\\n\\n（James的手缓缓放下来，停在身侧。他站在原地，没有离开，也没有再开口。Sylvia转向窗边，背对他，不再看他。）\\n\\n黑屏字幕：You couldn't finish tonight. But tomorrow, in the council hall, in front of everyone — you will.", "butterfly_effect": "The words broke before they landed. James registers the hesitation. WIL takes a fractional hit, but the declaration stands for tomorrow.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia没有移开视线，就这样直视着他，开口，声音清晰，一字一顿。）\\n\\nSylvia: I, Sylvia, reject you, James, as my Alpha and my mate—\\n\\n（James的手猛地收回来，像被烫到。他后退半步，眼睛里有什么东西裂开。）\\n\\nJames: (声音撕裂) Stop—\\n\\nSylvia: (继续，声音没有颤抖) —from this moment, and from every moment after.\\n\\n（话音落下，房间里的空气像被什么东西猛地抽走。James站在原地，呼吸急促，双手攥成拳。Sylvia的身体因誓词不完整而传来一阵刺痛，但她站着，没有动。）\\n\\nJames: (声音低沉，像压着什么) You don't know what you're doing.\\n\\nSylvia: (转身，不再看他) I know exactly what I'm doing.\\n\\n（James的手缓缓放下来，停在身侧。Sylvia走向窗边，背对他，不再开口。）\\n\\n黑屏字幕：You've already said it once. Tomorrow, in the council hall, in front of every Elder, you'll say it again.", "butterfly_effect": "The words were spoken first in private — unwitnessed, incomplete, but real. Sylvia's WIL registers a meaningful gain. James's composure fractures earlier than anticipated.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "James"]	{"James": "三十岁左右男性，黑色厚实睡裤，深色无袖上衣，赤足，发型凌乱。", "Sylvia": "二十多岁女性，深色宽松长袖上衣，深灰色长裤，赤脚，头发散落，左掌心有四道浅红压痕。"}	\N	2026-04-27 18:25:16.281	2026-04-27 18:25:16.281
+cmohj1zb30010tocipilm6ln3	cmohj1z87000etocihnpez3b5	EP11	撤不回	（字幕：次日清晨）\n\n（场景：银月领地 豪宅 议事厅 — 日）\n（长老议会成员已在长桌两侧就座。Cynthia 坐在左侧席位，神情平静。James 站在主位台阶上，没有落座。Huxley 靠墙站在侧席，视线落在厅中央。）\n\n（Sylvia 走进议事厅。脚步声在石材地面上清晰回响，她走到厅中央，停下来。全场安静。）\n\nSylvia: (声音清晰，整个厅都听得见) I, Sylvia, formally reject this bond. The holder chose another — repeatedly, openly. He used his Alpha command to silence me. The bond caused me physical harm. By Pack law, I exercise my right to reject. Unilaterally. In front of witnesses.\n\n（话音落下，厅内一片死寂。James 从主位猛地站起来。）\n\nJames: (Alpha 命令，声音带着强制压迫) I command you to withdraw those words. Now.\n\n（Alpha 命令砸下来。Sylvia 的双腿不受控制地弯折，双膝重重触地，石材地面的冷硬感透过裙料直抵膝骨。她的手攥住自己的膝盖，指节泛白，牙关咬紧，没有发出声音。）\n\n（席间有人倒吸一口气。没有人站起来。）\n\n（Sylvia 抬起头，慢慢撑直身体，一节一节站起来，站直，直视 James。）\n\nSylvia: (喘着气，声音没有抖) The words are said. I don't take them back.\n\n（Huxley 从侧席起身，大步走到 Sylvia 身前，背对她，正面朝向 James。）\n\nHuxley: (声音平稳，没有抬高，整个厅里听得一字不差) Alpha command governs Pack affairs. Not this. These are two different things.\n\n（James 的视线从 Huxley 身上移过去，两人对视。中间是站直了的 Sylvia。沉默维持了几秒。）\n\n（Cynthia 从左侧席位站起来。）\n\nCynthia: (语气平，像在宣读条文) A public rejection vow cannot be withdrawn by Alpha command. Pack law is clear. The council will rule within three days.\n\n（James 和 Huxley 同时转向她。Cynthia 的视线越过两人，落在 Sylvia 身上，停了一秒，没有表情。）\n\n（特写 — 议事厅正面。James 站在台阶上，Huxley 站在厅中，Sylvia 站在两人之间，身体直立，呼吸平稳。）	{"characters": ["Sylvia", "James", "Huxley", "Cynthia"], "episode_id": "EP 11", "choice_node": {"type": "分支型", "options": [{"id": "A", "check": "WIL（意志）12", "content": "Hold your ground. Stay standing where you are.", "description": "你的膝盖还在发疼，石材地面的冷意还没散。Cynthia 说了\\"三天\\"——三天之内议会裁定，三天之内你仍是誓词宣读人，仍站在这个厅里。James 还在台阶上看着你，Huxley 还在你身前一步的位置。你没有动。"}, {"id": "B", "check": "INT（智慧）14", "content": "Cite the review protocol. Refuse to leave the hall.", "description": "Cynthia 说完\\"三天\\"的那一刻，你脑子里某个东西咬住了那两个字。审议期。誓词宣读人。公开场合出席权。这些不是你发明的规则——是领地规程白纸黑字写着的。James 还没开口，但你看见他已经往你这边迈出了半步。"}]}, "episode_title": "撤不回", "scene_locations": {"银月领地 豪宅 议事厅": {"location_id": "silver_moon_manor_council_hall", "visual_prompt": "宽阔石材厅堂，长形会议桌两侧长老就座，主位台阶空置，壁灯冷白，穹顶高挑，石材地面中央留有空旷站立区，整体色调冷灰庄严，光线硬而平。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"James": "三十岁左右男性，深灰色西装外套，黑色衬衫，深色西裤，黑色皮鞋，无领带。", "Huxley": "三十岁左右男性，黑色战术夹克，深色长裤，军靴，腰间无武装。", "Sylvia": "二十多岁女性，深色高领针织长裙，黑色细跟低靴，头发松散垂落，无配饰。", "Cynthia": "五十岁左右女性，藏蓝色正装外套，白色衬衫，深色直筒裤，低跟皮鞋，银色胸针。"}, "pre_choice_script": "（字幕：次日清晨）\\n\\n（场景：银月领地 豪宅 议事厅 — 日）\\n（长老议会成员已在长桌两侧就座。Cynthia 坐在左侧席位，神情平静。James 站在主位台阶上，没有落座。Huxley 靠墙站在侧席，视线落在厅中央。）\\n\\n（Sylvia 走进议事厅。脚步声在石材地面上清晰回响，她走到厅中央，停下来。全场安静。）\\n\\nSylvia: (声音清晰，整个厅都听得见) I, Sylvia, formally reject this bond. The holder chose another — repeatedly, openly. He used his Alpha command to silence me. The bond caused me physical harm. By Pack law, I exercise my right to reject. Unilaterally. In front of witnesses.\\n\\n（话音落下，厅内一片死寂。James 从主位猛地站起来。）\\n\\nJames: (Alpha 命令，声音带着强制压迫) I command you to withdraw those words. Now.\\n\\n（Alpha 命令砸下来。Sylvia 的双腿不受控制地弯折，双膝重重触地，石材地面的冷硬感透过裙料直抵膝骨。她的手攥住自己的膝盖，指节泛白，牙关咬紧，没有发出声音。）\\n\\n（席间有人倒吸一口气。没有人站起来。）\\n\\n（Sylvia 抬起头，慢慢撑直身体，一节一节站起来，站直，直视 James。）\\n\\nSylvia: (喘着气，声音没有抖) The words are said. I don't take them back.\\n\\n（Huxley 从侧席起身，大步走到 Sylvia 身前，背对她，正面朝向 James。）\\n\\nHuxley: (声音平稳，没有抬高，整个厅里听得一字不差) Alpha command governs Pack affairs. Not this. These are two different things.\\n\\n（James 的视线从 Huxley 身上移过去，两人对视。中间是站直了的 Sylvia。沉默维持了几秒。）\\n\\n（Cynthia 从左侧席位站起来。）\\n\\nCynthia: (语气平，像在宣读条文) A public rejection vow cannot be withdrawn by Alpha command. Pack law is clear. The council will rule within three days.\\n\\n（James 和 Huxley 同时转向她。Cynthia 的视线越过两人，落在 Sylvia 身上，停了一秒，没有表情。）\\n\\n（特写 — 议事厅正面。James 站在台阶上，Huxley 站在厅中，Sylvia 站在两人之间，身体直立，呼吸平稳。）", "post_choice_outcomes": [{"reaction_id": "Reaction 1", "is_bad_ending": true, "story_content": "（Sylvia 站在原地，双腿却开始细微颤抖——Alpha 命令的余震还在神经里走。她咬住牙关，试图稳住，但身体已经先于意志开始弯折。）\\n\\n（James 从台阶上走下来，脚步声在石材地面上一下一下落地，每一声都清晰。他走到 Sylvia 面前，低头看她。）\\n\\nJames: (声音压低，只有她听得见) You're shaking.\\n\\n（Sylvia 没有回答。她的视线直视前方，但焦距已经开始涣散。）\\n\\nJames: (转向长老席，声音恢复平稳) The vow was spoken under physical duress. Council — she cannot stand on her own. The vow's validity is in question.\\n\\n（Cynthia 的眉头微微收紧，但没有立刻开口。另一名长老低声与旁边的人交换了什么。）\\n\\n（Sylvia 的腿彻底撑不住，她向侧面倾倒——Huxley 伸手，但 James 更快，一把扶住她的手臂，将她稳在自己身侧。）\\n\\nJames: (对长老席，语气平静而坚决) My Luna needs rest. We'll revisit this when she's recovered.\\n\\n（Sylvia 想开口，喉咙里发出的只是一声哑的气音。James 的手握住她的手臂，力道不重，却不容挣脱。）\\n\\n（Cynthia 站在原地，看着这一幕，没有说话。）\\n\\n（James 扶着 Sylvia 转身走向议事厅的门。Huxley 在原地没有动——他没有理由拦住一个扶着\\"晕倒的Luna\\"离开的Alpha。）\\n\\n（议事厅的大门在 Sylvia 身后关上。誓词悬在空中，没有裁定，没有见证，只剩下James的手还扣在她的手臂上，带她走回那个她以为已经离开的地方。）\\n\\n黑屏字幕：You stood up. You said the words. But your body fell before your will did — and he was waiting for exactly that. The vow hangs in the air. No one ruled on it. No one withdrew it. The door just closed, and you're back in that room again.\\n\\nGame Over.", "butterfly_effect": "Sylvia's body failed her under Alpha command residue. James seized the moment to invalidate the vow on health grounds. The council did not intervene. Game over.", "trigger_condition": "选择选项A - 检定失败", "bad_ending_details": {"nature": "身体在Alpha命令余震下失控倒下，James以\\"健康状况\\"为由质疑誓词有效性，将Sylvia带离议事厅，誓词被悬置而非裁定", "status": "全剧中断：游戏结束。", "ending_text": "You stood up. You said the words. But your body fell before your will did — and he was waiting for exactly that. The vow hangs in the air. No one ruled on it. No one withdrew it. The door just closed, and you're back in that room again.", "chain_reactions": "誓词既未被撤回，亦未获裁定，悬置在最对James有利的灰色地带。Sylvia被带回主卧，身体已因近拒绝状态持续恶化，而她唯一一次当众发声的机会已被James的手臂抹去。Huxley无法在程序之外强行介入，只能眼看议事厅的门关上。主线断绝。", "core_consequence": "Sylvia在全体长老面前失去站立能力，James利用她的身体失控将她带离议事厅，誓词的公开性与有效性被当场质疑，Cynthia未能及时介入，审议程序在未正式启动的状态下被James以「健康理由」搁置。"}}, {"reaction_id": "Reaction 2", "target_path": "mainline", "is_bad_ending": false, "story_content": "（Sylvia 站在原地，没有动。她的膝盖还在发疼，但脚踩在石材地面上，稳的。）\\n\\n（James 从台阶上走下来，走到她面前，压低声音。）\\n\\nJames: (只有她听得见) You're coming with me. Now.\\n\\n（Sylvia 没有开口，也没有后退。她的视线直视他，等着。）\\n\\n（James 的手抬起来，朝她手臂的方向——）\\n\\n（Cynthia 的声音从左侧席位传来，不高，却在整个厅里落地有声。）\\n\\nCynthia: Alpha. The vow has been spoken in front of the council. The speaker's physical status from this point falls under council oversight. Any action taken against her person in this hall will be recorded.\\n\\n（James 的手停在半空。他转头看向 Cynthia，两人对视了三秒。Cynthia 没有移开视线。）\\n\\n（James 的手缓缓放下来。他转身，走回主位台阶，背对全场。）\\n\\n黑屏字幕：You didn't move. You didn't speak. You just stood there — and that was enough. The council is watching now. Three days. The clock starts.", "butterfly_effect": "Sylvia held her ground under Alpha command without external rescue; her public act of standing is now formally on council record. WIL consolidates. The council's oversight of her physical status is established as a procedural fact.", "trigger_condition": "选择选项A - 检定成功"}, {"reaction_id": "Reaction 3", "target_path": "branch", "is_bad_ending": false, "story_content": "（Cynthia 的\\"三天\\"还在厅里回响，James 已经从台阶上走下来，朝 Sylvia 的方向迈出半步。）\\n\\nSylvia: (声音平，不高，但整个厅都听得见) Under Pack review protocol, the vow speaker retains the right to be present in any public space within the territory during the three-day deliberation period. That's written procedure. Not subject to Alpha command.\\n\\n（James 停住了。他的表情收紧了一下，很快压平。）\\n\\nJames: (低声) Sylvia—\\n\\nSylvia: (没有看他，视线落在长老席) Cynthia. Is that correct?\\n\\n（短暂的沉默。Cynthia 从席位上微微抬起头，看了 Sylvia 一眼，然后看向 James。）\\n\\nCynthia: (语气平，像在宣读条文) That is correct.\\n\\n（James 没有再开口。Cynthia 和两名长老还未离席，他无法在此刻再发出 Alpha 命令而不让自己当场再落一次脸。）\\n\\n（沉默维持了几秒。议事厅侧门被推开，Kennedy 被引进来。她走进厅，抬起头，看见 Sylvia 还坐在自己的席位上——她的脚步停住了，停在原地，脸上的从容瞬间出了裂缝。）\\n\\n（全场没有人说话。Sylvia 没有站起来，也没有开口，只是坐在那里，等着。）\\n\\n黑屏字幕：You used his own rules against him. Kennedy froze at the door. James couldn't say a word. The council heard everything. Three days. The clock starts.", "butterfly_effect": "Sylvia used procedural knowledge as a weapon in a public space, neutralizing James's Alpha authority without physical confrontation. INT sharply elevated; her capacity to hold ground through rules rather than force registers as a new mode of resistance.", "trigger_condition": "选择选项B - 检定成功"}, {"reaction_id": "Reaction 4", "is_bad_ending": true, "story_content": "（Sylvia 开口，声音比她预期的要低，带着一丝颤。）\\n\\nSylvia: Under review protocol — the vow speaker has the right to remain in public spaces during deliberation. It's written—\\n\\nJames: (打断，声音不高，却有明确的重量) There is no protocol that supersedes my authority in my own hall.\\n\\n（Sylvia 停了一下。她知道那条规程是真实存在的，但她说不出具体的条文编号，说不出它出自哪一份文件。她的话卡在喉咙里，像一把没有柄的刀。）\\n\\n（席间有人低声交谈。Cynthia 没有站起来。）\\n\\nJames: (转向长老席，语气平稳) The deliberation period begins when the council formally convenes. That has not happened yet. Tonight's proceedings are concluded.\\n\\n（他走向 Sylvia，声音压到只有她听得见。）\\n\\nJames: (低声) You had your moment. Now walk with me, or I will carry you.\\n\\n（Sylvia 看向 Cynthia。Cynthia 的视线落在桌面上的文件夹，没有抬起来。）\\n\\n（Huxley 在她身侧动了一下，但 James 的视线已经扫过去，两人对视，James 的 Alpha 气压无声漫开。）\\n\\n（Sylvia 站起来。她的腿是稳的。但她走向门口，是跟在 James 身后走的。）\\n\\n（议事厅的门在她身后关上。她说出了那些话，但她走出去的方式，让那些话的重量在这个厅里消散了一半。）\\n\\n（特写 — 走廊尽头的光。Sylvia 的脚步声在深色地毯上几乎听不见。James 走在她前面，没有回头。）\\n\\n黑屏字幕：The rule was real. You knew it existed. But you couldn't name it — and that was all he needed. Sometimes the truth isn't enough. You also need the words to prove it. And tonight, those words didn't come.\\n\\nGame Over.", "butterfly_effect": "Sylvia attempted to use procedural rules but failed to cite specifics. James countered decisively. The vow is suspended without formal review. Game over.", "trigger_condition": "选择选项B - 检定失败", "bad_ending_details": {"nature": "援引规程时无法给出具体条文，被James当场反驳，Cynthia未能介入，Sylvia在话语失据后被James带离议事厅", "status": "全剧中断：游戏结束。", "ending_text": "The rule was real. You knew it existed. But you couldn't name it — and that was all he needed. Sometimes the truth isn't enough. You also need the words to prove it. And tonight, those words didn't come.", "chain_reactions": "与选项A的失败截然不同——这次不是身体倒下，而是话语本身在最关键的一步断了链。她鼓起勇气用规则反击，却因说不出具体条文而让James把那条规则变成了他的武器。誓词悬置，审议程序未能正式启动，主线断绝。", "core_consequence": "Sylvia的规程援引因缺乏具体依据被James以\\"议会尚未正式召集\\"为由驳回，Cynthia保持沉默，Huxley被Alpha气压压制无法行动，Sylvia在话语失据后跟随James离开，誓词在最脆弱的状态下被搁置。"}}]}	["Sylvia", "James", "Huxley", "Cynthia"]	{"James": "三十岁左右男性，深灰色西装外套，黑色衬衫，深色西裤，黑色皮鞋，无领带。", "Huxley": "三十岁左右男性，黑色战术夹克，深色长裤，军靴，腰间无武装。", "Sylvia": "二十多岁女性，深色高领针织长裙，黑色细跟低靴，头发松散垂落，无配饰。", "Cynthia": "五十岁左右女性，藏蓝色正装外套，白色衬衫，深色直筒裤，低跟皮鞋，银色胸针。"}	\N	2026-04-27 18:25:16.287	2026-04-27 18:25:16.287
+cmohj1zbc0012tociaa6i9p2l	cmohj1z87000etocihnpez3b5	EP12	等你了	（场景：银月领地 豪宅 主卧 — 傍晚）\n（议事厅散场。James一言不发地走在Sylvia前面，穿过走廊，推开主卧的门，示意她进去。）\n\nJames: Stay here tonight. Kennedy is attending the gathering as a guest. You don't show up.\n\n（Sylvia站在门口，看着他。）\n\nSylvia: The review—\n\nJames: （打断她，声音压低）Three days. You sit here, keep quiet, and wait.\n\n（他没有等她回答，退出去，门从外面锁上。金属门锁咔嗒一声，走廊里的脚步声远去。）\n\n（Sylvia站在原地，听着锁舌落定的声音。她慢慢转身，看了一眼空荡荡的卧室——床头台灯还亮着，落地窗窗帘拉合，什么都看不见。）\n\n（时间流逝。字幕：深夜）\n\n（Sylvia靠坐在床脚的地板上，双臂抱膝。高烧从脊背蔓延上来，不完整的拒绝状态开始反噬——誓词已当众宣读，连结却悬而未决，撕裂感一波一波地涌。她咬紧后槽牙，额头抵在膝盖上，指甲掐进掌心。）\n\n（走廊外隐约传来集会的动静。一个女人的笑声穿过墙壁——是Kennedy，清晰可辨。）\n\n（Sylvia闭上眼睛，在心里唤Lyra。第一声，没有回应。第二声，微弱的震颤，像一根快烧尽的烛芯。第三声——什么也没有了。）\n\n（特写——她的手指松开，掌心四道红痕。额头上薄汗，嘴唇干裂。）\n\n（窗格被轻轻敲了两下。）\n\n（Sylvia抬起头。窗帘缝隙透进一线月光，一个黑影贴在玻璃外侧。）\n\n（她撑着床沿站起来，拉开窗帘一角——Daisy蹲在窗台外沿，看见她的脸色，表情骤然绷紧。）\n\n（Sylvia打开窗锁。Daisy翻进来，伸手摸了摸她的额头，手指缩回去的速度说明了一切。）\n\nDaisy: （压低声音，语速很快）You're burning up. Lyra?\n\nSylvia: （气声）...fading.\n\nDaisy: （咬了一下嘴唇，没有犹豫太久）If you stay here another night, she won't make it. Neither will you.\n\n（沉默。走廊外传来集会散场的脚步声，渐渐远去。）\n\nDaisy: Huxley's waiting at the east border. Bag's packed. Route's clear during shift change.\n\n（Sylvia看着Daisy伸过来的手，没有立刻接。她的视线落在门上——那扇从外面锁住的门。）	{"characters": ["Sylvia", "James", "Daisy", "Kennedy"], "episode_id": "EP 12", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Take Daisy's hand. Go now.", "description": "Daisy的手就在你面前，窗户开着，夜风灌进来带着松木和泥土的气味。走廊外已经安静了，集会散了，巡逻换班还有一刻钟。你的膝盖在抖，Lyra的存在感像水渍一样在蒸发。门从外面锁着——但窗户没有。"}, {"id": "B", "check": "WIL（意志）12", "content": "Stand up on your own. Walk out through the window.", "description": "Daisy的手伸在半空，但你低头看了看自己的掌心——四道红痕还在。你撑着床沿，把重心移到双脚上。高烧让视线有点虚，但你知道接下来每一步都得是自己走的，从这扇窗开始。"}]}, "episode_title": "等你了", "scene_locations": {"银月领地 豪宅 主卧": {"location_id": "silver_moon_manor_master_bedroom", "visual_prompt": "大型卧室，深色实木四柱床，厚重深色床帘半拢，地毯柔暗，落地窗窗帘拉合，壁灯调至最低亮度，门缝透出走廊昏黄光线，床头柜上草药茶杯已空，空气沉闷压抑。", "parent_location_id": "silver_moon_manor"}, "银月领地 豪宅 走廊": {"location_id": "silver_moon_manor_corridor", "visual_prompt": "长廊，深色实木护壁板，壁灯昏黄，地面深色地毯，走廊尽头透出集会厅方向的暖光，隐约可见人影晃动。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"Daisy": "二十多岁女性，黑色连帽卫衣，深色紧身裤，运动鞋，头发随意扎起，神色紧张。", "James": "三十岁左右男性，银月领地Alpha正装——深炭灰色西装，白色衬衫，无领带，袖口金属袖扣，黑色皮鞋。", "Sylvia": "二十多岁女性，深色长发松散，穿着室内便装——深灰色宽松针织衫，黑色长裤，赤脚，左手腕无饰品。", "Kennedy": "二十多岁女性，新月领地访客装束——米白色长款外套，内搭浅灰针织连衣裙，棕色踝靴，发型整洁盘起。（仅声音出现）"}, "pre_choice_script": "（场景：银月领地 豪宅 主卧 — 傍晚）\\n（议事厅散场。James一言不发地走在Sylvia前面，穿过走廊，推开主卧的门，示意她进去。）\\n\\nJames: Stay here tonight. Kennedy is attending the gathering as a guest. You don't show up.\\n\\n（Sylvia站在门口，看着他。）\\n\\nSylvia: The review—\\n\\nJames: （打断她，声音压低）Three days. You sit here, keep quiet, and wait.\\n\\n（他没有等她回答，退出去，门从外面锁上。金属门锁咔嗒一声，走廊里的脚步声远去。）\\n\\n（Sylvia站在原地，听着锁舌落定的声音。她慢慢转身，看了一眼空荡荡的卧室——床头台灯还亮着，落地窗窗帘拉合，什么都看不见。）\\n\\n（时间流逝。字幕：深夜）\\n\\n（Sylvia靠坐在床脚的地板上，双臂抱膝。高烧从脊背蔓延上来，不完整的拒绝状态开始反噬——誓词已当众宣读，连结却悬而未决，撕裂感一波一波地涌。她咬紧后槽牙，额头抵在膝盖上，指甲掐进掌心。）\\n\\n（走廊外隐约传来集会的动静。一个女人的笑声穿过墙壁——是Kennedy，清晰可辨。）\\n\\n（Sylvia闭上眼睛，在心里唤Lyra。第一声，没有回应。第二声，微弱的震颤，像一根快烧尽的烛芯。第三声——什么也没有了。）\\n\\n（特写——她的手指松开，掌心四道红痕。额头上薄汗，嘴唇干裂。）\\n\\n（窗格被轻轻敲了两下。）\\n\\n（Sylvia抬起头。窗帘缝隙透进一线月光，一个黑影贴在玻璃外侧。）\\n\\n（她撑着床沿站起来，拉开窗帘一角——Daisy蹲在窗台外沿，看见她的脸色，表情骤然绷紧。）\\n\\n（Sylvia打开窗锁。Daisy翻进来，伸手摸了摸她的额头，手指缩回去的速度说明了一切。）\\n\\nDaisy: （压低声音，语速很快）You're burning up. Lyra?\\n\\nSylvia: （气声）...fading.\\n\\nDaisy: （咬了一下嘴唇，没有犹豫太久）If you stay here another night, she won't make it. Neither will you.\\n\\n（沉默。走廊外传来集会散场的脚步声，渐渐远去。）\\n\\nDaisy: Huxley's waiting at the east border. Bag's packed. Route's clear during shift change.\\n\\n（Sylvia看着Daisy伸过来的手，没有立刻接。她的视线落在门上——那扇从外面锁住的门。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia握住Daisy的手。Daisy的掌心是干燥的，力道稳，把她拉起来。）\\n\\n（两人翻出窗台。月光下，豪宅侧翼的草地上没有人影。Daisy搀着Sylvia贴着墙根走，脚步很轻，没有发出声音。）\\n\\n（走廊那头传来一声门响——有人经过主卧门外，脚步停了一秒，又走开了。Daisy的手在Sylvia肩上收紧了一下，两人没有停。）\\n\\n（特写——Sylvia的赤脚踩在湿草地上，脚趾因高烧而微微蜷缩，但她没有回头看那扇亮着台灯的窗户。两人贴着外墙继续走，绕过花园拐角。）\\n\\n黑屏字幕：Your feet are cold. Your knees are shaking. But you didn't stop.", "butterfly_effect": "Sylvia's escape relied on Daisy's physical support; WIL takes a minor hit as the departure registers as assisted rather than autonomous.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia松开床沿，试图自己站稳——膝盖一软，身体往前倾，Daisy眼疾手快扶住她的手臂。）\\n\\nDaisy: （低声，没有责备）I've got you.\\n\\n（Sylvia咬紧牙，重新找到重心。她推开Daisy的手，自己迈向窗台——但翻出去的时候又踉了一下，Daisy从后面托住她的腰，两人一起落在草地上。）\\n\\n（月光下，Sylvia跪在湿草地上喘了两口气，然后自己撑着站起来。Daisy没有再伸手，只是紧紧跟着她。两人贴着墙根绕过花园拐角。）\\n\\n黑屏字幕：You fell. But you got back up on your own.", "butterfly_effect": "Sylvia attempted self-reliance but her body failed her; WIL registers effort but not consolidation. The escape proceeds with partial assistance.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia松开床沿，站直。膝盖在抖，但她的重心稳住了。）\\n\\n（她没有接Daisy的手，自己走到窗前，双手撑住窗框，翻了出去。落地的瞬间腿弯了一下——撑住了，没有倒。）\\n\\n（Daisy紧跟着翻出来，看了她一眼，什么都没说，只是跟上。）\\n\\n（月光下，两人贴着墙根走。Sylvia的赤脚踩在湿草地上，每一步都清晰，节奏没有乱。高烧还在，但她的脊背是直的。两人绕过花园拐角，没有回头。）\\n\\n黑屏字幕：The fever is still burning. But your steps didn't falter.", "butterfly_effect": "Sylvia exits under her own power despite physical deterioration; WIL consolidates. The escape registers as self-determined from the first step.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "James", "Daisy", "Kennedy"]	{"Daisy": "二十多岁女性，黑色连帽卫衣，深色紧身裤，运动鞋，头发随意扎起，神色紧张。", "James": "三十岁左右男性，银月领地Alpha正装——深炭灰色西装，白色衬衫，无领带，袖口金属袖扣，黑色皮鞋。", "Sylvia": "二十多岁女性，深色长发松散，穿着室内便装——深灰色宽松针织衫，黑色长裤，赤脚，左手腕无饰品。", "Kennedy": "二十多岁女性，新月领地访客装束——米白色长款外套，内搭浅灰针织连衣裙，棕色踝靴，发型整洁盘起。（仅声音出现）"}	\N	2026-04-27 18:25:16.297	2026-04-27 18:25:16.297
+cmohj1zbi0014tocia70xkrl2	cmohj1z87000etocihnpez3b5	EP12-minor_mainline	坐着别动	（场景：银月领地 豪宅 议事厅 — 夜）\n（Cynthia宣布完毕，转身往侧门走，两名长老跟上。James绕过主位，走到Sylvia席位旁，俯身压低声音，几乎贴着她耳边。）\n\nJames: Go back to the room. Kennedy's coming.\n\n（Sylvia没有转头。她的声音平稳，整个厅都听得见。）\n\nSylvia: The review is on record. I have the right to be present at any public proceeding during the review period.\n\n（James的下颌绷紧。侧门口，Cynthia的脚步停了。）\n\nSylvia: That's procedure. Not something an Alpha command can override.\n\n（James没有再开口。Cynthia和两名长老还没有完全离场，他无法在此刻再发出Alpha命令而不让自己当场再落一次脸。他退回主位，目光扫了一眼还站在侧门口的Cynthia，把后面的话堵了回去。）\n\n（门开。引导员将Kennedy带进来。Kennedy跨过门槛，视线落在Sylvia身上——她停住脚，从容的神情裂开一道缝。全场没有人说话。）\n\n（Sylvia坐在自己的席位上，没有站起来，没有开口，只是看着她。Kennedy不知道该往哪儿走。）\n\nJames: （嗓子发紧，整个议事厅都听见了那声勉强）...Kennedy.\n\n（Kennedy的眼神往James方向偏了一下，又偏回来。她最终在引导员的示意下落座，目光始终没有再看Sylvia的方向。）\n\n（议事程序继续推进。Cynthia从侧门回到长老席位，开始宣读审议期间的程序细则。Sylvia坐在原位，一言不发。）\n\n（时间流逝。特写——Sylvia的手，悄悄扣紧了椅子扶手，指节泛白。热从她后背蔓延上来，不完整的拒绝状态开始发作，Lyra的存在感骤然模糊。她咬住后槽牙，维持着坐直的姿势，力气在以可见的速度离开她的身体。）\n\n（Cynthia的声音从厅堂另一端传来，清晰而遥远。Sylvia的视线开始轻微漂移，但她的脊背没有弯。）	{"characters": ["Sylvia", "James", "Kennedy", "Cynthia"], "episode_id": "EP 12", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Signal Cynthia. Step out with dignity.", "description": "你已经赢了该赢的。Kennedy进门时停住脚的那一刻，James被迫当众叫出她名字的那一刻——议事厅里所有人都看见了。现在你的身体在往下坠，Lyra快要抓不住了。Cynthia在长老席上，你只需要一个眼神。"}, {"id": "B", "check": "WIL（意志）12", "content": "Hold on until the session ends. Don't leave first.", "description": "Kennedy已经不敢看你了，James那声勉强的\\"Kennedy\\"还钉在石墙上。你的手指已经把扶手攥出了温度，后背的热一波一波往上涌，Lyra的存在感像水渍一样在蒸发。但你坐着——你要让所有人看见，你是最后一个离开这张桌子的人。"}]}, "episode_title": "坐着别动", "scene_locations": {"银月领地 豪宅 议事厅": {"location_id": "silver_moon_manor_council_hall", "visual_prompt": "宽阔石材厅堂，长形会议桌，高背木椅，石材地面，穹顶高挑，壁灯排列，主位设有凸起台阶。夜间灯光全开，壁灯冷白光打在石材上，侧门半掩，长桌椅位多数占据，主位空置，整体色调冷灰庄严。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"James": "三十岁左右男性，银月领地Alpha正装——深炭灰色西装，白色衬衫，无领带，袖口金属袖扣，黑色皮鞋。", "Sylvia": "二十多岁女性，深色长发松散垂肩，银月领地Luna正式礼服——深酒红色长裙，收腰剪裁，丝绒质感，颈间细金项链，黑色低跟皮鞋。", "Cynthia": "五十岁左右女性，银月领地长老正式服装——深藏青色直筒长裙套装，银色胸针，黑色低跟鞋，发髻严整。", "Kennedy": "二十多岁女性，新月领地访客装束——米白色长款外套，内搭浅灰针织连衣裙，棕色踝靴，发型整洁盘起。"}, "pre_choice_script": "（场景：银月领地 豪宅 议事厅 — 夜）\\n（Cynthia宣布完毕，转身往侧门走，两名长老跟上。James绕过主位，走到Sylvia席位旁，俯身压低声音，几乎贴着她耳边。）\\n\\nJames: Go back to the room. Kennedy's coming.\\n\\n（Sylvia没有转头。她的声音平稳，整个厅都听得见。）\\n\\nSylvia: The review is on record. I have the right to be present at any public proceeding during the review period.\\n\\n（James的下颌绷紧。侧门口，Cynthia的脚步停了。）\\n\\nSylvia: That's procedure. Not something an Alpha command can override.\\n\\n（James没有再开口。Cynthia和两名长老还没有完全离场，他无法在此刻再发出Alpha命令而不让自己当场再落一次脸。他退回主位，目光扫了一眼还站在侧门口的Cynthia，把后面的话堵了回去。）\\n\\n（门开。引导员将Kennedy带进来。Kennedy跨过门槛，视线落在Sylvia身上——她停住脚，从容的神情裂开一道缝。全场没有人说话。）\\n\\n（Sylvia坐在自己的席位上，没有站起来，没有开口，只是看着她。Kennedy不知道该往哪儿走。）\\n\\nJames: （嗓子发紧，整个议事厅都听见了那声勉强）...Kennedy.\\n\\n（Kennedy的眼神往James方向偏了一下，又偏回来。她最终在引导员的示意下落座，目光始终没有再看Sylvia的方向。）\\n\\n（议事程序继续推进。Cynthia从侧门回到长老席位，开始宣读审议期间的程序细则。Sylvia坐在原位，一言不发。）\\n\\n（时间流逝。特写——Sylvia的手，悄悄扣紧了椅子扶手，指节泛白。热从她后背蔓延上来，不完整的拒绝状态开始发作，Lyra的存在感骤然模糊。她咬住后槽牙，维持着坐直的姿势，力气在以可见的速度离开她的身体。）\\n\\n（Cynthia的声音从厅堂另一端传来，清晰而遥远。Sylvia的视线开始轻微漂移，但她的脊背没有弯。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia的视线越过桌面，落在Cynthia身上。两人对视了一秒。Cynthia合上手里的文件夹，清了一下嗓子。）\\n\\nCynthia: （面向全场）The remaining procedural items will be tabled for tomorrow. Session adjourned.\\n\\n（成员们开始离席。Kennedy在引导员陪同下快步离开,经过Sylvia席位时视线死死盯着前方,没有转头。James在主位上坐了两秒,站起来,什么都没说,走了。）\\n\\n（议事厅空了大半。Sylvia松开扶手,缓缓站起来。椅脚在石材地面上发出一声轻响。她站着,身体晃了一下——Cynthia已经走到她身侧,没有搀扶,只是站在那里，让Sylvia自己决定下一步。）\\n\\n（Sylvia深吸一口气，迈出第一步，走向侧门。脚步是稳的，但每一步都在消耗剩下的东西。Cynthia跟在她身后，一步之遥。）\\n\\n（侧门在两人身后合上。）\\n\\n黑屏字幕：Everyone left before you did. You were the last one at that table.", "butterfly_effect": "Sylvia chose a controlled exit over endurance; her procedural victory is intact — Kennedy's humiliation and James's forced compliance are already on record. WIL holds steady; the retreat is strategic, not a collapse.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia没有动。）\\n\\n（议事程序继续。Cynthia的声音从厅堂另一端传来，清晰而遥远。Sylvia坐在席位上，后背的热已经漫到颈根，视线开始漂移。她咬紧后槽牙，把目光钉在桌面上。）\\n\\n（特写——她的指节，死死扣住扶手，泛白，纹丝不动。但她的肩膀在微微下沉。）\\n\\n（Cynthia宣读到第三条细则时，停顿了一下，视线越过文件落在Sylvia脸上。她合上文件夹，宣布今日议事暂时休会，剩余细则明日继续。）\\n\\n（成员们陆续离席。Kennedy在引导员陪同下快步离开，没有回头。James站起来，看了Sylvia一眼，转身走了。）\\n\\n（议事厅渐渐空了。Sylvia还坐在原位，手指终于从扶手上松开，整个人往前倾，额头抵在桌沿上。她撑住了，但所有人都看见了她在消耗。）\\n\\n黑屏字幕：Cynthia called the session early. You held on — but everyone saw what it cost you.", "butterfly_effect": "Sylvia held her ground but the effort cost her visibly. Cynthia's early adjournment preserved Sylvia's position but also put her physical deterioration on the council record. WIL shows resilience under pressure but not dominance.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia没有动。）\\n\\n（议事程序继续。Cynthia的声音在厅堂里回响，一条一条宣读审议细则。Sylvia坐在席位上，后背的热还在烧，指节已经泛白——但她的脊背是直的，呼吸是稳的，视线钉在桌面正前方。）\\n\\n（Kennedy偶尔往她方向看一眼，每一次都先移开视线。James在主位上翻文件，翻了三次同一页。）\\n\\n（特写——Sylvia的手，死死扣住扶手，指节泛白，纹丝不动。）\\n\\n（Cynthia宣布当日议事程序结束。长老们起身，成员们陆续离席。Kennedy在引导员陪同下先行离开，经过Sylvia席位时脚步明显加快，没有转头。James最后一个站起来，看了Sylvia一眼，嘴唇动了一下，没有说话，走了。）\\n\\n（议事厅空了。Sylvia还坐在原位，手指终于从扶手上松开，掌心留下两道深红的压痕。她的身体前倾，额头几乎碰到桌面，喘了一口气。）\\n\\n黑屏字幕：You won what you needed to win. Kennedy froze. James choked on her name. That's enough for today.", "butterfly_effect": "Sylvia outlasted everyone in the council hall; her composure under duress shifts the power dynamic decisively. CHA and WIL register a measurable gain. Kennedy's repeated aversion and James's inability to act are now part of the record.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "James", "Kennedy", "Cynthia"]	{"James": "三十岁左右男性，银月领地Alpha正装——深炭灰色西装，白色衬衫，无领带，袖口金属袖扣，黑色皮鞋。", "Sylvia": "二十多岁女性，深色长发松散垂肩，银月领地Luna正式礼服——深酒红色长裙，收腰剪裁，丝绒质感，颈间细金项链，黑色低跟皮鞋。", "Cynthia": "五十岁左右女性，银月领地长老正式服装——深藏青色直筒长裙套装，银色胸针，黑色低跟鞋，发髻严整。", "Kennedy": "二十多岁女性，新月领地访客装束——米白色长款外套，内搭浅灰针织连衣裙，棕色踝靴，发型整洁盘起。"}	\N	2026-04-27 18:25:16.303	2026-04-27 18:25:16.303
+cmohj1zbo0016tociepmv2tbh	cmohj1z87000etocihnpez3b5	EP13	走进去	（场景：银月领地 豪宅外围 — 深夜）\n（Sylvia和Daisy贴着豪宅外墙绕过花园。拐角处，Kayden已经蹲在灌木丛后面等着\n\n字幕：【Kayden：银月领地成员，出逃行动协助者】\n，看见Sylvia的状态，他从地上捡起一件外套递过来，没有说话。）\n\n（Daisy从背包里掏出一双靴子塞给Sylvia。Sylvia蹲下来换上，手指因高烧而有些笨拙，但她没有让任何人帮忙。）\n\n（三人绕开巡逻路线，穿过东侧林地。Kayden在前面带路，Daisy在Sylvia身侧，始终保持一臂距离，没有搀扶。）\n\n（场景：银月领地 东部边界 — 深夜）\n（月光从树隙落下来。Huxley站在边界线内侧，背靠一棵老橡树，脚边搁着一个黑色大背包。他看见三人的身影，从树干上直起身，目光越过Daisy和Kayden，落在Sylvia脸上，停了一秒。）\n\n（Huxley蹲下来，拉开背包拉链，让Sylvia看里面的东西——地图、压缩食物、水壶、中立区联络人信息、一小瓶退烧药。他一样一样指给她看，声音很低，语速平稳。）\n\nHuxley: Route's marked. Three safe points along the way. Contact in the neutral zone will take it from there.\n\n（他拉上背包，站起来，看着Sylvia。沉默了几秒。）\n\nHuxley: （声音比刚才更低，像是说了很久才说出来的话）Three years ago, when you first came to Silver Moon...My wolf Karl then found out. It knew it earlier than I did... I love you.\n\n（Sylvia抬起头看他。）\n\nHuxley: But you were already bonded to James. I had no right to say anything. So I didn't.\n\n（他停顿了一下，视线没有移开。）\n\nHuxley: I'm not asking for anything. Not now. Heal first. But if one day you're ready... I'll be there. So you can feel what a real bond is supposed to feel like.\n\n（Sylvia看着他，没有说话。月光落在两人之间那段沉默里。然后Huxley把背包提起来，递到她面前。）	{"characters": ["Sylvia", "Daisy", "Kayden", "Huxley"], "episode_id": "EP 13", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Let him help you carry the bag on your back.", "description": "Huxley的话还停在空气里，背包在他手上，月光照着他的指节。你的肩膀在抖——不只是因为高烧。三年来第一次有人把选择权交到你手里，没有附加条件。背包很重，你知道自己现在不一定背得动。"}, {"id": "B", "check": "WIL（意志）12", "content": "Take the bag yourself. Shoulder it alone.", "description": "背包在Huxley手上，他的话你都听见了。你看了一眼背包的肩带——它很重，你的手在抖，高烧还压着你的每一根骨头。但你伸出手。三年来第一份没有附加条件的善意，你要用自己的手接住它。"}]}, "episode_title": "走进去", "scene_locations": {"银月领地 东部边界": {"location_id": "silver_moon_east_border", "visual_prompt": "领地边界线，密林边缘与开阔地交界，月光从树隙投落，地面杂草与碎石，夜色深蓝，远处森林漆黑深邃，边界感强烈，地面草叶被踩倒后缓慢弹回。", "parent_location_id": "silver_moon_manor"}, "银月领地 豪宅外围": {"location_id": "silver_moon_manor_perimeter", "visual_prompt": "豪宅侧翼与东部林地之间的开阔地带，月光照射下的草地与碎石小径，巡逻路线标记隐约可见，夜色深蓝，远处豪宅灯光微弱。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"Daisy": "二十多岁女性，深橄榄色连帽外套，黑色紧身裤，黑色运动鞋，头发束于颈后。", "Huxley": "三十岁左右男性，深棕色皮质外套，深色衬衫，深色长裤，黑色靴子，手持深色大背包。", "Kayden": "二十多岁男性，深灰色战术夹克，黑色长裤，黑色厚底靴，短发，无饰品。", "Sylvia": "二十多岁女性，深色宽松长袖上衣，深色长裤，黑色系带靴，左手腕缠着细布条，背负深色大背包。"}, "pre_choice_script": "（场景：银月领地 豪宅外围 — 深夜）\\n（Sylvia和Daisy贴着豪宅外墙绕过花园。拐角处，Kayden已经蹲在灌木丛后面等着\\n\\n字幕：【Kayden：银月领地成员，出逃行动协助者】\\n，看见Sylvia的状态，他从地上捡起一件外套递过来，没有说话。）\\n\\n（Daisy从背包里掏出一双靴子塞给Sylvia。Sylvia蹲下来换上，手指因高烧而有些笨拙，但她没有让任何人帮忙。）\\n\\n（三人绕开巡逻路线，穿过东侧林地。Kayden在前面带路，Daisy在Sylvia身侧，始终保持一臂距离，没有搀扶。）\\n\\n（场景：银月领地 东部边界 — 深夜）\\n（月光从树隙落下来。Huxley站在边界线内侧，背靠一棵老橡树，脚边搁着一个黑色大背包。他看见三人的身影，从树干上直起身，目光越过Daisy和Kayden，落在Sylvia脸上，停了一秒。）\\n\\n（Huxley蹲下来，拉开背包拉链，让Sylvia看里面的东西——地图、压缩食物、水壶、中立区联络人信息、一小瓶退烧药。他一样一样指给她看，声音很低，语速平稳。）\\n\\nHuxley: Route's marked. Three safe points along the way. Contact in the neutral zone will take it from there.\\n\\n（他拉上背包，站起来，看着Sylvia。沉默了几秒。）\\n\\nHuxley: （声音比刚才更低，像是说了很久才说出来的话）Three years ago, when you first came to Silver Moon...My wolf Karl then found out. It knew it earlier than I did... I love you.\\n\\n（Sylvia抬起头看他。）\\n\\nHuxley: But you were already bonded to James. I had no right to say anything. So I didn't.\\n\\n（他停顿了一下，视线没有移开。）\\n\\nHuxley: I'm not asking for anything. Not now. Heal first. But if one day you're ready... I'll be there. So you can feel what a real bond is supposed to feel like.\\n\\n（Sylvia看着他，没有说话。月光落在两人之间那段沉默里。然后Huxley把背包提起来，递到她面前。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia点了点头。Huxley走到她身后，轻轻将背包搭上她的双肩，手指在肩带上停了一秒，调了调松紧，然后松开。）\\n\\n（背包的重量压下来，她的膝盖弯了一下——但她站住了。）\\n\\nSylvia: （轻，只有他听得见）Thank you.\\n\\n（她转身面向边界线。黑暗的森林在前方展开，什么也看不见。）\\n\\n（特写——边界线这侧，Huxley的靴尖停在线前，没有越过去。他站在原地，看着她的背影被森林吞没。定格。）\\n\\n黑屏字幕：You walked into the dark. Everything behind you stayed on the other side of the line.", "butterfly_effect": "Sylvia accepted help shouldering the burden; WIL registers the reliance but the departure is completed. Huxley's confession becomes a quiet anchor rather than a demand.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia伸出手，接过背包。她把它提起来，试图自己套上肩带——手臂因高烧而发颤，背包滑了一下，一条肩带落在肘弯处。她咬牙重新拉上去，背包终于搭上双肩，重量让她前倾了一步。）\\n\\n（Huxley的手在半空停了一下，没有碰她。）\\n\\nSylvia: （喘了一口气，抬眼看他一秒）Thank you.\\n\\n（她转身面向边界线。黑暗的森林在前方展开。）\\n\\n（特写——边界线这侧，Huxley的靴尖停在线前，没有越过去。他站在原地，看着她的背影被森林吞没。定格。）\\n\\n黑屏字幕：You walked into the dark. Your steps weren't steady. But you didn't look back.", "butterfly_effect": "Sylvia tried to shoulder the burden alone but her body showed strain; WIL registers determination despite physical limitation. The departure is self-initiated but visibly costly.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia伸出手，接过背包。她把它提起来，一气呵成套上双肩，肩带落在正确的位置，背包的重量压下来——她站着，没有晃。）\\n\\n（Huxley看着她，没有动，嘴角有什么东西微微动了一下。）\\n\\nSylvia: （轻，只有他听得见）Thank you.\\n\\n（她转身面向边界线。黑暗的森林在前方展开。）\\n\\n（特写——边界线这侧，Huxley的靴尖停在线前，没有越过去。他站在原地，看着她的背影被森林吞没。定格。）\\n\\n黑屏字幕：You walked into the dark. Every step was yours.", "butterfly_effect": "Sylvia shoulders the burden entirely on her own; WIL solidifies. The first unconditional kindness she's received in three years is met with self-determined strength. The departure registers as chosen.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Daisy", "Kayden", "Huxley"]	{"Daisy": "二十多岁女性，深橄榄色连帽外套，黑色紧身裤，黑色运动鞋，头发束于颈后。", "Huxley": "三十岁左右男性，深棕色皮质外套，深色衬衫，深色长裤，黑色靴子，手持深色大背包。", "Kayden": "二十多岁男性，深灰色战术夹克，黑色长裤，黑色厚底靴，短发，无饰品。", "Sylvia": "二十多岁女性，深色宽松长袖上衣，深色长裤，黑色系带靴，左手腕缠着细布条，背负深色大背包。"}	\N	2026-04-27 18:25:16.308	2026-04-27 18:25:16.308
+cmohj1zbs0018toci9wjqvx8r	cmohj1z87000etocihnpez3b5	EP13-minor_mainline	我自己走	（场景：银月领地 豪宅 侧廊 — 夜）\n（议事厅散场后，Sylvia靠在侧廊的廊柱上。高烧让她的视线开始涣散，额角沁出薄汗，呼吸浅而急促。她闭了一下眼，重新睁开。）\n\n（Huxley从走廊另一端快步走过来，在她面前停住。他看了一眼她的脸色，没有废话。）\n\nHuxley: （声音压低）You need to leave tonight. Lyra can't take another day of this.\n\n（Sylvia没有反驳。她知道他说的是对的。）\n\nSylvia: （喘着气）James—\n\nHuxley: He's with Kennedy in the main hall. Shift change in twenty minutes. East border, I've got a bag ready.\n\n（拐角处传来脚步声。Daisy从阴影里走出来，看见Sylvia的状态，嘴唇抿紧了一下，没有说话。）\n\n（Sylvia从廊柱上直起身，站了一秒。她转头看向议事厅的方向——走廊尽头，James的声音和Kennedy的声音隐约交叠在一起，传过来。）\n\n（她转回头，看着Huxley。）\n\nSylvia: Let's go.\n\n（三人沿侧廊向侧门移动。Sylvia走在中间，脚步不快但没有停。走到侧门前，她伸手推门——）\n\n（身后传来沉重的脚步声。James从走廊拐角出现，看见三人的背影，大步追过来，手伸向Sylvia的手臂。）\n\n（Cynthia不知什么时候已经站在侧门旁的阴影里。她侧身一步，不动声色地挡在James和Sylvia之间。）\n\nCynthia: （看着James，声音清晰，走廊里的回音让每个字都很重）During review, the declarant's physical state falls under council jurisdiction. Any interference requires written application to the council.\n\n（James的手停在半空。他看着Cynthia，牙关咬紧，喉结滚动了一下。他清楚再动手只会把这一幕彻底钉死在议会记录里。）\n\n（他把手放下来。）\n\n（Sylvia推开侧门，走出去。夜风灌进来。Huxley跟在她身侧，一步之遥，没有碰她。Daisy最后出来，把门在身后带上。）\n\n（场景：银月领地 豪宅外围 — 夜）\n（三人绕开巡逻路线，穿过东侧林地，朝边界方向走。Sylvia的脚步越来越慢，高烧把她的重心往前拉，但她还在走。）	{"characters": ["Sylvia", "James", "Huxley", "Cynthia", "Daisy"], "episode_id": "EP 13", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Lean on Huxley. Get to the border.", "description": "你刚在走廊里看着Cynthia用一句话把James钉在原地，但现在规程帮不了你的膝盖。树线还在前方，月光把碎石路照得发白，你的腿在抖。Huxley在你右侧一步远，他没有伸手——但你知道只要靠过去，他会接住你。"}, {"id": "B", "check": "WIL（意志）12", "content": "Walk to the border on your own feet.", "description": "Cynthia替你挡住了James的手，Huxley替你准备了背包，Daisy替你守着后路。但从这扇侧门到边界线之间的每一步，你要自己走。你的靴底踩上碎石，声音比你想象的要稳。"}]}, "episode_title": "我自己走", "scene_locations": {"银月领地 东部边界": {"location_id": "silver_moon_east_border", "visual_prompt": "领地边界线，密林边缘与开阔地交界，月光从树隙投落，地面杂草与碎石，夜色深蓝，远处森林漆黑深邃，树根旁有黑色背包，边界感强烈。", "parent_location_id": "silver_moon_manor"}, "银月领地 豪宅 侧廊": {"location_id": null, "visual_prompt": "豪宅侧翼廊道，深色实木廊柱，壁灯光线微弱，石材地面，一侧为侧门通向户外，夜间廊内几乎无人，光线昏暗。", "parent_location_id": "silver_moon_manor"}}, "character_outfits": {"Daisy": "二十多岁女性，黑色连帽卫衣，深色紧身裤，运动鞋，头发随意扎起。", "James": "三十岁左右男性，深色剪裁西装，白色衬衫无领带，皮鞋，神情凝重。", "Huxley": "三十岁左右男性，深色军绿色战术外套，黑色长裤，厚底靴，表情沉静。", "Sylvia": "二十多岁女性，深色长发散落，穿着深灰色简约长裙，外罩黑色厚实外套，黑色平底靴，左手腕有细布条缠绕，背负黑色大背包。", "Cynthia": "四十岁左右女性，深蓝色正装外套，直筒裤，低跟皮鞋，头发束于脑后，神态从容。"}, "pre_choice_script": "（场景：银月领地 豪宅 侧廊 — 夜）\\n（议事厅散场后，Sylvia靠在侧廊的廊柱上。高烧让她的视线开始涣散，额角沁出薄汗，呼吸浅而急促。她闭了一下眼，重新睁开。）\\n\\n（Huxley从走廊另一端快步走过来，在她面前停住。他看了一眼她的脸色，没有废话。）\\n\\nHuxley: （声音压低）You need to leave tonight. Lyra can't take another day of this.\\n\\n（Sylvia没有反驳。她知道他说的是对的。）\\n\\nSylvia: （喘着气）James—\\n\\nHuxley: He's with Kennedy in the main hall. Shift change in twenty minutes. East border, I've got a bag ready.\\n\\n（拐角处传来脚步声。Daisy从阴影里走出来，看见Sylvia的状态，嘴唇抿紧了一下，没有说话。）\\n\\n（Sylvia从廊柱上直起身，站了一秒。她转头看向议事厅的方向——走廊尽头，James的声音和Kennedy的声音隐约交叠在一起，传过来。）\\n\\n（她转回头，看着Huxley。）\\n\\nSylvia: Let's go.\\n\\n（三人沿侧廊向侧门移动。Sylvia走在中间，脚步不快但没有停。走到侧门前，她伸手推门——）\\n\\n（身后传来沉重的脚步声。James从走廊拐角出现，看见三人的背影，大步追过来，手伸向Sylvia的手臂。）\\n\\n（Cynthia不知什么时候已经站在侧门旁的阴影里。她侧身一步，不动声色地挡在James和Sylvia之间。）\\n\\nCynthia: （看着James，声音清晰，走廊里的回音让每个字都很重）During review, the declarant's physical state falls under council jurisdiction. Any interference requires written application to the council.\\n\\n（James的手停在半空。他看着Cynthia，牙关咬紧，喉结滚动了一下。他清楚再动手只会把这一幕彻底钉死在议会记录里。）\\n\\n（他把手放下来。）\\n\\n（Sylvia推开侧门，走出去。夜风灌进来。Huxley跟在她身侧，一步之遥，没有碰她。Daisy最后出来，把门在身后带上。）\\n\\n（场景：银月领地 豪宅外围 — 夜）\\n（三人绕开巡逻路线，穿过东侧林地，朝边界方向走。Sylvia的脚步越来越慢，高烧把她的重心往前拉，但她还在走。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia向右靠了半步。Huxley没有说话，手臂抵上她的肩侧，力道轻得像是偶然。）\\n\\n（三人继续穿过林地。豪宅方向突然传来一声低沉的怒吼，James的气息在整片领地骤然蔓延压下来——Daisy的脚步顿了一下。Sylvia的手指收紧了，但脚步没有停。）\\n\\nDaisy: （低声）Don't look back.\\n\\n（东部边界。月光从树隙落下来。Huxley从树根旁提起背包，递过去。Sylvia接过来，背上，两肩绷紧，她抬眼看了他一秒。）\\n\\nSylvia: （轻，只有他听得见）Thank you.\\n\\n（她转身，踏过边界线，走进黑暗的森林。脚步一直没有停。）\\n（特写——边界线这侧，Huxley的靴尖停在线前，没有越过去。他站在原地，看着她的背影消失进树林。定格。）\\n\\n黑屏字幕：You walked into the dark. Everything behind you stayed on the other side of the line.", "butterfly_effect": "Sylvia accepted physical support at the threshold; her departure is completed. The council-hall victory and Cynthia's intervention gave her procedural ground, but the physical cost is real. WIL carries a slight deficit entering the next phase.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia迈开步子，脚踩上碎石路，腿软了一下——她扶住旁边的树干，停了两秒，没有回头。Huxley的手悬在半空，没有碰她。）\\n\\n（三人继续穿过林地。豪宅方向突然传来一声低沉的怒吼，James的气息在整片领地骤然蔓延压下来——Sylvia的步子踉了一下，Daisy下意识伸手，Sylvia摆了摆手，没有接。）\\n\\n（东部边界。Huxley从树根旁提起背包，递过去。Sylvia接过来，背上，两肩因重量前倾，她停了一拍，把脊背重新撑直。她抬眼看了他一秒。）\\n\\nSylvia: （轻，只有他听得见）Thank you.\\n\\n（她转身，踏过边界线，走进黑暗的森林。脚步一直没有停。）\\n（特写——边界线这侧，Huxley的靴尖停在线前，没有越过去。他站在原地，看着她的背影消失进树林。定格。）\\n\\n黑屏字幕：You stumbled. But you didn't stop. You didn't look back.", "butterfly_effect": "Sylvia held the line in name but stumbled on the path. She won the procedural battle in the council hall and walked out under Cynthia's protection, but the physical cost of the rejection state nearly undid her. WIL shows strain but not collapse.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia迈开步子，靴底踩上碎石，声音沉稳。高烧还在，但步子是直的。）\\n\\n（三人继续穿过林地。豪宅方向突然传来一声低沉的怒吼，James的气息在整片领地骤然蔓延压下来——Daisy的步子一顿，Sylvia的步子没有停，连节奏都没有乱。）\\n\\n（东部边界。Huxley从树根旁提起背包，递过去。Sylvia接过来，背上，两肩绷紧，她抬眼看了他一秒。）\\n\\nSylvia: （轻，只有他听得见）Thank you.\\n\\n（她转身，踏过边界线，走进黑暗的森林。脚步一直没有停。）\\n（特写——边界线这侧，Huxley的靴尖停在线前，没有越过去。他站在原地，看着她的背影消失进树林。定格。）\\n\\n黑屏字幕：You walked into the dark. Every step was yours.", "butterfly_effect": "Sylvia crossed the threshold entirely under her own power. She won the procedural fight sitting down, walked out under Cynthia's shield, and completed the departure standing up. WIL solidifies; the departure registers as chosen, not endured.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "James", "Huxley", "Cynthia", "Daisy"]	{"Daisy": "二十多岁女性，黑色连帽卫衣，深色紧身裤，运动鞋，头发随意扎起。", "James": "三十岁左右男性，深色剪裁西装，白色衬衫无领带，皮鞋，神情凝重。", "Huxley": "三十岁左右男性，深色军绿色战术外套，黑色长裤，厚底靴，表情沉静。", "Sylvia": "二十多岁女性，深色长发散落，穿着深灰色简约长裙，外罩黑色厚实外套，黑色平底靴，左手腕有细布条缠绕，背负黑色大背包。", "Cynthia": "四十岁左右女性，深蓝色正装外套，直筒裤，低跟皮鞋，头发束于脑后，神态从容。"}	\N	2026-04-27 18:25:16.313	2026-04-27 18:25:16.313
+cmohj1zbw001atoci70dzg7em	cmohj1z87000etocihnpez3b5	EP14	快没了	（场景：银月领地 东部边界 — 夜）\n（Sylvia 踏过边界线，走入树线。背包的重量压着她的肩膀微微前倾，靴底踩过碎石与枯叶，一步一步往前。）\n（身后，James 的怒吼声在领地上空炸开，气息浪潮从豪宅方向骤然蔓延，压过整片夜色。）\n（Sylvia 的脚步没有停。树线将身后的光彻底隔断，黑暗合拢，怒吼声被森林吞进去。）\n\n字幕：三十天后\n\n（场景：中立区 溪流旁 — 日）\n（溪流窄浅，水声细碎。Sylvia 站在溪边，背包已经瘪下去大半，外套袖口沾着泥。她弯腰，伸手向水面。）\n（腿突然软了。她的手没能碰到水，整个人侧倒在溪旁的泥地上，背包压着她的背。她试图撑起来，手肘一滑，没能起身。）\n（特写 — 她的嘴唇干裂，眼睫微颤，喉咙里发出一声极低的唤声。）\n\nSylvia: (气声，几乎听不见) Lyra...\n\n（没有回应。她的手指在泥地里收紧，又松开。）\n（一双手从侧面伸过来，稳稳扶住她的肩膀，将她从泥地里抬起。）\n（Iris 俯身看她，气息沉稳，没有任何压迫性。她打量 Sylvia 一眼，视线落在瘪掉的背包上，再落回她的脸。）\n\n字幕：【Iris Blackwood：河谷领地 Alpha】\n\nIris: (平静，直接) Are you a lone wolf?\n\n（特写 — Sylvia 抬起眼，对上 Iris 的目光。她的嘴唇动了一下，喉咙滚动了一下，没有立刻说话。）	{"characters": ["Sylvia", "Iris Blackwood"], "episode_id": "EP 14", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Say nothing. Look away.", "description": "Iris 的手还扶着你的肩膀，你能感觉到那个力道是稳的，不是要抓住你，是要托住你。你的嘴唇动了一下，又闭上——背包里那张地图已经翻烂了边角，三十天，你没有开口问过任何人任何事。"}, {"id": "B", "check": "WIL（意志）10", "content": "\\"Not anymore.\\"", "description": "泥地的湿气还贴着你的外套，Iris 的目光落在你脸上，不是审问，是等待。你上一次开口说自己是谁，是在议事厅，是对着James。你的喉咙很干，那两个字压在舌根，你能感觉到它们的重量。"}]}, "episode_title": "快没了", "scene_locations": {"中立区 溪流旁": {"location_id": null, "visual_prompt": "窄浅溪流，水面清浅透底，溪岸为深色泥地，杂草低伏，落叶散布，周围阔叶林遮挡直射光，日光漫射呈冷白色，空间潮湿安静。", "parent_location_id": null}, "银月领地 东部边界": {"location_id": "silver_moon_east_border", "visual_prompt": "领地边界线，密林边缘与开阔地交界，月光从树隙投落，地面杂草与碎石，夜色深蓝，远处森林漆黑深邃，背景方向隐约有豪宅灯光，边界感强烈。", "parent_location_id": "silver_moon_east_border"}}, "character_outfits": {"Sylvia": "二十多岁女性，深色厚实外套，袖口沾有泥迹，深色长裤，磨损登山靴，背负大号登山背包，左手腕无饰品。", "Iris Blackwood": "三十岁左右女性，深橄榄色户外夹克，深色修身长裤，厚底皮靴，无多余饰品，气质沉稳干练。"}, "pre_choice_script": "（场景：银月领地 东部边界 — 夜）\\n（Sylvia 踏过边界线，走入树线。背包的重量压着她的肩膀微微前倾，靴底踩过碎石与枯叶，一步一步往前。）\\n（身后，James 的怒吼声在领地上空炸开，气息浪潮从豪宅方向骤然蔓延，压过整片夜色。）\\n（Sylvia 的脚步没有停。树线将身后的光彻底隔断，黑暗合拢，怒吼声被森林吞进去。）\\n\\n字幕：三十天后\\n\\n（场景：中立区 溪流旁 — 日）\\n（溪流窄浅，水声细碎。Sylvia 站在溪边，背包已经瘪下去大半，外套袖口沾着泥。她弯腰，伸手向水面。）\\n（腿突然软了。她的手没能碰到水，整个人侧倒在溪旁的泥地上，背包压着她的背。她试图撑起来，手肘一滑，没能起身。）\\n（特写 — 她的嘴唇干裂，眼睫微颤，喉咙里发出一声极低的唤声。）\\n\\nSylvia: (气声，几乎听不见) Lyra...\\n\\n（没有回应。她的手指在泥地里收紧，又松开。）\\n（一双手从侧面伸过来，稳稳扶住她的肩膀，将她从泥地里抬起。）\\n（Iris 俯身看她，气息沉稳，没有任何压迫性。她打量 Sylvia 一眼，视线落在瘪掉的背包上，再落回她的脸。）\\n\\n字幕：【Iris Blackwood：河谷领地 Alpha】\\n\\nIris: (平静，直接) Are you a lone wolf?\\n\\n（特写 — Sylvia 抬起眼，对上 Iris 的目光。她的嘴唇动了一下，喉咙滚动了一下，没有立刻说话。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia 的视线从 Iris 脸上移开，落到溪面上，没有说话。）\\n（Iris 没有追问。她沉默了一秒，将 Sylvia 的手臂搭上自己的肩膀，开始扶她站起来。）\\n\\nIris: (平静，不是审问，是确认) You don't have to answer that.\\n\\n（特写 — Sylvia 的脚踩进泥地，腿在抖，但没有再倒下。她的视线还是低着的，喉结滚动了一下，没有出声。）\\n（两人沿溪岸慢慢走出镜头。背包还在 Sylvia 背上。溪流的水声在身后渐渐远去。）\\n\\n黑屏字幕：You don't know how much further you can go. But Iris held you up — all the way to her territory.", "butterfly_effect": "Sylvia's silence in the face of Iris's question leaves her WIL stagnant; the first step toward rebuilding self-definition is deferred.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia 张开嘴，声音从喉咙里挤出来，比她预想的更哑、更碎。）\\n\\nSylvia: (声音破碎，几乎听不清) Not... anymore.\\n\\n（话说出口，眼眶却先热了。她低下头，手指重新扣紧背包带，指节泛白。）\\n（Iris 没有说话，也没有松手。她静静地等了一秒，然后将 Sylvia 的手臂搭上自己的肩膀，开始扶她站起来。）\\n\\nIris: (平静，不是审问，是确认) You don't have to answer that.\\n\\n（特写 — Sylvia 的脚踩进泥地，腿在抖，但没有再倒下。她抬起眼，视线落在溪对岸的树线上，没有再开口。）\\n（两人沿溪岸慢慢走出镜头。背包还在 Sylvia 背上。）\\n\\n黑屏字幕：You don't know how much further you can go. But Iris held you up — all the way to her territory.", "butterfly_effect": "Sylvia speaks her loss aloud for the first time, but the words fracture before they land; WIL stirs but does not yet consolidate.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia 抬起眼，对上 Iris 的目光。她的嘴唇动了一下，喉咙很干，但声音出来的时候是平的。）\\n\\nSylvia: (低，但清晰) Not anymore.After meeting you.\\n\\n（Iris 的眼神没有变，只是停顿了一秒，像是在确认她听到的是真的。然后她将 Sylvia 的手臂搭上自己的肩膀，开始扶她站起来。）\\n\\nIris: (平静，不是审问，是确认) You don't have to answer that.\\n\\n（特写 — Sylvia 的脚踩进泥地，站起来，腿在抖，但没有再倒下。她的视线跟着 Iris 的方向，第一次没有低下去。）\\n（两人沿溪岸慢慢走出镜头。背包还在 Sylvia 背上。）\\n\\n黑屏字幕：You don't know how much further you can go. But Iris held you up — all the way to her territory.", "butterfly_effect": "Sylvia names her own severance without being asked; WIL registers a meaningful gain as self-definition begins to re-root.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Iris Blackwood"]	{"Sylvia": "二十多岁女性，深色厚实外套，袖口沾有泥迹，深色长裤，磨损登山靴，背负大号登山背包，左手腕无饰品。", "Iris Blackwood": "三十岁左右女性，深橄榄色户外夹克，深色修身长裤，厚底皮靴，无多余饰品，气质沉稳干练。"}	\N	2026-04-27 18:25:16.316	2026-04-27 18:25:16.316
+cmohj1zbz001ctoci5kwotwk0	cmohj1z87000etocihnpez3b5	EP15	活下去	（场景：河谷领地 疗养小屋 — 日）\n\n字幕：【Iris Blackwood：河谷领地 Alpha，专门收容被驱逐者】\n\n（Iris 将 Sylvia 扶到床边坐下。她蹲下来，双手轻按 Sylvia 的腹部两侧，表情收紧了一下。）\n\nIris: The tear hasn't healed. But it won't kill you. Not if you stay.\n\n（Sylvia 没有反应。她的视线落在地板上，喉结滚动了一下。）\n\nIris: (站起来，声音放慢) A she-wolf's worth has nothing to do with the bond. Nothing.\n\n（停顿。）\n\nIris: First — just stay alive.\n\n（特写 — Sylvia 的手，攥着背包带，慢慢松开了。）\n\n（场景：河谷领地 疗养小屋 — 夜）\n\n（一盏油灯。Sylvia 躺在床上，眼睛睁着，盯着横梁。特写 — 她的手平放在身侧，掌心朝上，不再攥任何东西。）\n\n（窗外有虫鸣。没有脚步声，没有命令。Sylvia 的眼睫缓缓垂下去，又抬起来。她侧过身，面向墙壁。）\n\n（这时，床头联络装置发出一声低鸣。Sylvia 坐起来，盯着屏幕。）\n\n（特写 — 屏幕上显示发件人：Kayden。内容："Daisy is under house arrest. James found out. She can't reach you anymore."）\n\n（Sylvia 的下颌绷紧，手指按住屏幕边缘，没有松开。）	{"characters": ["Sylvia", "Iris Blackwood"], "episode_id": "EP 15", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Put the device down. Turn back to the wall.", "description": "Kayden 的名字还亮在屏幕上，油灯把那行字的影子拉长到床单上。你的手指按着屏幕边缘，凉的。Iris 今天说的话还在耳朵里——\\"just stay alive\\"——你把装置翻扣在夜柜上，那行字消失了。"}, {"id": "B", "check": "WIL（意志）10", "content": "Send a reply to Kayden. Ask about Daisy's condition.", "description": "屏幕的光打在你手背上，Daisy 的名字没有出现在那行字里，但你知道她在哪里、因为什么。你腹部还有隐隐的钝痛，腿踩地时还在抖——你的拇指悬在屏幕上方，没有落下去。"}]}, "episode_title": "活下去", "scene_locations": {"中立区 无名溪流旁": {"location_id": null, "visual_prompt": "溪流旁泥地，浅色卵石散布，水流细浅清澈，溪岸杂草丛生，周围阔叶林遮蔽，日光从树隙斜透，地面潮湿，光线漫射柔和。", "parent_location_id": null}, "河谷领地 疗养小屋": {"location_id": null, "visual_prompt": "小型木制小屋内部，单张铁架床铺白色床单，床头木质夜柜，一盏油灯置于柜面，窗帘为米白薄棉布，窗外隐约可见植被，墙面浅木色，地面旧木板，角落有折叠椅，整体昏暖安静。", "parent_location_id": "river_valley_manor"}}, "character_outfits": {"Sylvia": "二十多岁女性，深色厚棉外套，黑色长裤，磨损登山靴，左手腕有细布绷带，背负深色大背包，头发凌乱垂散。", "Iris Blackwood": "三十多岁女性，暗绿色宽领毛衣，深棕色直筒长裤，皮质系带靴，头发扎成低马尾，无饰品。"}, "pre_choice_script": "（场景：河谷领地 疗养小屋 — 日）\\n\\n字幕：【Iris Blackwood：河谷领地 Alpha，专门收容被驱逐者】\\n\\n（Iris 将 Sylvia 扶到床边坐下。她蹲下来，双手轻按 Sylvia 的腹部两侧，表情收紧了一下。）\\n\\nIris: The tear hasn't healed. But it won't kill you. Not if you stay.\\n\\n（Sylvia 没有反应。她的视线落在地板上，喉结滚动了一下。）\\n\\nIris: (站起来，声音放慢) A she-wolf's worth has nothing to do with the bond. Nothing.\\n\\n（停顿。）\\n\\nIris: First — just stay alive.\\n\\n（特写 — Sylvia 的手，攥着背包带，慢慢松开了。）\\n\\n（场景：河谷领地 疗养小屋 — 夜）\\n\\n（一盏油灯。Sylvia 躺在床上，眼睛睁着，盯着横梁。特写 — 她的手平放在身侧，掌心朝上，不再攥任何东西。）\\n\\n（窗外有虫鸣。没有脚步声，没有命令。Sylvia 的眼睫缓缓垂下去，又抬起来。她侧过身，面向墙壁。）\\n\\n（这时，床头联络装置发出一声低鸣。Sylvia 坐起来，盯着屏幕。）\\n\\n（特写 — 屏幕上显示发件人：Kayden。内容：\\"Daisy is under house arrest. James found out. She can't reach you anymore.\\"）\\n\\n（Sylvia 的下颌绷紧，手指按住屏幕边缘，没有松开。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia 将联络装置翻扣在夜柜上，屏幕的光熄灭了。）\\n\\n（她重新躺下，面向墙壁。油灯的火苗轻轻摇了一下，虫鸣还在窗外。她的手平放在腹部，掌心贴着薄薄的床单，一动不动。）\\n\\n（特写 — 她的眼睛睁着，没有眼泪，只是盯着木板墙的纹路，呼吸很慢，很浅。）\\n\\n（良久，她闭上眼睛。翻扣的装置在夜柜上静静发着微弱的余光，照不到她的脸。）\\n\\n黑屏字幕：Daisy is under house arrest because she helped you escape. You lay in bed all night, eyes open. The next morning, you went to find Iris.", "butterfly_effect": "Sylvia chose stillness over action; her WIL stabilizes at a baseline but registers no forward momentum. Daisy's situation remains an unaddressed weight.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia 的拇指落在屏幕上，停了两秒，打出几个字，又全部删掉。）\\n\\n（她的手开始抖。不是冷，是那行字——\\"She can't reach you anymore\\"——在眼前重叠成另一个画面：Daisy 被 James 以 Alpha 命令强压噤声的那一刻，那声哑掉的呼吸。）\\n\\n（她把装置攥进掌心，低下头，额头抵在膝盖上。油灯的光把她的影子压成一团，虫鸣从窗缝钻进来，填满整间小屋。）\\n\\n（她没有发出去任何东西。装置的屏幕自动熄灭。）\\n\\n（Sylvia 缓缓抬起头，把装置放回夜柜，手慢慢松开。她重新躺下，眼睛睁着，盯着横梁，呼吸一点点平稳下来。）\\n\\n黑屏字幕：You didn't sleep. The next morning, you went to find Iris.", "butterfly_effect": "Sylvia reached for agency but was stopped by the weight of helplessness. WIL takes a minor hit; Daisy's situation registers as an unresolved fracture.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia 的拇指落下去，打出一行字：\\"How bad is it. Is she safe right now.\\"）\\n\\n（她盯着屏幕，没有放下装置。等待的时间里，油灯的火苗轻轻晃了一下，虫鸣从窗外漫进来。）\\n\\n（回复来得很快。Kayden：\\"Confined to quarters. Not hurt. James doesn't know about the route.\\"）\\n\\n（Sylvia 的下颌慢慢松开了一毫米。她把这行字看了很久，然后把装置放回夜柜，手掌平压在上面，没有翻扣它。）\\n\\n（她重新躺下，这次面朝天花板，眼睛睁着。屏幕的余光还亮着，照在夜柜侧面，像一盏很小的灯。）\\n\\n（特写 — 她的手平放在身侧，掌心朝上，手指舒展，没有攥任何东西。）\\n\\n黑屏字幕：Daisy is safe — for now. You didn't sleep. The next morning, you went to find Iris.", "butterfly_effect": "Sylvia acted on Daisy's behalf within her current limits. WIL gains a marginal increment; her capacity to hold others without losing herself registers as strengthened.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Iris Blackwood"]	{"Sylvia": "二十多岁女性，深色厚棉外套，黑色长裤，磨损登山靴，左手腕有细布绷带，背负深色大背包，头发凌乱垂散。", "Iris Blackwood": "三十多岁女性，暗绿色宽领毛衣，深棕色直筒长裤，皮质系带靴，头发扎成低马尾，无饰品。"}	\N	2026-04-27 18:25:16.319	2026-04-27 18:25:16.319
+cmohj1zc2001etocivmrnd9rf	cmohj1z87000etocihnpez3b5	EP16	回来了	（场景：河谷领地 豪宅 客厅 — 日）\n（特写 — Sylvia 手里攥着一张折叠纸条，纸边已被手汗浸湿。她的嘴唇抿紧，喉结滚动了一下。）\n（Iris 站在她侧方两步外，没有开口。）\n\nSylvia: （声音压低，像在说给自己听）Daisy's locked in. Because of me.\n\nIris: What are you going to do?\n\n（Sylvia 把纸条攥进拳心。她抬头，眼眶发红，但眼神是清醒的。）\n\nSylvia: If I go back now — it gets worse for her.\n\n（她把纸条放在桌上，手慢慢松开，没有再看它。）\n\nSylvia: I'm staying.\n\n字幕：三个月后\n\n（场景：河谷领地 行政室 — 日）\n（Sylvia 坐在桌前，面前摊开几份文件。一名领地成员走进来，把意见表放在她桌角。她点点头，拿起来认真翻看。）\n（特写 — 文件上密密麻麻的批注，全是她的笔迹。）\n\n（场景：河谷领地 疗养草地 — 夜）\n（月光铺在草地上。Sylvia 一个人坐在地面，双腿盘起，双手放在膝上，眼睛闭着。她的嘴唇微动，没有声音发出——只是在轻唤。等了很久，什么都没有。她没有站起来，继续坐着。）\n（忽然，她的手指收紧，按住地面。）\n（特写 — 草地上，一道银灰色的轮廓从她身体里分离出来，四肢落地，稳稳站住。健康的狼，毛色清亮，呼吸平稳，和她对视。）\n（Sylvia 的膝盖慢慢弯下去，跪在地上。她的肩膀开始抖，眼泪直接落在草叶上，没有捂脸，没有出声，就那样哭着。）\n（脚步声。Iris 走过来，在她身边蹲下，没有说话，只是陪着。）	{"characters": ["Sylvia", "Iris Blackwood"], "episode_id": "EP 16", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Turn away. Don't let Iris see you like this.", "description": "Lyra 就站在你面前，毛色清亮，四肢稳稳踩着草地。你的肩膀还在抖，眼泪已经砸湿了膝盖前的草叶。Iris 就蹲在你旁边，你感觉到她的影子落在你身上——你把脸偏开，背对着她。"}, {"id": "B", "check": "WIL（意志）10", "content": "Stay. Let her see.", "description": "Iris 蹲下来的时候没有说话，也没有伸手。Lyra 的呼吸声就在你面前，稳的像一块压舱石。你的手还按在草地上，指尖是湿的——你没有动，也没有把脸转开。"}]}, "episode_title": "回来了", "scene_locations": {"河谷领地 行政室": {"location_id": null, "visual_prompt": "简洁行政办公空间，浅木色桌面，摊开的多份文件，台灯暖光，桌角叠放意见表，窗外隐约可见庭院植被，整体色调米白暖棕，光线集中于桌面。", "parent_location_id": "river_valley_manor"}, "河谷领地 疗养草地": {"location_id": null, "visual_prompt": "开阔草地，月光铺洒地面，草叶银白，远处树线低缓，无人工照明，夜风轻动，空旷宁静，地面草叶上有水珠反光。", "parent_location_id": "river_valley_manor"}, "河谷领地 豪宅 客厅": {"location_id": "river_valley_manor_living_room", "visual_prompt": "宽敞客厅，浅色石材地面，棉麻质感沙发，落地窗外夜色深沉，室内壁灯暖光低亮，木桌上摊开一张折叠纸条，空间安静，无其他人。", "parent_location_id": "river_valley_manor"}}, "character_outfits": {"Sylvia": "二十多岁女性，深色针织高领毛衣，深灰色直筒长裤，黑色系带皮靴，左手腕一圈细麻绳编织手环。", "Iris Blackwood": "三十岁左右女性，橄榄绿宽版衬衫外套，米白色长裤，棕色厚底踝靴，颈间一枚简约圆形银质吊坠。"}, "pre_choice_script": "（场景：河谷领地 豪宅 客厅 — 日）\\n（特写 — Sylvia 手里攥着一张折叠纸条，纸边已被手汗浸湿。她的嘴唇抿紧，喉结滚动了一下。）\\n（Iris 站在她侧方两步外，没有开口。）\\n\\nSylvia: （声音压低，像在说给自己听）Daisy's locked in. Because of me.\\n\\nIris: What are you going to do?\\n\\n（Sylvia 把纸条攥进拳心。她抬头，眼眶发红，但眼神是清醒的。）\\n\\nSylvia: If I go back now — it gets worse for her.\\n\\n（她把纸条放在桌上，手慢慢松开，没有再看它。）\\n\\nSylvia: I'm staying.\\n\\n字幕：三个月后\\n\\n（场景：河谷领地 行政室 — 日）\\n（Sylvia 坐在桌前，面前摊开几份文件。一名领地成员走进来，把意见表放在她桌角。她点点头，拿起来认真翻看。）\\n（特写 — 文件上密密麻麻的批注，全是她的笔迹。）\\n\\n（场景：河谷领地 疗养草地 — 夜）\\n（月光铺在草地上。Sylvia 一个人坐在地面，双腿盘起，双手放在膝上，眼睛闭着。她的嘴唇微动，没有声音发出——只是在轻唤。等了很久，什么都没有。她没有站起来，继续坐着。）\\n（忽然，她的手指收紧，按住地面。）\\n（特写 — 草地上，一道银灰色的轮廓从她身体里分离出来，四肢落地，稳稳站住。健康的狼，毛色清亮，呼吸平稳，和她对视。）\\n（Sylvia 的膝盖慢慢弯下去，跪在地上。她的肩膀开始抖，眼泪直接落在草叶上，没有捂脸，没有出声，就那样哭着。）\\n（脚步声。Iris 走过来，在她身边蹲下，没有说话，只是陪着。）", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia 把脸转开，肩膀绷紧，眼泪还在流，但她不让人看见。）\\n（Iris 没有强迫。她就那样蹲在旁边，沉默着，直到 Sylvia 的肩膀慢慢停止颤抖。）\\n（Lyra 走近一步，低头，把鼻尖轻轻抵在 Sylvia 的手背上。Sylvia 的手指动了一下，没有缩回去。）\\n（片刻后——）\\n\\nIris: （轻声）You already know how much longer.\\n\\n（Sylvia 没有说话。她点了点头，抬起脸，看向正上方。）\\n（特写 — 月亮，圆而清亮，还在原处。定格。）\\n\\n黑屏字幕：Lyra came back. So did you.", "butterfly_effect": "Sylvia accepts comfort only through Lyra's presence, not through human witness. WIL holds steady but gains no forward momentum.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia 没有转开脸。但眼泪一落，她的手就抬起来按住了自己的嘴——堵住那个快要出声的瞬间。）\\n（Iris 看见了。她没有说话，也没有靠近，只是把手放在了 Sylvia 旁边的草地上，就那样陪着。）\\n（Lyra 在她们中间站着，呼吸平稳，毛色在月光里发亮。）\\n（Sylvia 的手慢慢从嘴边放下来。她没有擦脸。）\\n\\nIris: （轻声）You already know how much longer.\\n\\n（Sylvia 没有说话。她点了点头，抬起脸，看向正上方。）\\n（特写 — 月亮，圆而清亮，还在原处。定格。）\\n\\n黑屏字幕：Lyra came back. You cried for a long time. But this time, it wasn't from pain.", "butterfly_effect": "Sylvia allows herself to be seen mid-breakdown but instinctively suppresses her voice. WIL gains a marginal increment; emotional openness remains guarded.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia 没有动。眼泪继续落，她的手还按在草地上，指节陷进潮湿的土里。）\\n（Iris 蹲在她旁边，没有说话，伸出手替Sylvia擦掉眼泪。Lyra 走近，把头低下来，轻轻靠在 Sylvia 的肩侧。）\\n（Sylvia 闭上眼睛，深吸一口气，把那口气慢慢呼出去。她的肩膀最后抖了一下，然后松了。）\\n\\nIris: （轻声）You already know how much longer.\\n\\n（Sylvia 睁开眼。她没有擦脸，直接抬起头，看向正上方，眼眶还是红的，但眼神是定的。）\\n\\nSylvia: （很轻，像只是说给月亮听）Yeah.\\n\\n（特写 — 月亮，圆而清亮，还在原处。定格。）\\n\\n黑屏字幕：Lyra came back. You let Iris watch you cry. You don't need to hide anymore.", "butterfly_effect": "Sylvia lets herself be witnessed without retreating. WIL and CHA both register a meaningful gain; her capacity for genuine connection takes one step forward.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Iris Blackwood"]	{"Sylvia": "二十多岁女性，深色针织高领毛衣，深灰色直筒长裤，黑色系带皮靴，左手腕一圈细麻绳编织手环。", "Iris Blackwood": "三十岁左右女性，橄榄绿宽版衬衫外套，米白色长裤，棕色厚底踝靴，颈间一枚简约圆形银质吊坠。"}	\N	2026-04-27 18:25:16.322	2026-04-27 18:25:16.322
+cmohj1zc5001gtoci71je3e9j	cmohj1z87000etocihnpez3b5	EP17	准备好了	（场景：河谷领地 疗养草地 — 夜）\n（月光铺满草地。Sylvia跪在月光里，Lyra——完整的、健康的灰白色内狼——安静站在她面前。Iris在她身边蹲着陪她。）\n\n（Sylvia抬起头，点了一下。月亮还在原处。）\n\n字幕：七个月后\n\n（场景：河谷领地 豪宅 客厅 — 日）\n（Sylvia 坐在窗边，手里握着一封信，纸张边缘已经被反复摩挲起皱。她把信读完，放在腿上，沉默了几秒。）\n\n（特写 — 信纸上最后一行清晰可见："Kennedy left. James is finished. Come back."）\n\n（Sylvia 站起来，走向沙发旁的背包，蹲下来，拉开底层夹层的拉链。她从里面取出一张折叠了很多次的纸条，展开。）\n\n（特写 — 纸条上只有一个地址，和一行字："Whenever you're ready. I'm here."）\n\n（Sylvia 的手指按住那行字，停了两秒，然后把纸条折好，放进外衣口袋。）\n\n（她拿起背包，走向走廊。Iris 从走廊另一端迎面走来，在她面前停下，看了她一眼，看了她手里的背包一眼。）\n\nSylvia: (直视 Iris，声音平稳) I'm ready.\n\nIris: (嘴角动了一下，点头) Then go.	{"characters": ["Sylvia", "Iris Blackwood"], "episode_id": "EP 17", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Step out without looking back.", "description": "Iris说了\\"then go\\"，大门就在你面前。这个地方救了你的命，Iris从来没问过你为什么来。但你知道——如果现在回头，你可能会留下来。你的手推上门把。"}, {"id": "B", "check": "CHA（魅力）8", "content": "Turn around. Say goodbye to Iris properly.", "description": "Iris站在走廊里看着你。十个月前她从溪边泥地里把你扶起来的时候，你连自己的名字都快说不出来。你的手在门把上，背包的重量压着肩膀。你转过身。"}]}, "episode_title": "准备好了", "scene_locations": {"河谷领地 疗养草地": {"location_id": null, "visual_prompt": "开阔草地，月光铺洒，草叶银白，远处树线低缓，夜风轻动，地面草丛间有露水反光，一只灰白色大型狼静立其中，四肢有力，毛色完整，无人工建筑物。", "parent_location_id": "river_valley_manor"}, "河谷领地 豪宅 客厅": {"location_id": "river_valley_manor_living_room", "visual_prompt": "宽敞客厅，浅色石材地面，棉麻质感沙发，落地窗引入充足自然光，窗边摆一把单人椅，椅旁小茶几，书架与绿植点缀，整体温暖开阔，光线明亮柔和。", "parent_location_id": "river_valley_manor"}}, "character_outfits": {"Sylvia": "二十多岁女性，深色长发松散披肩，穿着朴素深色长外套，深灰色修身长裤，黑色系带靴，外衣右侧口袋微微鼓起一个折叠纸条的轮廓，肩背深色大背包。", "Iris Blackwood": "三十岁左右女性，米白色宽松针织毛衣，浅卡其色直筒长裤，棕色皮质低跟踝靴，颈间细绳挂一枚小型黑色石质吊坠。"}, "pre_choice_script": "（场景：河谷领地 疗养草地 — 夜）\\n（月光铺满草地。Sylvia跪在月光里，Lyra——完整的、健康的灰白色内狼——安静站在她面前。Iris在她身边蹲着陪她。）\\n\\n（Sylvia抬起头，点了一下。月亮还在原处。）\\n\\n字幕：七个月后\\n\\n（场景：河谷领地 豪宅 客厅 — 日）\\n（Sylvia 坐在窗边，手里握着一封信，纸张边缘已经被反复摩挲起皱。她把信读完，放在腿上，沉默了几秒。）\\n\\n（特写 — 信纸上最后一行清晰可见：\\"Kennedy left. James is finished. Come back.\\"）\\n\\n（Sylvia 站起来，走向沙发旁的背包，蹲下来，拉开底层夹层的拉链。她从里面取出一张折叠了很多次的纸条，展开。）\\n\\n（特写 — 纸条上只有一个地址，和一行字：\\"Whenever you're ready. I'm here.\\"）\\n\\n（Sylvia 的手指按住那行字，停了两秒，然后把纸条折好，放进外衣口袋。）\\n\\n（她拿起背包，走向走廊。Iris 从走廊另一端迎面走来，在她面前停下，看了她一眼，看了她手里的背包一眼。）\\n\\nSylvia: (直视 Iris，声音平稳) I'm ready.\\n\\nIris: (嘴角动了一下，点头) Then go.", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia推开大门，阳光铺在她脸上。她迈过门槛，脚步稳，没有停顿，没有回头。）\\n（门在身后合上，发出一声轻响。）\\n（特写——她外衣口袋处，纸条的折痕轮廓透过布料隐约可见。她的手垂在身侧，指节放松。定格。）\\n\\n黑屏字幕：The note is still in your pocket. You know where to go.", "butterfly_effect": "Sylvia's departure is clean and self-contained. Her bond with Iris remains warm but unspoken; WIL carries forward steady, with no new relational anchor established.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia转过身。Iris还站在原地，神情平静，等着她。）\\n（Sylvia张了张嘴，停了一拍。）\\n\\nSylvia: （声音比预想的低，有些涩）I don't know how to say it.\\n\\nIris: （轻声）You don't have to. It's time to say goodbye.\\n\\n（沉默了两秒。Sylvia点了一下头，重新转向门口。她推开门，阳光打在她脸上。）\\n（特写——她外衣口袋处，纸条的折痕轮廓透过布料隐约可见。她的手垂在身侧，指节放松。定格。）\\n\\n黑屏字幕：The note is still in your pocket. You know where to go.", "butterfly_effect": "The farewell was attempted but left incomplete. Sylvia's connection with Iris holds; CHA gains no traction, but WIL remains stable.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia转过身。Iris还站在原地，神情平静，等着她。）\\n\\nSylvia: （直视她，声音平稳而清楚）Thank you. For not asking me to be anything.\\n\\n（Iris没有立刻说话。她看了Sylvia一秒，嘴角轻轻动了一下。）\\n\\nIris: （低声）Go be everything. I will always wish you well.\\n\\n（Sylvia点头。）\\n\\nSylvia:Goodbye.\\n\\n(Sylvia重新转向门口，推开门，阳光打在她脸上。）\\n（特写——她外衣口袋处，纸条的折痕轮廓透过布料隐约可见。她的手垂在身侧，指节放松。定格。）\\n\\n黑屏字幕：The note is still in your pocket. You know where to go.", "butterfly_effect": "Sylvia names what Iris gave her and receives it fully. CHA and WIL both register a quiet gain; her capacity to acknowledge genuine care has been restored.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Iris Blackwood"]	{"Sylvia": "二十多岁女性，深色长发松散披肩，穿着朴素深色长外套，深灰色修身长裤，黑色系带靴，外衣右侧口袋微微鼓起一个折叠纸条的轮廓，肩背深色大背包。", "Iris Blackwood": "三十岁左右女性，米白色宽松针织毛衣，浅卡其色直筒长裤，棕色皮质低跟踝靴，颈间细绳挂一枚小型黑色石质吊坠。"}	\N	2026-04-27 18:25:16.326	2026-04-27 18:25:16.326
+cmohj1zc8001itocizknmw7fj	cmohj1z87000etocihnpez3b5	EP18	等着你	字幕：次日\n\n（场景：中立区 咖啡馆 — 日）\n\n（Sylvia推开木门，背包搭在一侧肩上，外套口袋鼓起一个小角。她在门口停了一秒，视线扫过靠窗的卡座。）\n\n（Huxley已经坐在那里。鬓角比记忆里多了几缕白发。他看见她推门进来，没有站起来，没有开口，只是把手里的杯子放下，等她走过来。）\n\n（Sylvia在他对面坐下，把背包放在脚边。两人对视，沉默了两秒。）\n\nHuxley: You look better.\n\nSylvia: You have more white hair.\n\n（Huxley没有辩驳，低头看了看桌面，喉结动了一下。）\n\n（特写 — Sylvia的手放在桌上，指节放松，没有收紧。）\n\n（沉默延续。Sylvia的胸腔微微起伏，微微低下头，像是在听什么。Huxley的呼吸也慢了一拍，眼神往内收了一下。两人都没有说话。片刻后，Sylvia慢慢抬起头。）\n\nHuxley: I want to do this properly. Every step — your call. No commands. No pressure.\n\n（Sylvia看着他，看了整整三秒。）\n\nSylvia: Okay.\n\n（Huxley的手在桌面下握紧了一下，然后松开。他抬眼看向窗外，天色正往橙黄偏移。）\n\nHuxley: Tonight's a full moon. I found a quiet meadow nearby.\n\n（他把视线收回来，落在她脸上。）\n\nHuxley: Not an order. Just — if you want.	{"characters": ["Sylvia", "Huxley"], "episode_id": "EP 18", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Stay a little longer. Not yet.", "description": "Huxley的杯子还放在桌上，热气已经散了大半。他说\\"not an order\\"，但你的手指不自觉地碰了一下外套口袋——那张纸条还在里面。咖啡馆的暖光把他鬓角的白发照得很清楚，你低下眼睛，没有站起来。"}, {"id": "B", "check": "WIL（意志）10", "content": "Let's go.", "description": "他把视线收回来落在你脸上的那一秒，Lyra在你胸腔里动了一下——不是挣扎，是认出了什么。外套口袋里的纸条硌着你的手背，你的椅子腿在地板上轻响一声，背包已经搭上了肩。"}]}, "episode_title": "等着你", "scene_locations": {"中立区 咖啡馆": {"location_id": "neutral_zone_cafe", "visual_prompt": "中立区小型咖啡馆，砖墙裸露，木质吧台，吊灯暖黄，窗边卡座，桌面陶瓷杯，窗外天色由日光向橙黄偏移，馆内顾客稀少，光线温暖低调。", "parent_location_id": "neutral_zone_cafe"}}, "character_outfits": {"Huxley": "三十岁左右男性，深橄榄色厚实夹克，黑色圆领针织衫，深色直筒长裤，棕色皮靴，鬓角夹杂银丝。", "Sylvia": "二十多岁女性，深色连帽外套，深灰色修身长裤，黑色系带马丁靴，左手腕细银手链，背单肩深色背包，外套口袋略微鼓起。"}, "pre_choice_script": "字幕：次日\\n\\n（场景：中立区 咖啡馆 — 日）\\n\\n（Sylvia推开木门，背包搭在一侧肩上，外套口袋鼓起一个小角。她在门口停了一秒，视线扫过靠窗的卡座。）\\n\\n（Huxley已经坐在那里。鬓角比记忆里多了几缕白发。他看见她推门进来，没有站起来，没有开口，只是把手里的杯子放下，等她走过来。）\\n\\n（Sylvia在他对面坐下，把背包放在脚边。两人对视，沉默了两秒。）\\n\\nHuxley: You look better.\\n\\nSylvia: You have more white hair.\\n\\n（Huxley没有辩驳，低头看了看桌面，喉结动了一下。）\\n\\n（特写 — Sylvia的手放在桌上，指节放松，没有收紧。）\\n\\n（沉默延续。Sylvia的胸腔微微起伏，微微低下头，像是在听什么。Huxley的呼吸也慢了一拍，眼神往内收了一下。两人都没有说话。片刻后，Sylvia慢慢抬起头。）\\n\\nHuxley: I want to do this properly. Every step — your call. No commands. No pressure.\\n\\n（Sylvia看着他，看了整整三秒。）\\n\\nSylvia: Okay.\\n\\n（Huxley的手在桌面下握紧了一下，然后松开。他抬眼看向窗外，天色正往橙黄偏移。）\\n\\nHuxley: Tonight's a full moon. I found a quiet meadow nearby.\\n\\n（他把视线收回来，落在她脸上。）\\n\\nHuxley: Not an order. Just — if you want.", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia没有动。她的手指在桌沿轻轻搭着，视线落在杯子侧面。）\\n\\nSylvia: Can we just... sit here for a while?\\n\\n（Huxley没有催。他把杯子重新端起来，靠在椅背上，把窗外的橙色天光看了很久。）\\n\\nHuxley: Of course，we have enough time.\\n\\n（沉默落下来，但这次不是空的。窗外天色一点一点加深，从橙黄压向暮蓝。Sylvia的手指慢慢离开桌沿，垂回膝上。她侧过脸，看了一眼窗外。）\\n\\n（特写 — 她外套口袋的轮廓，那张纸条的角微微翘起。）\\n\\n（Sylvia站起来，拎起背包搭上肩，没有说话，只是朝门口走了一步，在门边停下，回头看了他一眼。）\\n\\nHuxley: （已经跟着站起来，推开椅子，动作比平时快了半拍。）\\n\\n（两人一前一后推开玻璃门，走出咖啡馆。外面月光铺在碎石路上。）\\n\\n黑屏字幕：You looked back at him. He was already on his feet.", "butterfly_effect": "Sylvia chose to pause before stepping forward. WIL holds steady but registers no active gain; the bond's first move was deferred, not declined.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia站起来，背包搭上肩，转向门口。）\\n\\nSylvia: Let's go.\\n\\n（声音比预想的小了一号，像是话出了口才意识到自己说了什么。她的脚步在门边顿了一下，手扶上门框，没有回头。）\\n\\n（Huxley没有催她，也没有追上来。沉默里，Sylvia听见他椅子轻响，站起来的声音。）\\n\\nHuxley: （声音很平，不带任何压力）I'm right behind you.\\n\\n（Sylvia的手指在门框上松开。她深吸一口气，推开门，迈出去。）\\n\\n（特写 — 门外，暮色已经压下来，碎石路在橙蓝交界的天光里延伸向前。Huxley跟着走出来，推开椅子的动作比平时快了半拍。）\\n\\n黑屏字幕：\\"I'm right behind you.\\" You didn't look back. But you knew he was there.", "butterfly_effect": "Sylvia moved forward despite the hesitation. WIL registers a marginal gain; the bond's first step was taken, though not yet fully claimed.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia已经转向门口。）\\n\\nSylvia: Let's go.\\n\\n（Huxley愣了一秒。特写 — 他的手推开椅子，动作比平时快了半拍。）\\n\\n（Sylvia没有等他开口，也没有回头确认。她推开木门，门铃轻响一声，暮色扑进来。碎石路在橙蓝交界的天光里向前延伸，远处草地的轮廓已经隐入暮色。）\\n\\n（Huxley跟着走出来，在她身侧一步的位置停下。两人并排站在门口，没有说话。）\\n\\n（特写 — Sylvia的手指碰了一下外套口袋，那张纸条的角硌了一下她的掌心，然后她把手放开，垂在身侧。）\\n\\n黑屏字幕：You didn't wait for him. But he followed. The note is still in your pocket.", "butterfly_effect": "Sylvia moved first, without waiting for permission or reassurance. WIL gains traction; her agency in initiating the bond's first step registers as a clear internal shift.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Huxley"]	{"Huxley": "三十岁左右男性，深橄榄色厚实夹克，黑色圆领针织衫，深色直筒长裤，棕色皮靴，鬓角夹杂银丝。", "Sylvia": "二十多岁女性，深色连帽外套，深灰色修身长裤，黑色系带马丁靴，左手腕细银手链，背单肩深色背包，外套口袋略微鼓起。"}	\N	2026-04-27 18:25:16.328	2026-04-27 18:25:16.328
+cmohj1zcb001ktocidvrm28ed	cmohj1z87000etocihnpez3b5	EP19	月下	（场景：中立区 咖啡馆 出口 → 草地小路 — 夜，满月）\n（两扇玻璃门从内推开。Sylvia先迈出去，Huxley跟在半步之后。碎石路在月光下发白，两人都没有说话。）\n（特写 — 两双脚，一前一后踩在碎石上，节奏各自独立，却没有一方催促另一方。）\n\n（场景：中立区 草地 — 夜，满月，连续）\n（草地边缘，Huxley停下。Sylvia继续往前走了两步，走到草地中央，停住，仰头看满月。）\n\nHuxley: Kael's been waiting three years. But if you just want to stand here — that's enough.\n\n（Sylvia没有回答。她闭上眼睛，双臂垂落，指尖微微松开。）\n（特写 — 她的喉结轻轻滚动一下。嘴角极细微地动了一下，像是在回应什么只有她自己听得见的东西。）\n（她睁开眼，转头看向Huxley，点了一下头。）\n（Huxley的下颌轻轻收紧，随即松开。他闭上眼睛，片刻后睁开，直视着她。月光在两人之间铺开，没有震颤，没有灼烧，只是一种安静的、不可撤回的到位感。）\n（特写 — Sylvia的手，手指缓缓收拢，攥成一个松松的拳，然后完全放开，悬在身侧，不动了。）\n\nHuxley: （轻，像在确认）How does it feel?\n\nSylvia: （停顿一秒，声音很平，却清晰）Right.\n\n（Huxley从外套内袋取出一张折叠地图，展开，单手递到Sylvia面前。月光打在纸面上，北方有一处手写标记。）\n\nHuxley: （手指点在标记上）Aurora Pack. Alpha Morgan's waiting. They need someone who knows how to run a territory.\n\n（Sylvia低头看地图。特写 — 她的眼睛在那个陌生坐标上停住，眼睫没有颤，表情没有收紧。）\n（她抬起头，直视Huxley。）	{"characters": ["Sylvia", "Huxley"], "episode_id": "EP 19", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Tell me more. What exactly do they need?", "description": "地图还展开在Huxley手里，北方那个手写坐标在月光下清晰得像一道命令。你的眼睛停在那个陌生名字上，\\"Aurora Pack\\"——你连那片土地长什么样都不知道。你想把所有细节问清楚再开口，就像你一直以来的习惯：先确认安全，再迈步。"}, {"id": "B", "check": "WIL（意志）10", "content": "When do we leave?", "description": "地图纸边被夜风轻轻掀起一角，Huxley的手指还压在那个北方标记上。你十个月前连自己的名字都快不认识了，现在你站在满月下的草地中央，Lyra在你胸腔里安静而清醒。那个坐标你一个字都不认识，但你的嘴已经先你的脑子动了。"}]}, "episode_title": "月下", "scene_locations": {"中立区 草地": {"location_id": "neutral_zone_meadow", "visual_prompt": "开阔草地，无遮挡满月高悬，月光均匀铺洒，草地银白与深绿交织，远处树线轮廓低缓，夜风轻动草浪，空旷宁静，无人工建筑物。地面碎石小路延伸至草地边缘，两人脚印清晰可见。", "parent_location_id": "neutral_zone_meadow"}, "中立区 咖啡馆": {"location_id": "neutral_zone_cafe", "visual_prompt": "中立区小型咖啡馆，砖墙裸露，木质吧台，吊灯暖黄，窗边卡座，桌面有陶瓷杯与蜡烛，整体氛围低调私密，色调暖棕米白。", "parent_location_id": "neutral_zone_cafe"}}, "character_outfits": {"Huxley": "三十岁左右男性，厚实深橄榄绿军事风外套，黑色圆领内搭，深色直筒裤，黑色登山靴，外套内袋有明显折叠纸张轮廓。", "Sylvia": "二十多岁女性，深色收腰长外套，深灰针织高领毛衣，黑色修身长裤，深棕色系带短靴，左手腕一根细皮绳手环。"}, "pre_choice_script": "（场景：中立区 咖啡馆 出口 → 草地小路 — 夜，满月）\\n（两扇玻璃门从内推开。Sylvia先迈出去，Huxley跟在半步之后。碎石路在月光下发白，两人都没有说话。）\\n（特写 — 两双脚，一前一后踩在碎石上，节奏各自独立，却没有一方催促另一方。）\\n\\n（场景：中立区 草地 — 夜，满月，连续）\\n（草地边缘，Huxley停下。Sylvia继续往前走了两步，走到草地中央，停住，仰头看满月。）\\n\\nHuxley: Kael's been waiting three years. But if you just want to stand here — that's enough.\\n\\n（Sylvia没有回答。她闭上眼睛，双臂垂落，指尖微微松开。）\\n（特写 — 她的喉结轻轻滚动一下。嘴角极细微地动了一下，像是在回应什么只有她自己听得见的东西。）\\n（她睁开眼，转头看向Huxley，点了一下头。）\\n（Huxley的下颌轻轻收紧，随即松开。他闭上眼睛，片刻后睁开，直视着她。月光在两人之间铺开，没有震颤，没有灼烧，只是一种安静的、不可撤回的到位感。）\\n（特写 — Sylvia的手，手指缓缓收拢，攥成一个松松的拳，然后完全放开，悬在身侧，不动了。）\\n\\nHuxley: （轻，像在确认）How does it feel?\\n\\nSylvia: （停顿一秒，声音很平，却清晰）Right.\\n\\n（Huxley从外套内袋取出一张折叠地图，展开，单手递到Sylvia面前。月光打在纸面上，北方有一处手写标记。）\\n\\nHuxley: （手指点在标记上）Aurora Pack. Alpha Morgan's waiting. They need someone who knows how to run a territory.\\n\\n（Sylvia低头看地图。特写 — 她的眼睛在那个陌生坐标上停住，眼睫没有颤，表情没有收紧。）\\n（她抬起头，直视Huxley。）", "post_choice_outcomes": [{"reaction_id": "Reaction 1", "story_content": "（Huxley没有立刻回答。他低头看了一眼地图，食指在那个标记上停了一秒。）\\n\\nHuxley: Morgan runs the territory alone. Six months behind on admin. She needs someone who's done it before — and who won't flinch at the backlog.\\n\\n（Sylvia听着，视线没有离开那个坐标。她的手指轻轻碰了一下纸边，感受到折痕的厚度。）\\n\\nSylvia: And the Pack? How many?\\n\\nHuxley: Forty-three. Small. Loyal.\\n\\n（沉默了两秒。草地上的夜风把地图纸边再次掀起来，Sylvia用指腹压住。）\\n\\nSylvia: （声音平稳，没有迟疑）Okay. When do we leave?\\n\\n（Huxley把地图重新折好，递到她手里。两人并排站在月光下，满月高悬，草地银白，地图握在Sylvia掌心。）\\n\\n黑屏字幕：You folded the map and headed north.", "butterfly_effect": "Sylvia gathers information before committing. Her caution is intact; WIL holds steady but registers no forward momentum.", "trigger_condition": "选择选项 A"}, {"reaction_id": "Reaction 2", "story_content": "（话出了口，但声音比她预想的低了一个刻度，像是被什么压住了尾音。）\\n（Huxley没有立刻接话。他看了她一眼，眼神里有什么东西在等待。）\\n\\nHuxley: （平静）You sure? You haven't even asked what the job is.\\n\\n（Sylvia的手指收紧了一下，地图纸边在她指间发出轻微的摩擦声。她低头看了一眼那个北方坐标，喉咙里有什么东西卡了一下。）\\n\\nSylvia: （重新抬起头，声音稳住了）I'm sure. Tell me on the way.\\n\\n（Huxley沉默了一秒，然后把地图折好，递到她手里。）\\n\\nHuxley: （轻）Fair enough.\\n\\n（两人并排站在月光下，满月高悬，草地银白，地图握在Sylvia掌心，夜风轻动草浪。）\\n\\n黑屏字幕：You folded the map and headed north.", "butterfly_effect": "Sylvia's resolve surfaces but wavers under scrutiny. WIL shows movement without full consolidation.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "Reaction 3", "story_content": "（Huxley愣了一秒。他的手指还压在地图上，眼睛抬起来，认真看了她一眼。）\\n\\nHuxley: （嘴角极轻地动了一下）You didn't even ask what the job pays.\\n\\nSylvia: （眼神清醒，嘴角微动）Does it matter?\\n\\n（Huxley没有再说话。他把地图折好，两手递到她面前——不是单手，是郑重的两手。）\\n（Sylvia接过来，握在掌心。纸张还带着他外套内袋的温度。）\\n\\nHuxley: （轻，像是说给自己听）Three years. Worth the wait.\\n\\n（两人并排站在月光下，满月高悬，草地银白，地图握在Sylvia掌心，夜风轻动草浪。）\\n\\n黑屏字幕：You folded the map and headed north.", "butterfly_effect": "Sylvia's unguarded decisiveness registers as genuine agency. WIL and CHA both gain traction entering the new territory.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Huxley"]	{"Huxley": "三十岁左右男性，厚实深橄榄绿军事风外套，黑色圆领内搭，深色直筒裤，黑色登山靴，外套内袋有明显折叠纸张轮廓。", "Sylvia": "二十多岁女性，深色收腰长外套，深灰针织高领毛衣，黑色修身长裤，深棕色系带短靴，左手腕一根细皮绳手环。"}	\N	2026-04-27 18:25:16.332	2026-04-27 18:25:16.332
+cmohj1zce001mtocijz3nuglp	cmohj1z87000etocihnpez3b5	EP20	此地	（场景：北极光领地 边界 — 日）\n（字幕：数日后）\n（Sylvia 和 Huxley 并排走到边界线前停下。对面，Daisy 已经等在那里了。）\n（Daisy 没有跑过来，没有哭。她从头到脚把 Sylvia 打量了一圈，目光最后落在她脸上，停住。）\n\nDaisy: You look different.\n\nSylvia: Different how?\n\nDaisy: (顿了一下，认真) You never used to look at people like that. Like you're not afraid of anything.\n\n（Sylvia 没有说话。她抬手把 Daisy 拉过来，两人抱了一下，快而有力，像是把一年的话都压进这一个动作里。）\n\n（场景：北极光领地 主屋 办公室 — 日）\n（字幕：【Alpha Morgan：北极光领地 Alpha，以平等理念立领】）\n（Alpha Morgan 把半摞积压的行政档案推到桌子对面，眼神直接，不带客套。）\n\nAlpha Morgan: Six months behind. You want the job or not?\n\n（Sylvia 看了看那摞档案。她拉开椅子，坐下，翻开第一页。）\n\nSylvia: I'll start today.\n\n（Morgan 扬了扬眉——她显然没想到连一秒都没有犹豫。）\n\n（场景：北极光领地 北侧开阔地 — 夜）\n（Sylvia 独自站在开阔地上，仰着头。北极光在天幕上大片展开，绿与白在黑暗中缓慢流动。）\n（Huxley 走过来，站在她身边，没有开口。）\n\nSylvia: (看着天，慢) Three years ago, I thought fate gave me everything I could have.\n\nHuxley: And now?\n\nSylvia: (停顿，清晰) Now I know. That wasn't fate. That was a cage.\n\n（Huxley 把手覆上她的手背。Sylvia 没有缩回去——她把手翻过来，反握住他。两人都没有再说话。北极光的光在两只交握的手上流过。）\n\n（场景：北极光领地 主屋 书桌 — 次日清晨）\n（字幕：次日清晨）\n（晨光斜射进来。Sylvia 坐在桌前，翻开那摞档案。最上面压着一封信，她抽出来，展开。）\n（特写——信纸上一行字，落款：Iris Blackwood。）\n\nSylvia: (轻声，念出来) "I knew you'd find it."\n\n（她把信叠好，握在手里，没有立刻放下。	{"characters": ["Sylvia", "Huxley", "Daisy", "Alpha Morgan"], "episode_id": "EP 20", "choice_node": {"type": "成长型", "options": [{"id": "A", "check": "无需检定", "content": "Fold the letter away. There's work to do.", "description": "信纸的折痕压在你指尖。Iris 的字迹你认得出——她从不多说一个字。你把信叠好，压进口袋，翻开档案的下一页。Huxley 还没坐下来，办公室里只有你一个人，和那摞六个月没人动过的文件。"}, {"id": "B", "check": "WIL（意志）8", "content": "Read it out loud to Huxley.", "description": "Huxley 就坐在你对面，手里拿着另一份文件还没翻开。Iris 的那句话还停在你嘴边——\\"I knew you'd find it.\\" 你一个人藏了太久太多东西了。信纸在你手里，晨光从侧窗打进来，他抬起眼看你。"}]}, "episode_title": "此地", "scene_locations": {"北极光领地 边界": {"location_id": null, "visual_prompt": "领地边界线，开阔地与密林交界处，地面覆薄雪，针叶林深绿连绵，天光清冷泛蓝，远处可见领地主屋屋顶轮廓，边界感明确，无围栏，仅以地势区分内外。", "parent_location_id": null}, "北极光领地 主屋 书桌": {"location_id": null, "visual_prompt": "室内书桌一角，浅木色桌面，摊开的档案文件，一封折叠信纸置于文件最上层，晨光从侧窗斜射而入，光线柔和偏暖，窗外针叶林树梢透光，室内安静整洁。", "parent_location_id": null}, "北极光领地 北侧开阔地": {"location_id": null, "visual_prompt": "宽阔雪地，无遮挡夜空，北极光大片铺展，绿色与白色光带在黑暗中流动涌动，地面积雪反光呈蓝白色，远处针叶林剪影低沉，空旷寂静，无人工建筑。", "parent_location_id": null}, "北极光领地 主屋 办公室": {"location_id": null, "visual_prompt": "简洁功能性办公室，浅木色实木桌面，桌上积压厚厚一摞档案文件，两把对向木椅，窗外针叶林，自然光冷白直射，墙面浅灰，无多余装饰，整体风格干净克制。", "parent_location_id": null}}, "character_outfits": {"Daisy": "二十多岁女性，酒红色羊毛大衣，黑色高领毛衣，深色紧身裤，黑色切尔西靴，颈间细金项链。", "Huxley": "三十岁左右男性，深灰色厚呢大衣，黑色高领毛衣，深色直筒长裤，黑色皮靴。", "Sylvia": "二十多岁女性，深色修身长裤，厚实深橄榄绿户外夹克，内搭米白色圆领针织衫，深棕色系带踝靴，左手腕细银手链。", "Alpha Morgan": "四十岁左右女性，深蓝色立领制服外套，同色系直筒长裤，黑色皮带束腰，黑色低跟皮靴，短发利落。"}, "pre_choice_script": "（场景：北极光领地 边界 — 日）\\n（字幕：数日后）\\n（Sylvia 和 Huxley 并排走到边界线前停下。对面，Daisy 已经等在那里了。）\\n（Daisy 没有跑过来，没有哭。她从头到脚把 Sylvia 打量了一圈，目光最后落在她脸上，停住。）\\n\\nDaisy: You look different.\\n\\nSylvia: Different how?\\n\\nDaisy: (顿了一下，认真) You never used to look at people like that. Like you're not afraid of anything.\\n\\n（Sylvia 没有说话。她抬手把 Daisy 拉过来，两人抱了一下，快而有力，像是把一年的话都压进这一个动作里。）\\n\\n（场景：北极光领地 主屋 办公室 — 日）\\n（字幕：【Alpha Morgan：北极光领地 Alpha，以平等理念立领】）\\n（Alpha Morgan 把半摞积压的行政档案推到桌子对面，眼神直接，不带客套。）\\n\\nAlpha Morgan: Six months behind. You want the job or not?\\n\\n（Sylvia 看了看那摞档案。她拉开椅子，坐下，翻开第一页。）\\n\\nSylvia: I'll start today.\\n\\n（Morgan 扬了扬眉——她显然没想到连一秒都没有犹豫。）\\n\\n（场景：北极光领地 北侧开阔地 — 夜）\\n（Sylvia 独自站在开阔地上，仰着头。北极光在天幕上大片展开，绿与白在黑暗中缓慢流动。）\\n（Huxley 走过来，站在她身边，没有开口。）\\n\\nSylvia: (看着天，慢) Three years ago, I thought fate gave me everything I could have.\\n\\nHuxley: And now?\\n\\nSylvia: (停顿，清晰) Now I know. That wasn't fate. That was a cage.\\n\\n（Huxley 把手覆上她的手背。Sylvia 没有缩回去——她把手翻过来，反握住他。两人都没有再说话。北极光的光在两只交握的手上流过。）\\n\\n（场景：北极光领地 主屋 书桌 — 次日清晨）\\n（字幕：次日清晨）\\n（晨光斜射进来。Sylvia 坐在桌前，翻开那摞档案。最上面压着一封信，她抽出来，展开。）\\n（特写——信纸上一行字，落款：Iris Blackwood。）\\n\\nSylvia: (轻声，念出来) \\"I knew you'd find it.\\"\\n\\n（她把信叠好，握在手里，没有立刻放下。", "post_choice_outcomes": [{"reaction_id": "反应一", "story_content": "（Sylvia 把信叠好，塞进外衣口袋，低下头，翻开档案的下一页。）\\n（Huxley 在她对面坐下，拿起另一份文件，开始翻。没有问，没有等。）\\n（两人并排坐在桌前，各自低头。窗外晨光打进来，针叶林的树影在地板上拉出长线。没有誓词，没有命令。）\\n\\n黑屏字幕：This is where you belong. Not because fate said so — because you chose it.", "butterfly_effect": "Sylvia keeps Iris's words private. The letter becomes a sealed anchor rather than a shared one. WIL consolidates inward; CHA toward Huxley holds steady but does not deepen.", "trigger_condition": "选择选项 A"}, {"reaction_id": "反应二", "story_content": "（Sylvia 张了张嘴，目光落在信纸上，又移开。）\\n\\nSylvia: (轻，像是自言自语) She said... she knew I'd find it.\\n\\n（Huxley 抬起眼，等着。Sylvia 把信叠好，放进口袋，没有再说下去。）\\n\\nHuxley: (平静，不追问) Okay.\\n\\n（他低下头，继续翻文件。Sylvia 看了他一秒，也低下头。）\\n（两人并排坐在桌前，各自低头翻看档案，窗外晨光打进来。没有誓词，没有命令。）\\n\\n黑屏字幕：This is where you belong. Not because fate said so — because you chose it.", "butterfly_effect": "Sylvia reaches toward Huxley but pulls back at the threshold. WIL shows strain at the point of vulnerability; CHA toward Huxley remains unchanged.", "trigger_condition": "选择选项 B - 检定失败"}, {"reaction_id": "反应三", "story_content": "（Sylvia 抬起头，看向 Huxley。）\\n\\nSylvia: She said, \\"I knew you'd find it.\\"\\n\\n（Huxley 放下手里的文件，认真地看着她。）\\n\\nHuxley: Sounds like she always did.\\n\\nSylvia: (停顿，轻) Yeah. She did.\\n\\n（她把信叠好，放进外衣口袋，手在口袋外面按了一下，然后松开。）\\n（Huxley 拿起另一份文件，递给她。Sylvia 接过来，低下头。）\\n（两人并排坐在桌前，各自低头翻看档案，窗外晨光打进来。没有誓词，没有命令。）\\n\\n黑屏字幕：This is where you belong. Not because fate said so — because you chose it.", "butterfly_effect": "Sylvia speaks Iris's words aloud and lets them land between her and Huxley. CHA and WIL each register a measured gain; the bond carries a new layer of witnessed history.", "trigger_condition": "选择选项 B - 检定成功"}]}	["Sylvia", "Huxley", "Daisy", "Alpha Morgan"]	{"Daisy": "二十多岁女性，酒红色羊毛大衣，黑色高领毛衣，深色紧身裤，黑色切尔西靴，颈间细金项链。", "Huxley": "三十岁左右男性，深灰色厚呢大衣，黑色高领毛衣，深色直筒长裤，黑色皮靴。", "Sylvia": "二十多岁女性，深色修身长裤，厚实深橄榄绿户外夹克，内搭米白色圆领针织衫，深棕色系带踝靴，左手腕细银手链。", "Alpha Morgan": "四十岁左右女性，深蓝色立领制服外套，同色系直筒长裤，黑色皮带束腰，黑色低跟皮靴，短发利落。"}	\N	2026-04-27 18:25:16.334	2026-04-27 18:25:16.334
+\.
+
+
+--
+-- Data for Name: Skill; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."Skill" (id, name, version, description, tags, "ossKey", "isProduction", metadata, "createdAt", "updatedAt") FROM stdin;
+cmohicbrt0000toqh4q0lq5o0	business-database	1	使用 PostgreSQL 业务数据库管理业务数据，通过 biz_db 工具创建表、存储数据、查询数据或构建任何业务数据结构	{}	public/skills/business-database/v1.md	t	\N	2026-04-27 18:05:19.385	2026-04-27 18:05:19.385
+cmohicbui0001toqh4pg4hlp5	ep-video-workflow	1	EP级视频制作工作流，用于分镜生成、镜头图片和视频创建。仅用于剧集级内容，不修改小说级资源	{}	public/skills/ep-video-workflow/v1.md	t	\N	2026-04-27 18:05:19.483	2026-04-27 18:05:19.483
+cmohicbys0002toqh5xnniyq9	forge-sync	1	在本地和远程 hub 之间同步 skills 和 MCPs。当需要本地不可用的能力，或想要分享本地 skills/MCPs 到 hub 时使用	{}	public/skills/forge-sync/v1.md	t	\N	2026-04-27 18:05:19.636	2026-04-27 18:05:19.636
+cmohiccak0003toqh4oqv9zz8	langfuse	1	通过 Langfuse 管理 prompt 模板。当需要获取、检查或编译 subagent 执行的 prompts 时使用	{}	public/skills/langfuse/v1.md	t	\N	2026-04-27 18:05:20.06	2026-04-27 18:05:20.06
+cmohiccdf0004toqh8ui8dh2t	novel-resource-mgr	1	初始化和管理小说级共享资源，如角色立绘和场景图片。用于小说级资源设置、角色初始化和场景位置管理	{}	public/skills/novel-resource-mgr/v1.md	t	\N	2026-04-27 18:05:20.164	2026-04-27 18:05:20.164
+cmohiccfz0005toqhaahispa3	oss	1	上传文件（图片、视频、文档）到阿里云 OSS 进行永久存储。当需要持久化生成的内容或外部资源时使用	{}	public/skills/oss/v1.md	t	\N	2026-04-27 18:05:20.256	2026-04-27 18:05:20.256
+cmohiccic0006toqhr4oth2bk	skill-creator	1	为本系统创建高质量的 Agent Skills。当被要求创建、设计或改进 skill 时使用	{}	public/skills/skill-creator/v1.md	t	\N	2026-04-27 18:05:20.34	2026-04-27 18:05:20.34
+cmohiccl00007toqhx237l8u0	subagent	1	通过 subagent 将 prompt 驱动的任务委托给小模型。当需要执行 Langfuse prompts 或任何不应在主控制器模型上运行的任务时使用	{}	public/skills/subagent/v1.md	t	\N	2026-04-27 18:05:20.436	2026-04-27 18:05:20.436
+cmohiccnf0008toqh7mt9929z	upload	1	上传本地文件（图片、视频、文档、小说）到任意端点 — 文件内容不经过 LLM 上下文	{}	public/skills/upload/v1.md	t	\N	2026-04-27 18:05:20.524	2026-04-27 18:05:20.524
+cmohiccpl0009toqh6r9zhet6	video-character-dna	1	角色 DNA 锁定规则 - 服装权威源、立绘映射、弱档属性处理	{}	public/skills/video-character-dna/v1.md	t	\N	2026-04-27 18:05:20.601	2026-04-27 18:05:20.601
+cmohiccre000atoqhvdp0peff	video-deep-analysis	1	深度分析工具 - 用于分析视频生成问题和优化策略	{}	public/skills/video-deep-analysis/v1.md	t	\N	2026-04-27 18:05:20.666	2026-04-27 18:05:20.666
+cmohiccte000btoqhts3zdqa9	video-director-playbook	1	Seedance 实测可用的导演原则 - 镜头语言、剧作、声音、色调等导演技巧	{}	public/skills/video-director-playbook/v1.md	t	\N	2026-04-27 18:05:20.739	2026-04-27 18:05:20.739
+cmohiccvg000ctoqh8ioc2q2j	video-mgr	1	通过 FC（函数计算）多模态服务生成图片和视频。当被要求创建、生成或制作图片或视频时使用	{}	public/skills/video-mgr/v1.md	t	\N	2026-04-27 18:05:20.813	2026-04-27 18:05:20.813
+cmohiccx4000dtoqhyyilhs25	video-problems-log	1	问题日志 - 记录已知问题和解决方案	{}	public/skills/video-problems-log/v1.md	t	\N	2026-04-27 18:05:20.873	2026-04-27 18:05:20.873
+cmohiccyr000etoqhn2796dcp	video-seedance-lessons	1	Seedance 实测经验教训 - 能力档位、反向校准、道具激活、情绪定位等铁律	{}	public/skills/video-seedance-lessons/v1.md	t	\N	2026-04-27 18:05:20.932	2026-04-27 18:05:20.932
+cmohicd0q000ftoqhl2stz2f6	video-shot-id-policy	1	Shot ID 命名与素材引用规则 - @图N 顺序、videos 规则、末帧 PNG 标准	{}	public/skills/video-shot-id-policy/v1.md	t	\N	2026-04-27 18:05:21.002	2026-04-27 18:05:21.002
+cmohicd2e000gtoqh93x7ve3l	video-skill-reviewer	1	Skill Reviewer - 技能文件质量检测标准，32 项检测清单	{}	public/skills/video-skill-reviewer/v1.md	t	\N	2026-04-27 18:05:21.062	2026-04-27 18:05:21.062
+cmohicd4a000htoqhoq5x8oc2	video-workflow-legacy	1	Video Agent 旧版工作流 - 保留作为参考	{}	public/skills/video-workflow-legacy/v1.md	t	\N	2026-04-27 18:05:21.131	2026-04-27 18:05:21.131
+cmohicd6c000itoqhfammmm28	video-workflow	1	Video Agent 新管线工作流 - 测试管线的完整 SOP，用于 EP2/EP11/EP16 复杂场景	{}	public/skills/video-workflow/v1.md	t	\N	2026-04-27 18:05:21.205	2026-04-27 18:05:21.205
+\.
+
+
+--
+-- Data for Name: StylePreset; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."StylePreset" (id, name, prompt, "referenceImageUrl", "createdAt", "updatedAt") FROM stdin;
+cmohj3pli0004tounqsr553r9	video_style	以下人物均为版权属于我们的原创动漫人物（并非真实人物），版权所有 ©️ MOB.AI Inc\n{{definition}}\n韩漫画风，2d 动漫风格画风，9:16 尺寸，9:16 尺寸，9:16 尺寸，严格遵循参考图、参考视频中场景的空间关系，禁止人物瞬移、镜头跳跃、空间关系改变和物理穿模，保证视频中空间场景与人物的一致性，自然的切镜和运镜。\n{{prompt}}	\N	2026-04-27 18:26:37.015	2026-04-27 18:27:51.897
+cmohj3pl90003tounnonl9x19	update_portrait_style	韩漫画风，欧美五官，9:16 尺寸的全身人物立绘，白色背景，注视着镜头微笑，无文字，在保持人物面部特征不变的情况下，用这段新的着装词仅更换人物立绘的着装：{{appearance_desc}}	\N	2026-04-27 18:26:37.006	2026-04-27 18:28:12.898
+cmohj3pkj0000tounknbkxoah	location_style	16:9 尺寸，场景空镜图，新海诚动漫风格，自然光，明度调高，色彩清澈，欧美现代风格，电影级细节，{{scenePrompt}}	\N	2026-04-27 18:26:36.979	2026-04-27 18:29:32.109
+cmohj3pkt0001tounufq3n4he	location_grid_style	新海诚动漫风格，自然光，明度调高，色彩清澈，欧美现代风格，电影级细节，\n请生成一张 {{gridSize}} 宫格图片，每格比例16:9，所有格子风格必须严格统一。\n请在每格底部标注场景名称：\n{{gridSlots}}	\N	2026-04-27 18:26:36.989	2026-04-27 18:29:44.994
+cmohj3pl00002tounwtkcvgdk	sub_location_style	参考图 1 生成 16:9 的场景图：新海诚动漫画风，将【{{sceneName}}】的场景图放大并添加电影级细节，画面中没有任何文字和人物。	\N	2026-04-27 18:26:36.997	2026-04-27 18:29:59.728
+cmnkofxt10000top6ss1f74nq	portrait-style	韩漫画风，欧美五官，9:16 尺寸的全身人物立绘，白色背景，注视着镜头，无文字，{{demographics}}	https://mobai-file.oss-cn-shanghai.aliyuncs.com/public/style-ref/media-mnncxnln-6wl8lx.png	2026-04-27 17:52:08.872	2026-04-27 18:30:09.562
+\.
+
+
+--
+-- Data for Name: SubAgent; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."SubAgent" (id, "sessionId", "parentAgentId", depth, status, config, output, error, trace, "createdAt", "updatedAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: SubAgentEvent; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."SubAgentEvent" (id, "subagentId", type, data, "createdAt") FROM stdin;
+\.
+
+
+--
+-- Data for Name: User; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public."User" (id, name) FROM stdin;
+cmohiqtve000btoci4ynb8xfd	video:cmohdrfk10004toytykaqe50g
+cmohj1zk4001ntociwtafcfvd	video:cmohj1z87000etocihnpez3b5
+\.
+
+
+--
+-- Name: SubAgentEvent_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public."SubAgentEvent_id_seq"', 1, false);
+
+
+--
+-- Name: BizSchemaVersion BizSchemaVersion_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."BizSchemaVersion"
+    ADD CONSTRAINT "BizSchemaVersion_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: BizSchema BizSchema_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."BizSchema"
+    ADD CONSTRAINT "BizSchema_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: BizTableMapping BizTableMapping_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."BizTableMapping"
+    ADD CONSTRAINT "BizTableMapping_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: ChatMessage ChatMessage_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."ChatMessage"
+    ADD CONSTRAINT "ChatMessage_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: ChatSession ChatSession_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."ChatSession"
+    ADD CONSTRAINT "ChatSession_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: DomainResource DomainResource_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."DomainResource"
+    ADD CONSTRAINT "DomainResource_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: ImageGenerationVersion ImageGenerationVersion_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."ImageGenerationVersion"
+    ADD CONSTRAINT "ImageGenerationVersion_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: ImageGeneration ImageGeneration_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."ImageGeneration"
+    ADD CONSTRAINT "ImageGeneration_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: KeyResourceVersion KeyResourceVersion_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."KeyResourceVersion"
+    ADD CONSTRAINT "KeyResourceVersion_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: KeyResource KeyResource_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."KeyResource"
+    ADD CONSTRAINT "KeyResource_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: NovelScript NovelScript_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."NovelScript"
+    ADD CONSTRAINT "NovelScript_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Novel Novel_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."Novel"
+    ADD CONSTRAINT "Novel_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: Skill Skill_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."Skill"
+    ADD CONSTRAINT "Skill_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: StylePreset StylePreset_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."StylePreset"
+    ADD CONSTRAINT "StylePreset_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: SubAgentEvent SubAgentEvent_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."SubAgentEvent"
+    ADD CONSTRAINT "SubAgentEvent_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: SubAgent SubAgent_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."SubAgent"
+    ADD CONSTRAINT "SubAgent_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: User User_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."User"
+    ADD CONSTRAINT "User_pkey" PRIMARY KEY (id);
+
+
+--
+-- Name: BizSchemaVersion_bizSchemaId_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "BizSchemaVersion_bizSchemaId_idx" ON public."BizSchemaVersion" USING btree ("bizSchemaId");
+
+
+--
+-- Name: BizSchemaVersion_bizSchemaId_version_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "BizSchemaVersion_bizSchemaId_version_key" ON public."BizSchemaVersion" USING btree ("bizSchemaId", version);
+
+
+--
+-- Name: BizSchema_tableName_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "BizSchema_tableName_key" ON public."BizSchema" USING btree ("tableName");
+
+
+--
+-- Name: BizTableMapping_physicalName_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "BizTableMapping_physicalName_key" ON public."BizTableMapping" USING btree ("physicalName");
+
+
+--
+-- Name: BizTableMapping_userName_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "BizTableMapping_userName_idx" ON public."BizTableMapping" USING btree ("userName");
+
+
+--
+-- Name: BizTableMapping_userName_logicalName_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "BizTableMapping_userName_logicalName_key" ON public."BizTableMapping" USING btree ("userName", "logicalName");
+
+
+--
+-- Name: ChatMessage_sessionId_createdAt_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "ChatMessage_sessionId_createdAt_idx" ON public."ChatMessage" USING btree ("sessionId", "createdAt");
+
+
+--
+-- Name: ChatSession_userId_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "ChatSession_userId_idx" ON public."ChatSession" USING btree ("userId");
+
+
+--
+-- Name: DomainResource_keyResourceId_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "DomainResource_keyResourceId_idx" ON public."DomainResource" USING btree ("keyResourceId");
+
+
+--
+-- Name: DomainResource_scopeType_scopeId_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "DomainResource_scopeType_scopeId_idx" ON public."DomainResource" USING btree ("scopeType", "scopeId");
+
+
+--
+-- Name: ImageGenerationVersion_imageGenId_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "ImageGenerationVersion_imageGenId_idx" ON public."ImageGenerationVersion" USING btree ("imageGenId");
+
+
+--
+-- Name: ImageGenerationVersion_imageGenId_version_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "ImageGenerationVersion_imageGenId_version_key" ON public."ImageGenerationVersion" USING btree ("imageGenId", version);
+
+
+--
+-- Name: ImageGeneration_sessionId_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "ImageGeneration_sessionId_idx" ON public."ImageGeneration" USING btree ("sessionId");
+
+
+--
+-- Name: ImageGeneration_sessionId_key_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "ImageGeneration_sessionId_key_key" ON public."ImageGeneration" USING btree ("sessionId", key);
+
+
+--
+-- Name: KeyResourceVersion_keyResourceId_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "KeyResourceVersion_keyResourceId_idx" ON public."KeyResourceVersion" USING btree ("keyResourceId");
+
+
+--
+-- Name: KeyResourceVersion_keyResourceId_version_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "KeyResourceVersion_keyResourceId_version_key" ON public."KeyResourceVersion" USING btree ("keyResourceId", version);
+
+
+--
+-- Name: KeyResource_scopeType_scopeId_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "KeyResource_scopeType_scopeId_idx" ON public."KeyResource" USING btree ("scopeType", "scopeId");
+
+
+--
+-- Name: KeyResource_scopeType_scopeId_key_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "KeyResource_scopeType_scopeId_key_key" ON public."KeyResource" USING btree ("scopeType", "scopeId", key);
+
+
+--
+-- Name: NovelScript_novelId_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "NovelScript_novelId_idx" ON public."NovelScript" USING btree ("novelId");
+
+
+--
+-- Name: NovelScript_novelId_scriptKey_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "NovelScript_novelId_scriptKey_key" ON public."NovelScript" USING btree ("novelId", "scriptKey");
+
+
+--
+-- Name: Novel_createdAt_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "Novel_createdAt_idx" ON public."Novel" USING btree ("createdAt");
+
+
+--
+-- Name: Skill_name_isProduction_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "Skill_name_isProduction_idx" ON public."Skill" USING btree (name, "isProduction");
+
+
+--
+-- Name: Skill_name_version_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "Skill_name_version_key" ON public."Skill" USING btree (name, version);
+
+
+--
+-- Name: Skill_ossKey_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "Skill_ossKey_key" ON public."Skill" USING btree ("ossKey");
+
+
+--
+-- Name: Skill_tags_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "Skill_tags_idx" ON public."Skill" USING btree (tags);
+
+
+--
+-- Name: StylePreset_name_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "StylePreset_name_key" ON public."StylePreset" USING btree (name);
+
+
+--
+-- Name: SubAgentEvent_subagentId_id_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "SubAgentEvent_subagentId_id_idx" ON public."SubAgentEvent" USING btree ("subagentId", id);
+
+
+--
+-- Name: SubAgent_parentAgentId_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "SubAgent_parentAgentId_idx" ON public."SubAgent" USING btree ("parentAgentId");
+
+
+--
+-- Name: SubAgent_sessionId_status_idx; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX "SubAgent_sessionId_status_idx" ON public."SubAgent" USING btree ("sessionId", status);
+
+
+--
+-- Name: User_name_key; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX "User_name_key" ON public."User" USING btree (name);
+
+
+--
+-- Name: BizSchemaVersion BizSchemaVersion_bizSchemaId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."BizSchemaVersion"
+    ADD CONSTRAINT "BizSchemaVersion_bizSchemaId_fkey" FOREIGN KEY ("bizSchemaId") REFERENCES public."BizSchema"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: ChatMessage ChatMessage_sessionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."ChatMessage"
+    ADD CONSTRAINT "ChatMessage_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES public."ChatSession"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: ChatSession ChatSession_userId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."ChatSession"
+    ADD CONSTRAINT "ChatSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES public."User"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: ImageGenerationVersion ImageGenerationVersion_imageGenId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."ImageGenerationVersion"
+    ADD CONSTRAINT "ImageGenerationVersion_imageGenId_fkey" FOREIGN KEY ("imageGenId") REFERENCES public."ImageGeneration"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: ImageGeneration ImageGeneration_sessionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."ImageGeneration"
+    ADD CONSTRAINT "ImageGeneration_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES public."ChatSession"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: KeyResourceVersion KeyResourceVersion_keyResourceId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."KeyResourceVersion"
+    ADD CONSTRAINT "KeyResourceVersion_keyResourceId_fkey" FOREIGN KEY ("keyResourceId") REFERENCES public."KeyResource"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: NovelScript NovelScript_novelId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."NovelScript"
+    ADD CONSTRAINT "NovelScript_novelId_fkey" FOREIGN KEY ("novelId") REFERENCES public."Novel"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: SubAgentEvent SubAgentEvent_subagentId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."SubAgentEvent"
+    ADD CONSTRAINT "SubAgentEvent_subagentId_fkey" FOREIGN KEY ("subagentId") REFERENCES public."SubAgent"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: SubAgent SubAgent_parentAgentId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."SubAgent"
+    ADD CONSTRAINT "SubAgent_parentAgentId_fkey" FOREIGN KEY ("parentAgentId") REFERENCES public."SubAgent"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: SubAgent SubAgent_sessionId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public."SubAgent"
+    ADD CONSTRAINT "SubAgent_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES public."ChatSession"(id) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: postgres
+--
+
+REVOKE USAGE ON SCHEMA public FROM PUBLIC;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict 3HXpIoKLqxfEd3nb9AgmWHfM9rsYLwL3vMTRm7jIT4mzhs1Zyhc4ICPG6VAtoiJ
+
