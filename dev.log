@@ -20,7 +20,9 @@
 [Skill Init] Found 10 builtin skills to check
 [Skill Init] ✓ Skill "skill-creator" already exists, skipping
 [Skill Init] ✓ Skill "business-database" already exists, skipping
+[Skill Init] ✓ Skill "video-mgr" already exists, skipping
 [Skill Init] ✓ Skill "novel-resource-mgr" already exists, skipping
+[Skill Init] ✓ Skill "ep-video-workflow" already exists, skipping
 [Skill Init] ✓ Skill "langfuse" already exists, skipping
 [Skill Init] ✓ Skill "subagent" already exists, skipping
 [Skill Init] ✓ Skill "oss" already exists, skipping
@@ -31,7 +33,9 @@
 [Skill Init] Found 10 builtin skills to check
 [Skill Init] ✓ Skill "skill-creator" already exists, skipping
 [Skill Init] ✓ Skill "business-database" already exists, skipping
+[Skill Init] ✓ Skill "video-mgr" already exists, skipping
 [Skill Init] ✓ Skill "novel-resource-mgr" already exists, skipping
+[Skill Init] ✓ Skill "ep-video-workflow" already exists, skipping
 [Skill Init] ✓ Skill "langfuse" already exists, skipping
 [Skill Init] ✓ Skill "subagent" already exists, skipping
 [Skill Init] ✓ Skill "oss" already exists, skipping
@@ -100,12 +104,16 @@ TypeError: Cannot read properties of undefined (reading 'length')
 [Skill Init] ✓ Skill "skill-creator" already exists, skipping
 [Skill Init] ✓ Skill "business-database" already exists, skipping
 [Skill Init] ✓ Skill "skill-creator" already exists, skipping
+[Skill Init] ✓ Skill "video-mgr" already exists, skipping
  GET /api/subagents/cmofxufe40005to63voy8xxsj/events 200 in 722ms (compile: 713ms, render: 8ms)
 [Skill Init] ✓ Skill "novel-resource-mgr" already exists, skipping
 [Skill Init] ✓ Skill "business-database" already exists, skipping
+[Skill Init] ✓ Skill "ep-video-workflow" already exists, skipping
+[Skill Init] ✓ Skill "video-mgr" already exists, skipping
 [Skill Init] ✓ Skill "langfuse" already exists, skipping
 [Skill Init] ✓ Skill "subagent" already exists, skipping
 [Skill Init] ✓ Skill "novel-resource-mgr" already exists, skipping
+[Skill Init] ✓ Skill "ep-video-workflow" already exists, skipping
 [Skill Init] ✓ Skill "oss" already exists, skipping
 [Skill Init] ✓ Skill "langfuse" already exists, skipping
 [Skill Init] ✓ Skill "upload" already exists, skipping
@@ -121,7 +129,9 @@ TypeError: Cannot read properties of undefined (reading 'length')
 [Skill Init] ✓ Skill "skill-creator" already exists, skipping
 [Skill Init] ✓ Skill "business-database" already exists, skipping
  GET /api/sessions/cmofxufdz0003to634g7ujv6k 200 in 592ms (compile: 580ms, render: 12ms)
+[Skill Init] ✓ Skill "video-mgr" already exists, skipping
 [Skill Init] ✓ Skill "novel-resource-mgr" already exists, skipping
+[Skill Init] ✓ Skill "ep-video-workflow" already exists, skipping
 [Skill Init] ✓ Skill "langfuse" already exists, skipping
 [Skill Init] ✓ Skill "subagent" already exists, skipping
 [Skill Init] ✓ Skill "oss" already exists, skipping
@@ -136,7 +146,9 @@ TypeError: Cannot read properties of undefined (reading 'length')
 [Skill Init] Found 10 builtin skills to check
 [Skill Init] ✓ Skill "skill-creator" already exists, skipping
 [Skill Init] ✓ Skill "business-database" already exists, skipping
+[Skill Init] ✓ Skill "video-mgr" already exists, skipping
 [Skill Init] ✓ Skill "novel-resource-mgr" already exists, skipping
+[Skill Init] ✓ Skill "ep-video-workflow" already exists, skipping
 [Skill Init] ✓ Skill "langfuse" already exists, skipping
 [Skill Init] ✓ Skill "subagent" already exists, skipping
 [Skill Init] ✓ Skill "oss" already exists, skipping
@@ -210,7 +222,9 @@ TypeError: Cannot read properties of undefined (reading 'length')
 [Skill Init] Found 10 builtin skills to check
 [Skill Init] ✓ Skill "skill-creator" already exists, skipping
 [Skill Init] ✓ Skill "business-database" already exists, skipping
+[Skill Init] ✓ Skill "video-mgr" already exists, skipping
 [Skill Init] ✓ Skill "novel-resource-mgr" already exists, skipping
+[Skill Init] ✓ Skill "ep-video-workflow" already exists, skipping
 [Skill Init] ✓ Skill "langfuse" already exists, skipping
 [Skill Init] ✓ Skill "subagent" already exists, skipping
 [Skill Init] ✓ Skill "oss" already exists, skipping
@@ -219,7 +233,9 @@ TypeError: Cannot read properties of undefined (reading 'length')
 [Skill Init] Completed: 0 initialized, 10 skipped
 [Skill Init] ✓ Skill "skill-creator" already exists, skipping
 [Skill Init] ✓ Skill "business-database" already exists, skipping
+[Skill Init] ✓ Skill "video-mgr" already exists, skipping
 [Skill Init] ✓ Skill "novel-resource-mgr" already exists, skipping
+[Skill Init] ✓ Skill "ep-video-workflow" already exists, skipping
 [Skill Init] ✓ Skill "langfuse" already exists, skipping
 [Skill Init] ✓ Skill "subagent" already exists, skipping
 [Skill Init] ✓ Skill "oss" already exists, skipping
