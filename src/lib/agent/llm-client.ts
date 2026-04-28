@@ -64,10 +64,9 @@ function getThinkingMode(): LlmThinkingMode | undefined {
   return "disabled";
 }
 
-function applyThinkingMode<T extends ThinkingRequest>(body: T): T {
+function applyThinkingMode(body: ThinkingRequest): void {
   const mode = getThinkingMode();
   if (mode) body.thinking = { type: mode };
-  return body;
 }
 
 export async function chatCompletion(
@@ -76,11 +75,12 @@ export async function chatCompletion(
   model?: string,
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const client = getClient();
-  const body: NonStreamingRequest = applyThinkingMode({
+  const body: NonStreamingRequest = {
     model: model ?? DEFAULT_MODEL,
     messages,
     tools: tools?.length ? tools : undefined,
-  });
+  };
+  applyThinkingMode(body);
   const rawRes: unknown = await client.chat.completions.create(body);
 
   let res: ChatCompletion;
@@ -121,12 +121,13 @@ export async function chatCompletionStream(
     thinkingMode: getThinkingMode() ?? "provider-default",
   });
   
-  const body: StreamingRequest = applyThinkingMode({
+  const body: StreamingRequest = {
     model: model ?? DEFAULT_MODEL,
     messages,
     tools: tools?.length ? tools : undefined,
     stream: true,
-  });
+  };
+  applyThinkingMode(body);
   const stream = await client.chat.completions.create(
     body,
     signal ? { signal } : undefined,
@@ -156,7 +157,7 @@ export async function generateTitle(userMessage: string): Promise<string> {
   });
   
   try {
-    const body: NonStreamingRequest = applyThinkingMode({
+    const body: NonStreamingRequest = {
       model,
       messages: [
         {
@@ -169,7 +170,8 @@ export async function generateTitle(userMessage: string): Promise<string> {
           content: `Generate a title for this message:\n${userMessage}`,
         },
       ],
-    });
+    };
+    applyThinkingMode(body);
     const rawRes: unknown = await client.chat.completions.create(body);
     
     // Handle case where OpenAI SDK returns a string instead of object
