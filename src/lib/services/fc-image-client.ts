@@ -3,7 +3,7 @@
  * Calls the Function Compute image generation endpoint.
  */
 
-const DEFAULT_IMAGE_MODEL = "gpt-image-2";
+const DEFAULT_IMAGE_MODEL = "gpt";
 
 export async function callFcGenerateImage(
   prompt: string,
@@ -16,10 +16,10 @@ export async function callFcGenerateImage(
   let url: string | undefined;
   let token: string | undefined;
 
-  if (effectiveModel.startsWith("gpt-image")) {
+  if (effectiveModel === "gpt" || effectiveModel.startsWith("gpt-")) {
     url = process.env.FC_GENERATE_IMAGE_GPT_URL;
     token = process.env.FC_GENERATE_IMAGE_GPT_TOKEN;
-  } else if (effectiveModel.startsWith("gemini")) {
+  } else if (effectiveModel.startsWith("gemini-")) {
     url = process.env.FC_GENERATE_IMAGE_URL;
     token = process.env.FC_GENERATE_IMAGE_TOKEN;
   } else {
@@ -31,7 +31,7 @@ export async function callFcGenerateImage(
   if (!url || !token) {
     throw new Error(
       `FC endpoint not configured for model "${effectiveModel}". ` +
-      `Check FC_GENERATE_IMAGE_GPT_URL/TOKEN (for gpt-image-*) or ` +
+      `Check FC_GENERATE_IMAGE_GPT_URL/TOKEN (for gpt) or ` +
       `FC_GENERATE_IMAGE_URL/TOKEN (for gemini-*) in .env`
     );
   }
