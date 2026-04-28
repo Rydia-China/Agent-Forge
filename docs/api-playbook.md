@@ -148,14 +148,14 @@ EP 级资源 agent：
 2. 会话 user scope 为 `video:{novelId}:{scriptKey}`
 3. `POST /api/video/tasks` 创建 SubAgent
 4. 服务端注入 `VideoContextProvider`，提供 `novel_id`、`script_id`、`script_key` 与 `init_result`
-5. 默认 skill 为 `video-workflow`，用于无文件系统环境下的 EP 级视频 prompt 生成、review 门禁和产视编排
+5. 默认 skill 为 `video-workflow`，默认 MCP scope 为 `video_workflow` + `subagent`，用于无文件系统环境下的 EP 级资源门禁、Prompt Optimizer 调度、review 门禁和产视编排
 
 **视频生成工作流**：
 1. 先提交 EP 级异步批量换装任务，等待 `completed`，并将换装图作为服装权威源
-2. 独立 Prompt Writer subagent 按 `video-workflow` 的新管线 prompt 规格生成所有视频 prompt
-3. 独立 Reviewer subagent 使用 `video-skill-reviewer` 审查 prompt、换装资源、资源引用顺序和剧情一致性
-4. 若 `passed=false`、`allowVideoGeneration=false` 或存在 error，按反馈重复 prompt writer + reviewer 循环
-5. 只有 `passed=true` 且 `allowVideoGeneration=true` 后，prompt 才能保存为 reviewed 并允许产视
+2. 主控只启动一个一级 Prompt Optimizer subagent，不直接循环调用 Prompt Writer / Reviewer
+3. Prompt Optimizer 内部最多 5 轮增量迭代：每轮调独立 Prompt Writer，再调独立 Reviewer；它维护 `iterationHistory`、`resolvedIssues`、`remainingIssues`、`doNotRegress` 和 `bestVersion`
+4. 若 Reviewer 通过，Optimizer 返回 `status="passed"`、最终 prompts 和 final review；若 5 轮未通过，返回 `max_iterations` 和当前 best version；若发现门禁互相矛盾，返回 `conflict`
+5. 主控只有在 Optimizer 返回 `passed` 且 `allowVideoGeneration=true` 后，才调用 `save_reviewed_video_prompt` 保存 prompt
 6. 视频生成时支持系统资源形式的帧参照：从上一个视频抽取末尾帧并保存为后续 shot 的参考资源
 
 前端兼容性：`/api/video/tasks` 与 `/api/video/novel/{novelId}/chat` 都返回 `subagent_id`，并同时保留 `task_id` 作为旧字段别名；前端以 `subagent_id` 连接 `/api/subagents/{id}/events`。
