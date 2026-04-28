@@ -291,6 +291,7 @@ DATABASE_URL=postgresql://...      # System database
 BUSINESS_DATABASE_URL=postgresql://... # Business data
 LLM_API_KEY=...                    # LLM provider key
 LLM_BASE_URL=https://...           # LLM API endpoint
+LLM_DEFAULT_MODEL=deepseek-v4-pro  # Optional default controller model
 \`\`\`
 
 See \`.env.example\` for complete list.
@@ -618,7 +619,8 @@ curl -X POST http://localhost:8001/mcp \\
 DATABASE_URL=postgresql://...      # 系统数据库
 BUSINESS_DATABASE_URL=postgresql://... # 业务数据
 LLM_API_KEY=...                    # LLM provider key
-LLM_BASE_URL=https://...           # LLM API endpoint`}</code>
+LLM_BASE_URL=https://...           # LLM API endpoint
+LLM_DEFAULT_MODEL=deepseek-v4-pro  # Optional default controller model`}</code>
             </pre>
             <Paragraph className="mt-4">
               完整列表见 <Text code>.env.example</Text>
