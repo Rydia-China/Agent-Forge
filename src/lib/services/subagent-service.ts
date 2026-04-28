@@ -17,7 +17,7 @@ export interface SubAgentEventRow {
   createdAt: Date;
 }
 
-/** Sentinel emitted when a subagent finishes (completed/failed/cancelled/max_iterations). */
+/** Sentinel emitted when a subagent reaches a terminal state. */
 const SUBAGENT_END = Symbol("subagent-end");
 
 /** Max nesting depth for subagent trees. */
@@ -106,16 +106,15 @@ function pushEvent(
   type: string,
   data: Prisma.InputJsonValue,
 ): Promise<SubAgentEventRow> {
-  const prev = pushQueues.get(subagentId) ?? Promise.resolve();
-  const next = prev
-    .then(async () => {
+  const prev = pushQueues.get(subagentId)?.catch(() => undefined) ?? Promise.resolve();
+  const next = prev.then(async () => {
+    try {
       const row = await prisma.subAgentEvent.create({
         data: { subagentId, type, data },
       });
       emitter.emit(`event:${subagentId}`, row);
       return row;
-    })
-    .catch((err: unknown) => {
+    } catch (err: unknown) {
       // 写入失败也要发射事件，避免客户端永久等待
       console.error(`[subagent:${subagentId}] pushEvent(${type}) DB write failed:`, err);
       const fallbackRow: SubAgentEventRow = {
@@ -126,8 +125,9 @@ function pushEvent(
         createdAt: new Date(),
       };
       emitter.emit(`event:${subagentId}`, fallbackRow);
-      throw err; // 重新抛出，让调用方知道失败了
-    });
+      return fallbackRow;
+    }
+  });
   pushQueues.set(subagentId, next);
   return next;
 }
@@ -204,7 +204,9 @@ export async function submitSubAgent(
   });
 
   // Fire-and-forget: start execution on next tick
-  void executeSubAgent(subagent.id, session.id, input);
+  void executeSubAgent(subagent.id, session.id, input).catch((err: unknown) => {
+    console.error(`[subagent:${subagent.id}] background execution leaked error:`, err);
+  });
 
   return { subagentId: subagent.id, sessionId: session.id };
 }
@@ -307,15 +309,35 @@ async function executeSubAgent(
       agentConfig,
     );
 
-    await prisma.subAgent.update({
-      where: { id: subagentId },
-      data: { status: "completed", output: result.reply },
-    });
+    if (result.interruption) {
+      await prisma.subAgent.update({
+        where: { id: subagentId },
+        data: {
+          status: "interrupted",
+          output: result.reply || null,
+          error: result.interruption.reason,
+        },
+      });
 
-    await pushEvent(subagentId, "done", {
-      session_id: result.sessionId,
-      output: result.reply,
-    });
+      await pushEvent(subagentId, "interrupted", {
+        session_id: result.sessionId,
+        output: result.reply,
+        error: result.interruption.reason,
+        recoverable: result.interruption.recoverable,
+        partial_saved: result.interruption.partialSaved,
+        code: result.interruption.code ?? null,
+      });
+    } else {
+      await prisma.subAgent.update({
+        where: { id: subagentId },
+        data: { status: "completed", output: result.reply },
+      });
+
+      await pushEvent(subagentId, "done", {
+        session_id: result.sessionId,
+        output: result.reply,
+      });
+    }
   } catch (err: unknown) {
     // Check if this was a cancellation
     if (ac.signal.aborted) {
@@ -496,6 +518,7 @@ export async function* subscribeEvents(
       !subagent ||
       subagent.status === "completed" ||
       subagent.status === "failed" ||
+      subagent.status === "interrupted" ||
       subagent.status === "cancelled" ||
       subagent.status === "max_iterations";
 
@@ -539,7 +562,7 @@ export async function* subscribeEvents(
  */
 export async function updateSubAgentStatus(
   id: string,
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'max_iterations'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'interrupted' | 'cancelled' | 'max_iterations'
 ): Promise<void> {
   await prisma.subAgent.update({
     where: { id },

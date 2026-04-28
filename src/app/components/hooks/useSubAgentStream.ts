@@ -145,6 +145,49 @@ export function useSubAgentStream(
       subagentIdRef.current = subagentId;
       const es = new EventSource(`/api/subagents/${subagentId}/events`);
       eventSourceRef.current = es;
+      const clearTimeoutCheck = () => {
+        if (timeoutCheckIntervalRef.current) {
+          clearInterval(timeoutCheckIntervalRef.current);
+          timeoutCheckIntervalRef.current = null;
+        }
+      };
+
+      const closeEventSource = () => {
+        clearTimeoutCheck();
+        es.close();
+        if (eventSourceRef.current === es) {
+          eventSourceRef.current = null;
+        }
+        subagentIdRef.current = null;
+      };
+
+      const reloadSessionDetail = (clearStreamingOnSuccess: boolean) => {
+        const sid = sessionIdRef.current;
+        if (!sid) return;
+        void fetchJson<SessionDetail>(`/api/sessions/${sid}`)
+          .then((detail) => {
+            setMessages(detail.messages);
+            setKeyResources(detail.keyResources ?? []);
+            cbRef.current.onSessionDetail?.(detail);
+            if (clearStreamingOnSuccess) {
+              setStreamingReply(null);
+              setStreamingTools([]);
+            }
+          })
+          .catch(() => { /* best effort */ });
+      };
+
+      const finishRecoverableInterruption = (message: string) => {
+        closeEventSource();
+        cbRef.current.onRefreshNeeded();
+        setIsStreaming(false);
+        setIsSending(false);
+        activeSendRef.current = false;
+        setError(message);
+        setStatus("error");
+        reloadSessionDetail(true);
+        cbRef.current.onStreamEnd?.();
+      };
 
       // 连接超时检测：如果 90 秒内没有收到任何消息（包括心跳），则认为连接已死
       let lastMessageTime = Date.now();
@@ -152,19 +195,11 @@ export function useSubAgentStream(
         const elapsed = Date.now() - lastMessageTime;
         if (elapsed > 90000 && es.readyState === EventSource.OPEN) {
           console.error(`[subagent:${subagentId}] No message received for ${elapsed}ms, considering connection dead`);
-          if (timeoutCheckIntervalRef.current) {
-            clearInterval(timeoutCheckIntervalRef.current);
-            timeoutCheckIntervalRef.current = null;
-          }
-          es.close();
-          eventSourceRef.current = null;
-          subagentIdRef.current = null;
+          closeEventSource();
           setIsStreaming(false);
           setIsSending(false);
           activeSendRef.current = false;
-          setStreamingReply(null);
-          setStreamingTools([]);
-          setError("连接超时，请刷新页面重试");
+          setError("连接超时，后台任务可能仍在运行；稍后重新打开会话会自动恢复进度。");
           setStatus("error");
           cbRef.current.onStreamEnd?.();
         }
@@ -271,31 +306,29 @@ export function useSubAgentStream(
           cbRef.current.onExtraEvent?.("tool_end", data);
         } catch { /* ignore */ }
       });
+      /* ---- interrupted ---- */
+
+      es.addEventListener("interrupted", (e: MessageEvent) => {
+        touchLastMessageTime();
+        let message = "LLM 网络中断，已保存上下文，可继续发送下一条消息。";
+        try {
+          const data: unknown = JSON.parse(e.data as string);
+          if (isRecord(data) && typeof data.error === "string") {
+            message = data.error;
+          }
+        } catch { /* ignore */ }
+        finishRecoverableInterruption(message);
+      });
 
       /* ---- done ---- */
 
       es.addEventListener("done", () => {
         touchLastMessageTime();
-        if (timeoutCheckIntervalRef.current) {
-          clearInterval(timeoutCheckIntervalRef.current);
-          timeoutCheckIntervalRef.current = null;
-        }
-        es.close();
-        eventSourceRef.current = null;
-        subagentIdRef.current = null;
+        closeEventSource();
         cbRef.current.onRefreshNeeded();
 
         // Reload full session to get final state
-        const sid = sessionIdRef.current;
-        if (sid) {
-          void fetchJson<SessionDetail>(`/api/sessions/${sid}`)
-            .then((detail) => {
-              setMessages(detail.messages);
-              setKeyResources(detail.keyResources ?? []);
-              cbRef.current.onSessionDetail?.(detail);
-            })
-            .catch(() => { /* best effort */ });
-        }
+        reloadSessionDetail(false);
 
         setIsStreaming(false);
         setIsSending(false);
@@ -314,19 +347,24 @@ export function useSubAgentStream(
         // 处理服务端发送的错误事件 (MessageEvent with data)
         if (e instanceof MessageEvent && e.data) {
           touchLastMessageTime();
-          if (timeoutCheckIntervalRef.current) {
-            clearInterval(timeoutCheckIntervalRef.current);
-            timeoutCheckIntervalRef.current = null;
-          }
+          clearTimeoutCheck();
+          let recoverable = false;
+          let recoverableMessage = "LLM 网络中断，已保存上下文，可继续发送下一条消息。";
           try {
             const data: unknown = JSON.parse(e.data as string);
             if (isRecord(data) && typeof data.error === "string") {
               setError(data.error);
+              recoverableMessage = data.error;
+            }
+            if (isRecord(data) && data.recoverable === true) {
+              recoverable = true;
             }
           } catch { /* ignore */ }
-          es.close();
-          eventSourceRef.current = null;
-          subagentIdRef.current = null;
+          if (recoverable) {
+            finishRecoverableInterruption(recoverableMessage);
+            return;
+          }
+          closeEventSource();
           setIsStreaming(false);
           setIsSending(false);
           activeSendRef.current = false;
@@ -340,19 +378,11 @@ export function useSubAgentStream(
         // 处理连接错误 (readyState === 0 or 2)
         if (es.readyState === EventSource.CLOSED) {
           console.error(`[subagent:${subagentId}] EventSource connection closed unexpectedly`);
-          if (timeoutCheckIntervalRef.current) {
-            clearInterval(timeoutCheckIntervalRef.current);
-            timeoutCheckIntervalRef.current = null;
-          }
-          es.close();
-          eventSourceRef.current = null;
-          subagentIdRef.current = null;
+          closeEventSource();
           setIsStreaming(false);
           setIsSending(false);
           activeSendRef.current = false;
-          setStreamingReply(null);
-          setStreamingTools([]);
-          setError("连接中断，请刷新页面重试");
+          setError("连接中断，后台任务可能仍在运行；重新打开会话会自动恢复进度。");
           setStatus("error");
           cbRef.current.onStreamEnd?.();
         }
@@ -377,12 +407,13 @@ export function useSubAgentStream(
         setKeyResources(data.keyResources ?? []);
         cbRef.current.onSessionDetail?.(data);
 
-        // Reconnect to active task if one exists
+        // Reconnect to active subagent if one exists
+        const activeSubAgent = data.activeSubAgent ?? data.activeTask;
         if (
-          data.activeTask &&
-          (data.activeTask.status === "pending" || data.activeTask.status === "running")
+          activeSubAgent &&
+          (activeSubAgent.status === "pending" || activeSubAgent.status === "running")
         ) {
-          connectToSubAgent(data.activeTask.id, { isReconnect: true });
+          connectToSubAgent(activeSubAgent.id, { isReconnect: true });
         }
       })
       .catch((err: unknown) => {

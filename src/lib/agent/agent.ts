@@ -114,17 +114,25 @@ function withSessionLock<T>(sid: string, fn: () => Promise<T>): Promise<T> {
   const prev = sessionLocks.get(sid) ?? Promise.resolve();
   const next = prev.then(fn, fn);          // run fn after previous settles
   sessionLocks.set(sid, next);
-  void next.finally(() => {
+  const cleanup = () => {
     // clean up if we're still the tail of the chain
     if (sessionLocks.get(sid) === next) sessionLocks.delete(sid);
-  });
+  };
+  void next.then(cleanup, cleanup);
   return next;
+}
+export interface AgentInterruption {
+  recoverable: true;
+  reason: string;
+  partialSaved: boolean;
+  code?: string;
 }
 
 export interface AgentResponse {
   sessionId: string;
   reply: string;
   messages: ChatMessage[];
+  interruption?: AgentInterruption;
 }
 
 export interface ToolStartEvent {
@@ -401,6 +409,94 @@ interface ToolCallDelta {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
+const RECOVERABLE_NETWORK_CODES = new Set([
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "ECONNABORTED",
+  "EPIPE",
+  "EAI_AGAIN",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_SOCKET",
+  "UND_ERR_DESTROYED",
+]);
+
+function getStringField(value: unknown, key: string): string | undefined {
+  if (!isRecord(value)) return undefined;
+  const raw = value[key];
+  if (typeof raw === "string" && raw.trim().length > 0) return raw;
+  if (typeof raw === "number") return String(raw);
+  return undefined;
+}
+
+function errorChain(err: unknown): unknown[] {
+  const chain: unknown[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = err;
+  for (let i = 0; i < 8; i++) {
+    if (current === undefined || current === null || seen.has(current)) break;
+    chain.push(current);
+    seen.add(current);
+    if (!isRecord(current) || !("cause" in current)) break;
+    current = current.cause;
+  }
+  return chain;
+}
+
+function classifyRecoverableLlmStreamError(err: unknown): Omit<AgentInterruption, "partialSaved"> | null {
+  const chain = errorChain(err);
+  const names: string[] = [];
+  const messages: string[] = [];
+  const codes: string[] = [];
+
+  for (const item of chain) {
+    const name = getStringField(item, "name");
+    const message = item instanceof Error ? item.message : getStringField(item, "message");
+    const code = getStringField(item, "code");
+
+    if (name) names.push(name);
+    if (message) messages.push(message);
+    if (code) codes.push(code);
+  }
+
+  const matchedCode = codes.find((code) => RECOVERABLE_NETWORK_CODES.has(code));
+  if (matchedCode) {
+    return {
+      recoverable: true,
+      reason: "LLM stream interrupted by a transient network error. Partial context has been saved.",
+      code: matchedCode,
+    };
+  }
+
+  const combinedNames = names.join(" ").toLowerCase();
+  if (
+    combinedNames.includes("apiconnectiontimeouterror") ||
+    combinedNames.includes("apiconnectionerror") ||
+    combinedNames.includes("timeouterror")
+  ) {
+    return {
+      recoverable: true,
+      reason: "LLM stream interrupted by a transient connection error. Partial context has been saved.",
+    };
+  }
+
+  const combinedMessages = messages.join(" ").toLowerCase();
+  if (
+    combinedMessages.includes("read etimedout") ||
+    combinedMessages.includes("socket hang up") ||
+    combinedMessages.includes("fetch failed") ||
+    combinedMessages.includes("network") ||
+    combinedMessages.includes("terminated")
+  ) {
+    return {
+      recoverable: true,
+      reason: "LLM stream interrupted before completion. Partial context has been saved.",
+    };
+  }
+
+  return null;
+}
 
 function upsertToolCall(
   map: Map<number, ToolCall>,
@@ -503,6 +599,8 @@ async function runAgentStreamInnerCore(
 
     let currentContent = "";
 
+    let phase: "llm" | "tools" = "llm";
+
     try {
       const stream = await chatCompletionStream(llmMessages, openaiTools, signal, config?.model);
       const toolCallsByIndex = new Map<number, ToolCall>();
@@ -523,6 +621,7 @@ async function runAgentStreamInnerCore(
           }
         }
       }
+      phase = "tools";
 
       lastReply = currentContent;
 
@@ -620,8 +719,8 @@ async function runAgentStreamInnerCore(
       // Flush assistant + tool messages so recall can find them
       await flush();
     } catch (err: unknown) {
-      console.error(`[agent:stream] Stream error:`, err);
       if (signal?.aborted) {
+        console.warn(`[agent:stream] Stream aborted; persisting partial context.`);
         // Strip dangling tool_calls that were accumulated before abort
         stripDanglingToolCalls(newMessages);
         if (currentContent && !newMessages.some(
@@ -632,6 +731,31 @@ async function runAgentStreamInnerCore(
         }
         break;
       }
+      if (phase === "llm") {
+        const interruption = classifyRecoverableLlmStreamError(err);
+        if (interruption) {
+          console.warn(`[agent:stream] Recoverable stream interruption:`, err);
+          stripDanglingToolCalls(newMessages);
+          if (currentContent && !newMessages.some(
+            (m) => m.role === "assistant" && m.content === currentContent,
+          )) {
+            lastReply = currentContent;
+            newMessages.push({ role: "assistant", content: currentContent });
+          }
+          await flush();
+          const allMessages = [...session.messages, ...newMessages];
+          return {
+            sessionId: session.id,
+            reply: currentContent || lastReply,
+            messages: allMessages,
+            interruption: {
+              ...interruption,
+              partialSaved: true,
+            },
+          };
+        }
+      }
+      console.error(`[agent:stream] Stream error:`, err);
       throw err;
     }
   }

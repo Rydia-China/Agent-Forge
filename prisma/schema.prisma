@@ -167,7 +167,7 @@ model SubAgent {
   parent        SubAgent?       @relation("SubAgentHierarchy", fields: [parentAgentId], references: [id], onDelete: Cascade)
   children      SubAgent[]      @relation("SubAgentHierarchy")
   depth         Int             @default(0) // 嵌套深度（0 = 顶层）
-  status        String          @default("pending") // pending | running | completed | failed | cancelled | max_iterations
+  status        String          @default("pending") // pending | running | completed | failed | interrupted | cancelled | max_iterations
   config        Json            // SubAgentConfig（instruction, mcpScope, model, etc.）
   output        String?         // 最终输出
   error         String?         // 错误信息
