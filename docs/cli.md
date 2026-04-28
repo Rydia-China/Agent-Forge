@@ -69,6 +69,31 @@ pnpm cli skills:create '{
 
 # 导出 skill 为 SKILL.md
 pnpm cli skills:export '{"name":"video-workflow"}'
+
+# 批量审计 production skill 是否包含旧术语
+pnpm cli skills:audit-terms '{
+  "names": ["video-workflow", "video-skill-reviewer"],
+  "terms": ["old_tool_name", "deprecated_schema_name", "legacy_term"]
+}'
+
+# 查看命中上下文
+pnpm cli skills:show-matches '{
+  "name": "video-workflow",
+  "terms": ["old_tool_name"],
+  "contextLines": 2
+}'
+
+# 按字面量替换 skill 内容并发布新 production 版本
+pnpm cli skills:replace-content '{
+  "name": "video-workflow",
+  "replacements": [
+    {
+      "search": "旧文本",
+      "replace": "新文本"
+    }
+  ],
+  "dryRun": false
+}'
 ```
 
 #### OSS 操作
@@ -133,6 +158,56 @@ pnpm cli subagent:get '{"subagentId":"xxx"}'
 pnpm cli subagent:cancel '{"subagentId":"xxx"}'
 ```
 
+#### URL-only 调试
+
+这些命令只通过 HTTP/MCP URL 调用本地服务，不直接 import service 层，适合复现 UI/Agent 的真实路径。
+
+```bash
+# 列出某个 MCP provider 的工具
+pnpm cli debug:mcp-tools '{"provider":"agent_forge"}'
+
+# 只输出工具名，并断言某些工具存在或不存在
+pnpm cli debug:mcp-tools '{
+  "provider": "video_workflow",
+  "namesOnly": true,
+  "required": ["get_status"],
+  "forbidden": ["old_tool_name"]
+}'
+
+# 调用 MCP 工具
+pnpm cli debug:mcp-call '{
+  "provider": "agent_forge",
+  "name": "submit_ep_agent",
+  "arguments": {
+    "novelId": "xxx",
+    "scriptId": "xxx",
+    "scriptKey": "EP1",
+    "message": "帮我执行任务，生成视频前停止，不要执行视频生成。"
+  }
+}'
+
+# 获取 subagent 状态
+pnpm cli debug:subagent-get '{"subagentId":"xxx"}'
+
+# 采样 subagent SSE 事件流；默认隐藏 delta 文本，只输出工具/状态事件和统计
+pnpm cli debug:subagent-events '{"subagentId":"xxx","timeoutMs":30000}'
+
+# 查看 session 完整内容
+pnpm cli debug:session-get '{"sessionId":"xxx"}'
+
+# 汇总 session 内的工具调用与参数
+pnpm cli debug:session-tools '{"sessionId":"xxx"}'
+
+# 只查看指定工具调用，避免输出过大
+pnpm cli debug:session-tools '{
+  "sessionId": "xxx",
+  "toolNames": ["subagent__run"],
+  "includeToolResults": true,
+  "includeArguments": false,
+  "resultMaxChars": 2000
+}'
+```
+
 ## 可用命令列表
 
 ### Skills
@@ -145,6 +220,9 @@ pnpm cli subagent:cancel '{"subagentId":"xxx"}'
 - `skills:export` — 导出为 SKILL.md
 - `skills:set-production` — 设置生产版本
 - `skills:list-versions` — 列出所有版本
+- `skills:audit-terms` — 批量统计 production skill 内容中的字面量术语
+- `skills:show-matches` — 显示 production skill 术语命中的行上下文
+- `skills:replace-content` — 对 production skill 做字面量替换并可发布新版本
 
 ### OSS
 - `oss:upload-url` — 从 URL 上传文件
@@ -167,6 +245,17 @@ pnpm cli subagent:cancel '{"subagentId":"xxx"}'
 ### Subagent
 - `subagent:get` — 获取 subagent 状态
 - `subagent:cancel` — 取消 subagent
+
+### Debug URL
+- `debug:mcp-tools` — 通过 HTTP URL 列出 MCP provider 工具
+- `debug:mcp-call` — 通过 HTTP URL 调用 MCP tool
+- `debug:subagent-get` — 通过 HTTP URL 获取 subagent 状态
+- `debug:subagent-events` — 通过 HTTP URL 采样 subagent SSE 事件
+- `debug:session-get` — 通过 HTTP URL 获取 session
+- `debug:session-tools` — 通过 HTTP URL 汇总 session 工具调用和参数
+
+### Resources
+- `resources:backfill-video-prompts` — 将视频Prompt资源当前版本里的 `prompt/refUrls` 回填进 JSON data
 
 ## 开发
 
