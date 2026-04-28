@@ -10,6 +10,7 @@
 
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma";
 import type {
   VideoShotPlan,
   PlanVideoShotsResult,
@@ -20,6 +21,7 @@ import * as subagentService from "./subagent-service";
 import * as skillService from "./skill-service";
 import * as episodeService from "./episode-service";
 import * as assetGenerationService from "./video-asset-generation-service";
+import * as keyResourceService from "./key-resource-service";
 
 /* ------------------------------------------------------------------ */
 /*  Helper: Execute subagent synchronously                            */
@@ -351,60 +353,48 @@ ${JSON.stringify(reviewResult, null, 2)}
     }
   }
 
-  // Step 4: Generate videos
-  console.log("[generateVideoShots] Step 4: Generating videos...");
-  const generatedShots = await Promise.all(
-    shots.map(async (shot, index) => {
+  // Step 4: Save prompts to database (no actual video generation)
+  console.log("[generateVideoShots] Step 4: Saving prompts to database...");
+  const savedShots = await Promise.all(
+    shots.map(async (shot) => {
       try {
-        // Get previous video URL for continuation shots
-        let previousVideoUrl: string | undefined;
-        if (index > 0 && shot.definition.includes("@视频1")) {
-          const prevShot = shots[index - 1];
-          if (prevShot) {
-            // Try to get the previous video from KeyResource
-            const prevKey = prevShot.shotId;
-            const prevResource = await prisma.keyResource.findFirst({
-              where: {
-                scopeType: "script",
-                scopeId: scriptId,
-                key: prevKey,
-                mediaType: "video",
-              },
-              include: {
-                versions: {
-                  orderBy: { version: "desc" },
-                  take: 1,
-                },
-              },
-            });
-            previousVideoUrl = prevResource?.versions[0]?.url ?? undefined;
-          }
-        }
-
-        const result = await assetGenerationService.executeVideoShot({
+        // Create KeyResource entry with prompt only
+        const kr = await keyResourceService.upsertResource(
+          "script",
           scriptId,
-          key: shot.shotId,
-          shotPrompt: shot.shotPrompt,
-          definition: shot.definition,
-          duration: shot.duration,
-          previousVideoUrl,
-          title: shot.title,
-        });
+          shot.shotId,
+          "video",
+          {
+            prompt: shot.shotPrompt,
+            refUrls: shot.assets.images,
+            data: {
+              duration: shot.duration,
+              definition: shot.definition,
+              mode: shot.mode,
+              scene: shot.scene,
+              emotionArc: shot.emotionArc,
+            } as Prisma.InputJsonValue,
+          },
+        );
+
+        // Set metadata for UI display
+        await assetGenerationService.setKeyResourceMetadata(kr.id, "视频", shot.title);
 
         return {
           shotId: shot.shotId,
-          status: "completed" as const,
-          videoUrl: result.videoUrl,
+          status: "reviewed" as const,
           prompt: shot.shotPrompt,
           reviewIterations: totalIterations,
+          keyResourceId: kr.id,
         };
       } catch (error) {
-        console.error(`[generateVideoShots] Failed to generate ${shot.shotId}:`, error);
+        console.error(`[generateVideoShots] Failed to save ${shot.shotId}:`, error);
         return {
           shotId: shot.shotId,
           status: "failed" as const,
           prompt: shot.shotPrompt,
           reviewIterations: totalIterations,
+          error: error instanceof Error ? error.message : String(error),
         };
       }
     })
@@ -413,7 +403,7 @@ ${JSON.stringify(reviewResult, null, 2)}
   return {
     scriptId,
     episodeKey: planResult.episodeKey,
-    shots: generatedShots,
+    shots: savedShots,
     totalIterations,
   };
 }

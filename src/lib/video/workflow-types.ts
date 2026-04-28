@@ -87,10 +87,11 @@ export interface GenerateVideoShotsResult {
   episodeKey: string;
   shots: Array<{
     shotId: string;
-    status: "planned" | "reviewed" | "generating" | "completed" | "failed";
-    videoUrl?: string;
+    status: "reviewed" | "failed";
     prompt: string;
     reviewIterations: number;
+    keyResourceId?: string;
+    error?: string;
   }>;
   totalIterations: number;
 }
