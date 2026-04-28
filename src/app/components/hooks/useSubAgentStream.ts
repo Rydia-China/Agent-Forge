@@ -111,7 +111,9 @@ export function useSubAgentStream(
 
   /* ---- Callback refs (identity-stable) ---- */
   const cbRef = useRef(callbacks);
-  cbRef.current = callbacks;
+  useEffect(() => {
+    cbRef.current = callbacks;
+  }, [callbacks]);
 
   /* ---- done → idle after 3s ---- */
   useEffect(() => {
