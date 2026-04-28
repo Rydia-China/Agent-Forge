@@ -137,7 +137,7 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 2. 会话 user scope 为 `video:{novelId}`
 3. `POST /api/video/novel/{novelId}/chat` 创建 SubAgent
 4. 服务端注入 `NovelContextProvider`，只暴露小说级上下文和已有 novel scope 资源统计
-5. 默认 skill 为 `novel-resource-mgr`，用于生成/管理 `scopeType="novel"` 的角色立绘和场景资源
+5. 默认 skill 为 `novel-resource-mgr`，默认 MCP scope 为 `video_workflow`，用于生成/管理 `scopeType="novel"` 的角色立绘和场景资源
 
 EP 级资源 agent：
 1. 前端选择具体 episode
