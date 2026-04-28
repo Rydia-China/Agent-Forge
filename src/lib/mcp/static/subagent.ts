@@ -128,10 +128,6 @@ const CancelScheduleParams = z.object({
   scheduleId: z.string().min(1),
 });
 
-const WaitParams = z.object({
-  seconds: z.number().positive().max(300),
-});
-
 /* ================================================================== */
 /*  Task input schema (shared across tools)                            */
 /* ================================================================== */
@@ -353,21 +349,6 @@ export const subagentMcp: McpProvider = {
         inputSchema: {
           type: "object" as const,
           properties: {},
-        },
-      },
-      {
-        name: "wait",
-        description:
-          "等待指定秒数后继续。用于给异步 subagent 留出完成时间，然后再查询结果。最大 300 秒。",
-        inputSchema: {
-          type: "object" as const,
-          properties: {
-            seconds: {
-              type: "number",
-              description: "等待秒数（最大 300）",
-            },
-          },
-          required: ["seconds"],
         },
       },
     ];
@@ -611,12 +592,6 @@ export const subagentMcp: McpProvider = {
 
       case "list_schedules": {
         return json(listSchedules());
-      }
-
-      case "wait": {
-        const { seconds } = WaitParams.parse(args);
-        await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
-        return text(`Waited ${seconds} seconds.`);
       }
 
       default:
