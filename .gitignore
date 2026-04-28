@@ -61,6 +61,7 @@ agent-forge.tar.gz
 
 # runtime logs
 logs/
+dev.log
 
 # git worktrees (managed by `git worktree`)
 .agent-worktrees/
