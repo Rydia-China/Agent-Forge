@@ -68,7 +68,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function formatResult(
-  result: SubAgentResult & { agentId: string },
+  result: SubAgentResult & { agentId: string; taskId?: string },
   includeTrace?: boolean,
 ): TaskResult {
   const base: TaskResult = {
@@ -150,7 +150,7 @@ export async function runSubAgentTask(
   context?: ToolContext,
   callbacks?: SubAgentProgressCallbacks,
   options?: { persist?: boolean },
-): Promise<SubAgentResult & { agentId: string }> {
+): Promise<SubAgentResult & { agentId: string; taskId?: string }> {
   if (options?.persist === false) {
     return runSubAgent(task, context, callbacks);
   }
