@@ -6,6 +6,7 @@
 export async function callFcGenerateImage(
   prompt: string,
   refUrls?: string[],
+  model?: string,
 ): Promise<string> {
   const url = process.env.FC_GENERATE_IMAGE_URL;
   const token = process.env.FC_GENERATE_IMAGE_TOKEN;
@@ -19,6 +20,9 @@ export async function callFcGenerateImage(
   const payload: Record<string, unknown> = { prompt };
   if (refUrls && refUrls.length > 0) {
     payload.refUrls = refUrls;
+  }
+  if (model) {
+    payload.model = model;
   }
 
   const response = await fetch(url, {

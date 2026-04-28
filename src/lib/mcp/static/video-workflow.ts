@@ -159,6 +159,40 @@ const TOOLS: Tool[] = [
     },
   },
 
+  // --- Batch Novel-level Image Gen ---
+  {
+    name: "batch_generate_portraits",
+    description:
+      "批量生成多个角色立绘（小说级）。并行调用 FC 生成服务，自动从数据库读取角色描述并结合样式模板生成 prompt。" +
+      "返回所有角色的生成结果（包括成功和失败）。适用于初始化小说资源或批量更新角色立绘。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        novelId: { type: "string", description: "小说 ID" },
+        characterNames: { type: "array", items: { type: "string" }, description: "角色名称列表（需与 JSON 中完全匹配）" },
+        styleName: { type: "string", description: "样式预设名称（例如 'portrait-style'），从数据库中按名称查找" },
+        model: { type: "string", description: "图片生成模型名称。省略时使用 FC 环境默认值" },
+      },
+      required: ["novelId", "characterNames"],
+    },
+  },
+  {
+    name: "batch_generate_scenes",
+    description:
+      "批量生成多个场景位置图片（小说级）。并行调用 FC 生成服务，自动从数据库读取场景描述并结合样式模板生成 prompt。" +
+      "返回所有场景的生成结果（包括成功和失败）。适用于初始化小说资源或批量更新场景图片。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        novelId: { type: "string", description: "小说 ID" },
+        sceneNames: { type: "array", items: { type: "string" }, description: "场景名称列表（中文），例如 ['银月领地 豪宅', '新月领地 公墓']" },
+        mode: { type: "string", enum: ["single", "grid", "hd"], description: "生成模式：'single'（默认，独立场景）、'grid'（父场景+子场景网格）、'hd'（基于 grid 的子场景高清版）" },
+        model: { type: "string", description: "图片生成模型名称。省略时使用 FC 环境默认值" },
+      },
+      required: ["novelId", "sceneNames"],
+    },
+  },
+
   // --- EP-level Image Gen ---
   {
     name: "generate_costume",
@@ -311,6 +345,18 @@ export const videoWorkflowMcp: McpProvider = {
         case "generate_scene": {
           const params = assetGenerationService.GenerateSceneParams.parse(args);
           const result = await assetGenerationService.generateScene(params);
+          return json(result);
+        }
+
+        case "batch_generate_portraits": {
+          const params = assetGenerationService.BatchGeneratePortraitsParams.parse(args);
+          const result = await assetGenerationService.batchGeneratePortraits(params);
+          return json(result);
+        }
+
+        case "batch_generate_scenes": {
+          const params = assetGenerationService.BatchGenerateScenesParams.parse(args);
+          const result = await assetGenerationService.batchGenerateScenes(params);
           return json(result);
         }
 
