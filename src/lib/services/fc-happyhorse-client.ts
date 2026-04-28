@@ -21,26 +21,20 @@ export interface CreateTaskRequest {
   model?: string;
 }
 
-export interface CreateTaskResponse {
+export interface GenerateVideoResponse {
   taskId: string;
-  status: TaskStatus;
-  requestId?: string;
-}
-
-export interface QueryTaskResponse {
-  taskId: string;
-  status: TaskStatus;
-  videoUrl?: string;
-  errorMessage?: string;
-  requestId?: string;
+  status: string;
+  videoUrl: string;
+  originalVideoUrl?: string;
 }
 
 /**
- * Create a HappyHorse video generation task
+ * Generate HappyHorse video (synchronous mode)
+ * FC handles: create → poll → download → upload to OSS
  */
-export async function callFcHappyHorseCreate(
+export async function callFcHappyHorseGenerate(
   request: CreateTaskRequest,
-): Promise<CreateTaskResponse> {
+): Promise<GenerateVideoResponse> {
   const url = process.env.FC_HAPPYHORSE_URL;
   const token = process.env.FC_HAPPYHORSE_TOKEN;
 
@@ -57,7 +51,7 @@ export async function callFcHappyHorseCreate(
       "Authorization": `Bearer ${token}`,
     },
     body: JSON.stringify({
-      action: "create",
+      action: "generate",
       ...request,
     }),
   });
@@ -65,7 +59,7 @@ export async function callFcHappyHorseCreate(
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error");
     throw new Error(
-      `FC HappyHorse create failed (${response.status}): ${errorText}`
+      `FC HappyHorse generate failed (${response.status}): ${errorText}`
     );
   }
 
@@ -77,106 +71,14 @@ export async function callFcHappyHorseCreate(
     "taskId" in result &&
     typeof result.taskId === "string" &&
     "status" in result &&
-    typeof result.status === "string"
+    typeof result.status === "string" &&
+    "videoUrl" in result &&
+    typeof result.videoUrl === "string"
   ) {
-    return result as CreateTaskResponse;
+    return result as GenerateVideoResponse;
   }
 
   throw new Error(
-    `FC HappyHorse create response invalid: ${JSON.stringify(result)}`
+    `FC HappyHorse generate response invalid: ${JSON.stringify(result)}`
   );
-}
-
-/**
- * Query a HappyHorse task status
- */
-export async function callFcHappyHorseQuery(
-  taskId: string,
-): Promise<QueryTaskResponse> {
-  const url = process.env.FC_HAPPYHORSE_URL;
-  const token = process.env.FC_HAPPYHORSE_TOKEN;
-
-  if (!url || !token) {
-    throw new Error(
-      "FC_HAPPYHORSE_URL and FC_HAPPYHORSE_TOKEN must be configured in .env"
-    );
-  }
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      action: "query",
-      taskId,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "Unknown error");
-    throw new Error(
-      `FC HappyHorse query failed (${response.status}): ${errorText}`
-    );
-  }
-
-  const result: unknown = await response.json();
-
-  if (
-    typeof result === "object" &&
-    result !== null &&
-    "taskId" in result &&
-    typeof result.taskId === "string" &&
-    "status" in result &&
-    typeof result.status === "string"
-  ) {
-    return result as QueryTaskResponse;
-  }
-
-  throw new Error(
-    `FC HappyHorse query response invalid: ${JSON.stringify(result)}`
-  );
-}
-
-/**
- * Wait for a HappyHorse task to complete
- */
-export async function callFcHappyHorseWait(
-  taskId: string,
-  options?: {
-    maxWaitTime?: number;
-    pollInterval?: number;
-    onProgress?: (status: TaskStatus) => void;
-  },
-): Promise<QueryTaskResponse> {
-  const maxWaitTime = options?.maxWaitTime ?? 300000; // 5 minutes default
-  const startTime = Date.now();
-
-  while (Date.now() - startTime < maxWaitTime) {
-    const result = await callFcHappyHorseQuery(taskId);
-
-    if (options?.onProgress) {
-      options.onProgress(result.status);
-    }
-
-    if (result.status === "SUCCEEDED" || result.status === "FAILED") {
-      return result;
-    }
-
-    const elapsed = Date.now() - startTime;
-    let interval: number;
-
-    if (elapsed < 30000) {
-      interval = 3000;
-    } else if (elapsed < 120000) {
-      interval = 5000;
-    } else {
-      interval = 10000;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, interval));
-  }
-
-  throw new Error("HappyHorse task timeout: exceeded maximum wait time");
 }

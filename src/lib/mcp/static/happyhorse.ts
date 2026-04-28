@@ -2,11 +2,8 @@ import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider, ToolContext } from "../types";
 import {
-  callFcHappyHorseCreate,
-  callFcHappyHorseQuery,
-  callFcHappyHorseWait,
+  callFcHappyHorseGenerate,
   type CreateTaskRequest,
-  type TaskStatus,
 } from "../../services/fc-happyhorse-client";
 
 function text(t: string): CallToolResult {
@@ -22,7 +19,7 @@ const MediaItemSchema = z.object({
   url: z.string().url(),
 });
 
-const CreateTaskParams = z.object({
+const GenerateVideoParams = z.object({
   prompt: z.string().min(1).max(2500),
   media: z.array(MediaItemSchema).min(1),
   resolution: z.enum(["1080P", "720P"]).optional(),
@@ -31,25 +28,15 @@ const CreateTaskParams = z.object({
   model: z.string().optional(),
 });
 
-const QueryTaskParams = z.object({
-  taskId: z.string().min(1),
-});
-
-const WaitTaskParams = z.object({
-  taskId: z.string().min(1),
-  maxWaitTime: z.number().min(1000).optional(),
-  pollInterval: z.number().min(1000).optional(),
-});
-
 export const happyhorseMcp: McpProvider = {
   name: "happyhorse",
 
   async listTools(): Promise<Tool[]> {
     return [
       {
-        name: "happyhorse_create_task",
+        name: "happyhorse_generate_video",
         description:
-          "创建 HappyHorse 视频生成任务。支持视频编辑和参考图风格迁移。返回 taskId 用于状态跟踪。",
+          "生成 HappyHorse 视频（同步模式）。支持视频编辑和参考图风格迁移。一次调用完成：创建任务 → 轮询 → 下载 → 上传 OSS，直接返回最终视频 URL。",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -98,44 +85,6 @@ export const happyhorseMcp: McpProvider = {
           required: ["prompt", "media"],
         },
       },
-      {
-        name: "happyhorse_query_task",
-        description:
-          "查询 HappyHorse 视频生成任务状态。返回状态（PENDING/RUNNING/SUCCEEDED/FAILED）和视频 URL（完成时）。",
-        inputSchema: {
-          type: "object" as const,
-          properties: {
-            taskId: {
-              type: "string",
-              description: "create_task 返回的任务 ID",
-            },
-          },
-          required: ["taskId"],
-        },
-      },
-      {
-        name: "happyhorse_wait_task",
-        description:
-          "等待 HappyHorse 任务完成，自动轮询。返回最终状态和视频 URL。适用于同步工作流。",
-        inputSchema: {
-          type: "object" as const,
-          properties: {
-            taskId: {
-              type: "string",
-              description: "create_task 返回的任务 ID",
-            },
-            maxWaitTime: {
-              type: "number",
-              description: "最大等待时间（毫秒），默认 300000（5 分钟）",
-            },
-            pollInterval: {
-              type: "number",
-              description: "初始轮询间隔（毫秒），默认自动调整",
-            },
-          },
-          required: ["taskId"],
-        },
-      },
     ];
   },
 
@@ -146,8 +95,8 @@ export const happyhorseMcp: McpProvider = {
   ): Promise<CallToolResult> {
     try {
       switch (name) {
-        case "happyhorse_create_task": {
-          const params = CreateTaskParams.parse(args);
+        case "happyhorse_generate_video": {
+          const params = GenerateVideoParams.parse(args);
           const request: CreateTaskRequest = {
             prompt: params.prompt,
             media: params.media,
@@ -157,48 +106,13 @@ export const happyhorseMcp: McpProvider = {
             model: params.model,
           };
 
-          const result = await callFcHappyHorseCreate(request);
-          return json({
-            success: true,
-            taskId: result.taskId,
-            status: result.status,
-            requestId: result.requestId,
-          });
-        }
-
-        case "happyhorse_query_task": {
-          const params = QueryTaskParams.parse(args);
-          const result = await callFcHappyHorseQuery(params.taskId);
+          const result = await callFcHappyHorseGenerate(request);
           return json({
             success: true,
             taskId: result.taskId,
             status: result.status,
             videoUrl: result.videoUrl,
-            errorMessage: result.errorMessage,
-            requestId: result.requestId,
-          });
-        }
-
-        case "happyhorse_wait_task": {
-          const params = WaitTaskParams.parse(args);
-          
-          const statusUpdates: TaskStatus[] = [];
-          const result = await callFcHappyHorseWait(params.taskId, {
-            maxWaitTime: params.maxWaitTime,
-            pollInterval: params.pollInterval,
-            onProgress: (status) => {
-              statusUpdates.push(status);
-            },
-          });
-
-          return json({
-            success: true,
-            taskId: result.taskId,
-            status: result.status,
-            videoUrl: result.videoUrl,
-            errorMessage: result.errorMessage,
-            requestId: result.requestId,
-            statusUpdates,
+            originalVideoUrl: result.originalVideoUrl,
           });
         }
 

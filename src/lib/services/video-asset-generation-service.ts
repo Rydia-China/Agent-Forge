@@ -19,10 +19,12 @@ import type {
   ExecuteVideoPromptResult,
 } from "@/lib/video/asset-generation-types";
 import * as keyResourceService from "./key-resource-service";
-import { callFcGenerateVideo, callFcCropVideo } from "./fc-video-client";
 import {
-  callFcHappyHorseCreate,
-  callFcHappyHorseWait,
+  callFcGenerateVideo,
+  callFcCropVideo,
+} from "./fc-video-client";
+import {
+  callFcHappyHorseGenerate,
   type MediaItem,
 } from "./fc-happyhorse-client";
 import { compileTemplate } from "@/lib/mcp/static/langfuse-helpers";
@@ -588,7 +590,7 @@ async function generateHappyHorseVideo(input: {
     throw new Error("HappyHorse requires at least one video or reference image");
   }
 
-  const created = await callFcHappyHorseCreate({
+  const result = await callFcHappyHorseGenerate({
     prompt: input.prompt,
     media,
     duration: input.duration,
@@ -597,14 +599,11 @@ async function generateHappyHorseVideo(input: {
     model: input.model,
   });
 
-  const completed = await callFcHappyHorseWait(created.taskId);
-  if (completed.status !== "SUCCEEDED" || !completed.videoUrl) {
-    throw new Error(
-      completed.errorMessage ?? `HappyHorse task ${created.taskId} ended with ${completed.status}`,
-    );
+  if (!result.videoUrl) {
+    throw new Error(`HappyHorse generation failed: no videoUrl in response`);
   }
 
-  return completed.videoUrl;
+  return result.videoUrl;
 }
 
 /* ------------------------------------------------------------------ */
