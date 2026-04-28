@@ -168,7 +168,10 @@ git merge --no-ff agent/<task-name>
 
 # 4. 类型检查（合并后必须执行）
 pnpm tsc --noEmit
-# 如果类型检查失败，立即修复问题并提交
+# 如果类型检查失败：
+# - 只修复本次变更引入的类型错误
+# - 不修复已存在的、非本次引入的类型错误
+# - 修复后立即提交
 
 # 5. 清理 worktree
 git worktree remove .agent-worktrees/<task-name>
@@ -181,7 +184,7 @@ git branch -d agent/<task-name>
 - **不独立启动开发环境** — worktree 不运行 `pnpm dev`，开发服务器仅在主工作区启动
 - **不复制环境变量** — worktree 不需要独立的 `.env` 文件
 - **gitignore 文件在主分支直接修改** — `.env`、`node_modules/` 等被 git 忽略的文件允许在 main 分支直接修改
-- **合并后必须类型检查** — 每次合并到 main 后立即执行 `pnpm tsc --noEmit`，发现问题立即修复
+- **合并后必须类型检查** — 每次合并到 main 后立即执行 `pnpm tsc --noEmit`，只修复本次变更引入的类型错误，不修复已存在的错误
 
 #### 自动保护机制（60秒检测周期）
 - **保护守护进程** — `scripts/protection-daemon.sh` 每 60 秒检测一次 main 工作区状态
