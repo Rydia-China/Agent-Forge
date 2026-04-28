@@ -128,25 +128,19 @@
 4. **合并后立即清理 worktree** — 避免 worktree 堆积
 5. **Worktree 中严格执行原子化提交** — 每完成一个逻辑单元立即提交，不积累变更
 
-#### AI Agent 强制约束（违反将受到严厉惩罚）
+#### AI Agent 强制约束
 **对于 AI Agent（包括但不限于 LLM、自动化脚本）操作本仓库时：**
 
-1. **绝对禁止在 main 分支直接修改任何文件** — 包括代码、文档、配置、任何文本文件
+1. **禁止在 main 分支直接修改任何文件** — 包括代码、文档、配置、任何文本文件
 2. **任何文件变更操作前必须先创建 worktree** — 无论变更大小，无论是否"只是文档"
-3. **违反此规则将触发自动保护机制** — 60 秒内所有变更被强制回退，工作成果全部丢失
-4. **不存在"临时修改"或"快速修复"的例外** — 所有变更必须经过 worktree → commit → merge 流程
+3. **发现自己在 main 分支时必须立即切换到 worktree** — 已做的修改是否 revert 自行判断
+4. **所有变更必须经过 worktree → commit → merge 流程**
 5. **AI Agent 必须在每次操作前检查当前分支** — 如果在 main 分支，必须立即停止并创建 worktree
 
 **例外：gitignore 文件的直接修改**
 - `.gitignore` 匹配的文件（如 `.env`、`node_modules/`、构建产物等）**允许在 main 分支直接修改**
 - 原因：这些文件不受 Git 版本控制，无法通过 worktree 分支合并覆盖主工作区
-- 保护机制会自动忽略这些文件的变更（`git diff-index` 和 `git clean -fd` 均不会触及 gitignore 匹配的路径）
 - 典型场景：配置 `.env` 环境变量、调整本地开发配置等
-
-**惩罚机制：**
-- 第一次违规：工作成果被自动清除，需重新开始
-- 持续违规：表明 AI Agent 未遵循指令，需要人工介入修正 Agent 行为
-- 保护机制不可绕过：任何试图禁用保护机制的行为都是严重违规
 
 #### 标准流程
 ```bash
@@ -185,42 +179,6 @@ git branch -d agent/<task-name>
 - **不复制环境变量** — worktree 不需要独立的 `.env` 文件
 - **gitignore 文件在主分支直接修改** — `.env`、`node_modules/` 等被 git 忽略的文件允许在 main 分支直接修改
 - **合并后必须类型检查** — 每次合并到 main 后立即执行 `pnpm tsc --noEmit`，只修复本次变更引入的类型错误，不修复已存在的错误
-
-#### 自动保护机制（60秒检测周期）
-- **保护守护进程** — `scripts/protection-daemon.sh` 每 60 秒检测一次 main 工作区状态
-- **自动回退触发条件**：仅限主分支存在未提交的修改（`git diff-index` / `git ls-files --others --exclude-standard` 检测到 dirty workdir，gitignore 匹配的路径不计入）
-- **回退操作**：仅 `git reset --hard HEAD && git clean -fd`（只清工作区，HEAD 不动，.gitignore 匹配的文件会被保留）
-- **绝不触变提交历史** — 本地 main 领先 `origin/main` 是合法状态（如刚合并 worktree 分支待 push），daemon 不会也不得对 commit 执行 reset/revert/rebase。因历史原因参见 `scripts/protect-main-branch.sh` 顶部注释
-- **审计日志** — 所有回退操作记录在 `.git/main-protection.log`，包含时间戳和回退内容
-- **零例外（针对工作区）** — 任何在 main 上直接编辑文件的动作，60 秒内都会被 dirty workdir 清理干净
-
-#### 保护机制启动
-```bash
-# 开发时自动启动（推荐）
-./scripts/dev-full.sh  # 同时启动保护守护进程和开发服务器
-
-# 手动控制守护进程
-./scripts/protection-daemon.sh start   # 启动
-./scripts/protection-daemon.sh stop    # 停止
-./scripts/protection-daemon.sh status  # 检查状态
-```
-
-#### 违规操作排查
-如果提交消失或被回退：
-```bash
-# 1. 检查保护日志
-tail -f .git/main-protection.log
-
-# 2. 确认当前分支
-git branch --show-current  # 必须在 worktree 分支，不能是 main
-
-# 3. 检查守护进程状态
-./scripts/protection-daemon.sh status
-
-# 4. 如果在 main 分支，立即切换到 worktree
-git worktree add -b agent/<task-name> .agent-worktrees/<task-name>
-cd .agent-worktrees/<task-name>
-```
 
 **任何代码变更都必须在 worktree 中完成，无例外。**
 
