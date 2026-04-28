@@ -11,6 +11,7 @@ const SubmitSchema = z.object({
   images: z.array(z.string()).optional(),
   model: z.string().optional(),
   skills: z.array(z.string()).optional(),
+  mcpScope: z.array(z.string()).optional(),
 });
 
 /** POST /api/video/novel/[novelId]/chat — submit a novel-level resource subagent */
@@ -32,7 +33,7 @@ export async function POST(
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  const { message, session_id, user, images, model, skills } = parsed.data;
+  const { message, session_id, user, images, model, skills, mcpScope } = parsed.data;
   const result = await submitSubAgent({
     message,
     sessionId: session_id,
@@ -41,7 +42,8 @@ export async function POST(
     model: resolveModel(model),
     agentConfig: {
       contextProvider: new NovelContextProvider({ novelId }),
-      skills,
+      skills: skills ?? ["novel-resource-mgr"],
+      mcpScope: mcpScope ?? ["video_workflow"],
     },
   });
 
