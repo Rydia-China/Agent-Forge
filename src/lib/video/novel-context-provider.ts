@@ -43,8 +43,28 @@ export class NovelContextProvider implements ContextProvider {
     if (categories.length > 0) {
       lines.push("");
       lines.push("## 已有小说级资源");
+
       for (const group of categories) {
-        lines.push(`- ${group.category}: ${group.items.length} 项`);
+        const generated = group.items.filter(item => item.url).length;
+        const pending = group.items.length - generated;
+
+        lines.push("");
+        lines.push(`### ${group.category} (${generated}/${group.items.length} 已生成)`);
+
+        // Show up to 20 items per category to avoid context bloat
+        const itemsToShow = group.items.slice(0, 20);
+        for (const item of itemsToShow) {
+          const status = item.url ? "✓" : "✗";
+          lines.push(`- ${status} ${item.key} — ${item.title || item.key}`);
+        }
+
+        if (group.items.length > 20) {
+          lines.push(`... 还有 ${group.items.length - 20} 项（使用 video_workflow__get_status 查看完整列表）`);
+        }
+
+        if (pending > 0) {
+          lines.push(`⚠ ${pending} 项待生成`);
+        }
       }
     } else {
       lines.push("");
