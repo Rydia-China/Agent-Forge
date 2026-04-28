@@ -18,6 +18,7 @@ const SubmitSchema = z.object({
   model: z.string().optional(),
   video_context: VideoContextSchema,
   skills: z.array(z.string()).optional(),
+  mcpScope: z.array(z.string()).optional(),
 });
 
 /** POST /api/video/tasks — submit a video workflow agent subagent */
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  const { message, session_id, user, images, model, video_context, skills } = parsed.data;
+  const { message, session_id, user, images, model, video_context, skills, mcpScope } = parsed.data;
 
   const contextProvider = new VideoContextProvider({
     novelId: video_context.novelId,
@@ -50,7 +51,8 @@ export async function POST(req: NextRequest) {
     model: resolveModel(model),
     agentConfig: {
       contextProvider,
-      skills,
+      skills: skills ?? ["video-workflow"],
+      mcpScope: mcpScope ?? ["video_workflow", "subagent"],
     },
   });
 
