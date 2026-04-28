@@ -153,26 +153,30 @@
 # 1. 创建 worktree（手动创建分支）
 git worktree add -b agent/<task-name> .agent-worktrees/<task-name>
 
-# 2. 设置 worktree 环境（复制 .env + 安装依赖）
+# 2. 在 worktree 中开发（原子化提交）
 cd .agent-worktrees/<task-name>
-./scripts/setup-worktree.sh
-
-# 3. 在 worktree 中开发（原子化提交）
 # ... 编写代码（完成一个逻辑单元）...
 git add -A && git commit -m "feat: add user model"
 # ... 继续开发（完成下一个逻辑单元）...
 git add -A && git commit -m "feat: add user service"
 # ... 多次原子化提交，每次提交功能完整可独立回滚 ...
 
-# 4. 验证无误后，在主工作区合并
+# 3. 验证无误后，在主工作区合并
 cd /path/to/main
 git checkout main
 git merge --no-ff agent/<task-name>
 
-# 5. 清理 worktree
+# 4. 清理 worktree
 git worktree remove .agent-worktrees/<task-name>
 git branch -d agent/<task-name>
 ```
+
+#### Worktree 约束
+- **不安装依赖** — worktree 共享主工作区的 `node_modules/`，无需重复安装
+- **不运行类型检查** — worktree 中不执行 `tsc` 或 `pnpm build`，类型检查在主工作区合并前进行
+- **不独立启动开发环境** — worktree 不运行 `pnpm dev`，开发服务器仅在主工作区启动
+- **不复制环境变量** — worktree 不需要独立的 `.env` 文件
+- **gitignore 文件在主分支直接修改** — `.env`、`node_modules/` 等被 git 忽略的文件允许在 main 分支直接修改
 
 #### 自动保护机制（60秒检测周期）
 - **保护守护进程** — `scripts/protection-daemon.sh` 每 60 秒检测一次 main 工作区状态
