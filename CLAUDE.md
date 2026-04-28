@@ -28,6 +28,7 @@
 - DB 字段与标准字段一一对齐，支持 SKILL.md 导入/导出
 - 必须兼容 Claude Code / Codex / Cursor 等主流 agent 工具的 skills 体系
 - **Skills 存储在 OSS 中** — 需要修改 Skill 内容时，必须到 OSS 系统中修改，不在本代码库中维护 Skill 文件
+- **快速查询** — AI Agent 查询 Skills 时使用 `docs/skills-api-quick-reference.md` 中的 curl 命令，避免每次搜索代码
 
 ### MCP 标准
 - 遵循 **Model Context Protocol** 开放标准 (modelcontextprotocol.io)
@@ -89,6 +90,7 @@
 - `docs/ROADMAP.md` — 短期目标（唯一规划文件）
 - `docs/dataflow.md` — 跨边界数据流（仅记录跨系统边界）
 - `docs/api-playbook.md` — 接口调用次序与验证手册（给 AI agent）
+- `docs/skills-api-quick-reference.md` — Skills API curl 命令速查（给 AI agent）
 
 ## 端口
 - 8001 (env `PORT`)
