@@ -85,9 +85,6 @@ function summarizeTool(call: ToolCall): string {
   return `调用了工具：${call.function.name}`;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 /**
  * Per-subagent serial queue for pushEvent.
