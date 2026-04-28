@@ -161,22 +161,27 @@ git add -A && git commit -m "feat: add user model"
 git add -A && git commit -m "feat: add user service"
 # ... 多次原子化提交，每次提交功能完整可独立回滚 ...
 
-# 3. 验证无误后，在主工作区合并
+# 3. 在主工作区合并
 cd /path/to/main
 git checkout main
 git merge --no-ff agent/<task-name>
 
-# 4. 清理 worktree
+# 4. 类型检查（合并后必须执行）
+pnpm tsc --noEmit
+# 如果类型检查失败，立即修复问题并提交
+
+# 5. 清理 worktree
 git worktree remove .agent-worktrees/<task-name>
 git branch -d agent/<task-name>
 ```
 
 #### Worktree 约束
 - **不安装依赖** — worktree 共享主工作区的 `node_modules/`，无需重复安装
-- **不运行类型检查** — worktree 中不执行 `tsc` 或 `pnpm build`，类型检查在主工作区合并前进行
+- **不运行类型检查** — worktree 中不执行 `tsc` 或 `pnpm build`，类型检查在主工作区合并后进行
 - **不独立启动开发环境** — worktree 不运行 `pnpm dev`，开发服务器仅在主工作区启动
 - **不复制环境变量** — worktree 不需要独立的 `.env` 文件
 - **gitignore 文件在主分支直接修改** — `.env`、`node_modules/` 等被 git 忽略的文件允许在 main 分支直接修改
+- **合并后必须类型检查** — 每次合并到 main 后立即执行 `pnpm tsc --noEmit`，发现问题立即修复
 
 #### 自动保护机制（60秒检测周期）
 - **保护守护进程** — `scripts/protection-daemon.sh` 每 60 秒检测一次 main 工作区状态
