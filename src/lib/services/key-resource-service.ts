@@ -145,6 +145,7 @@ export interface GenerateImageInput {
   key: string;
   prompt: string;
   refUrls?: string[];
+  model?: string;
 }
 
 export interface GenerateImageResult {
@@ -157,7 +158,7 @@ export interface GenerateImageResult {
 export async function generateImage(
   input: GenerateImageInput,
 ): Promise<GenerateImageResult> {
-  const { scopeType, scopeId, key, prompt, refUrls } = input;
+  const { scopeType, scopeId, key, prompt, refUrls, model } = input;
 
   // 1. Upsert identity
   const resource = await prisma.keyResource.upsert({
@@ -178,7 +179,7 @@ export async function generateImage(
   });
 
   // 3. Call FC
-  const imageUrl = await callFcGenerateImage(prompt, refUrls);
+  const imageUrl = await callFcGenerateImage(prompt, refUrls, model);
 
   // 4. Update version url + bump currentVersion
   await prisma.$transaction([

@@ -113,12 +113,16 @@ export async function generateAndPersistImage(
     key: input.key,
     prompt: input.prompt,
     refUrls: input.refUrls,
+    model: input.model,
   });
 
   await setKeyResourceMetadata(gen.id, input.category, input.title);
 
   return {
-    url: gen.imageUrl,
+    status: "ok",
+    key: input.key,
+    keyResourceId: gen.id,
+    imageUrl: gen.imageUrl,
     version: gen.version,
   };
 }
