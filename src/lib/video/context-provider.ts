@@ -43,6 +43,11 @@ export class VideoContextProvider implements ContextProvider {
       `novel_id: ${novelId}`,
       `script_id: ${scriptId}`,
       `script_key: ${scriptKey}`,
+      "",
+      "## Prompt Optimizer Dispatch Rule",
+      "生成或优化视频 prompt 时，你只负责调度，不负责拼接、转述或改写 episodeWindow。",
+      "必须调用 `video_workflow__optimize_video_prompts` 并只传当前 `script_id`；该工具会由服务端按 scriptId 注入当前 EP、前后一集原文窗口、资源状态和完整 skill 上下文。",
+      "禁止自行调用 `subagent__run` 来启动 video-prompt-optimizer，禁止手写 Optimizer instruction 中的 EP 内容。",
     ];
 
     if (!initResult) {

@@ -152,10 +152,10 @@ EP 级资源 agent：
 
 **视频生成工作流**：
 1. 先提交 EP 级异步批量换装任务，等待 `completed`，并将换装图作为服装权威源
-2. 主控只启动一个一级 Prompt Optimizer subagent，不直接循环调用 Prompt Writer / Reviewer
-3. Prompt Optimizer 内部最多 5 轮增量迭代：每轮调独立 Prompt Writer，再调独立 Reviewer；它维护 `iterationHistory`、`resolvedIssues`、`remainingIssues`、`doNotRegress` 和 `bestVersion`
-4. 若 Reviewer 通过，Optimizer 返回 `status="passed"`、最终 prompts 和 final review；若 5 轮未通过，返回 `max_iterations` 和当前 best version；若发现门禁互相矛盾，返回 `conflict`
-5. 主控只有在 Optimizer 返回 `passed` 且 `allowVideoGeneration=true` 后，才调用 `save_reviewed_video_prompt` 保存 prompt
+2. 主控只调用 `video_workflow__optimize_video_prompts`，不自行拼接或转述 Optimizer instruction，不直接调用 `subagent__run`
+3. `optimize_video_prompts` 由服务端按 `scriptId` 读取当前 EP、前后一集原文窗口、资源状态和换装 URL，再确定性启动 Prompt Optimizer
+4. Prompt Optimizer 内部最多 5 轮增量迭代：每轮调独立 Prompt Writer，再调独立 Reviewer；它维护 `iterationHistory`、`resolvedIssues`、`remainingIssues`、`doNotRegress` 和 `bestVersion`
+5. 若 Reviewer 通过，`optimize_video_prompts` 返回 `status="passed"` 并默认保存 reviewed prompts；若 5 轮未通过，返回 `max_iterations` 和当前 best version；若发现门禁互相矛盾，返回 `conflict`
 6. Seedance 是默认视频生成路径；HappyHorse 仅作兼容/测试路径
 7. 连续 clip 生成时，`clip_2+` 调用 `execute_video_prompt` 必须同时传 `previousVideoUrl` 与 `previousFrameUrl`：服务层默认从上一 clip 裁最后 15 秒作为 `sourceVideoUrls`，并把上一 clip 最后一帧图片作为首帧/参考图参照
 
@@ -175,13 +175,13 @@ pnpm --dir /path/to/Agent-Forge --silent run cli debug:mcp-call '{"provider":"ag
 ```
 pnpm --dir /path/to/Agent-Forge --silent run cli debug:subagent-events '{"subagentId":"<subagent_id>","timeoutMs":180000,"showText":false}'
 ```
-顶层验收：应看到 `video_workflow__get_status`、必要时 `video_workflow__get_episode`，然后只出现一次用于 Prompt Optimizer 的 `subagent__run`。顶层主控不应直接循环调用 Prompt Writer / Reviewer。
+顶层验收：应看到 `video_workflow__get_status`、必要时 `video_workflow__get_episode`，然后只出现一次 `video_workflow__optimize_video_prompts`。顶层主控不应直接调用 `subagent__run`，也不应直接循环调用 Prompt Writer / Reviewer。
 4. 抽取顶层 session 工具调用和工具结果：
 ```
 pnpm --dir /path/to/Agent-Forge --silent run cli debug:session-tools '{"sessionId":"<session_id>","includeToolResults":true,"includeArguments":true,"resultMaxChars":50000}'
 ```
-验收：`subagent__run` 的 arguments 中应包含 `skills:["video-prompt-optimizer",...]`、`mcpScope:["subagent"]`、`includeTrace:true`。工具结果应包含 Optimizer 的结构化输出或 trace，可用于确认内部 Writer/Reviewer 轮次。
-5. 如 `subagent__run` 返回内存 `agentId`，立即抓嵌套 trace：
+验收：`optimize_video_prompts` 的 arguments 只应包含当前 `scriptId` 以及保存/停止选项，不应包含 EP 原文。工具结果应包含 `optimizerTaskId`、`optimizerAgentId`、`iterationCount`、`promptCount`、`savedPrompts`、`remainingIssues`。
+5. 如 `optimize_video_prompts` 返回 `optimizerAgentId`，立即抓嵌套 trace：
 ```
 pnpm --dir /path/to/Agent-Forge --silent run cli debug:mcp-call '{"provider":"subagent","name":"get_trace","arguments":{"agentId":"<optimizerAgentId>","tree":true}}'
 ```
@@ -191,13 +191,13 @@ pnpm --dir /path/to/Agent-Forge --silent run cli debug:mcp-call '{"provider":"su
 - 最多 5 轮，且每轮更新 `iterationHistory`。
 - 下一轮 Writer 输入必须包含 `latestPromptJson`、`latestReviewJson`、历史 issue 摘要和 `doNotRegress`，而不是只传上一轮口头反馈。
 - Reviewer issue 应有稳定 `issueId` / `rule` / `blocking`，便于区分 `resolvedIssues`、`remainingIssues`、`newIssues`。
-- `status="passed"` 时才能进入保存；`max_iterations` / `conflict` / `failed` 均不得保存 reviewed prompt，不得产视。
+- `status="passed"` 时 `optimize_video_prompts` 才会保存 reviewed prompt；`max_iterations` / `conflict` / `failed` 均不得保存 reviewed prompt，不得产视。
 7. 停止与恢复规则：
 - 用户要求停止调试时，先取消顶层 `subagent_id`：`curl -X POST http://localhost:8001/api/subagents/<subagent_id>/cancel`。
 - 如果返回 “not found or already finished”，不得为了看 trace 重新执行；先用 `debug:subagent-get`、`debug:session-tools` recall 已持久化结果。
 - `interrupted` 表示 partial context 已保存，不自动重跑；继续前必须基于已有 session 续写。
 8. 保存结果验收：
-- 只有 Optimizer `passed` 且 final review 允许生成时，主控才调用 `save_reviewed_video_prompt`。
+- 只有 `optimize_video_prompts` 返回 `passed` 时，才应出现已保存的 reviewed prompt；主控通常不直接调用 `save_reviewed_video_prompt`。
 - 保存的 prompt JSON data 必须包含 `iterationCount`、`iterationHistory`、`bestVersion`、`resolvedIssues`、`remainingIssues`、`doNotRegress` 和 `optimizerSummary`，保证 UI 可查看版本路径和反馈历史。
 - 用户未明确要求生成视频时，不应出现 `execute_video_prompt`。
 
