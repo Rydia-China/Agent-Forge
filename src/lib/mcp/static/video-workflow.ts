@@ -5,14 +5,14 @@
  * Data queries (2): get_episode, get_status
  * Novel-level image gen (2): generate_portrait, generate_scene (single/grid/hd)
  * EP-level image gen (1): generate_costume
- * Prompt/video gen (2): save_reviewed_video_prompt, execute_video_prompt
+ * Prompt/video gen (3): optimize_video_prompts, save_reviewed_video_prompt, execute_video_prompt
  *
  * All generate_* tools auto-handle key/scope/category/KeyResource/domain_resources.
  */
 
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
-import type { McpProvider } from "../types";
+import type { McpProvider, ToolContext } from "../types";
 import type { Prisma } from "@/generated/prisma";
 import * as novelService from "@/lib/services/novel-service";
 import * as episodeService from "@/lib/services/episode-service";
@@ -20,6 +20,7 @@ import * as orchestrationService from "@/lib/services/video-workflow-orchestrati
 import * as assetGenerationService from "@/lib/services/video-asset-generation-service";
 import * as batchTaskService from "@/lib/services/batch-generation-task-service";
 import * as keyResourceService from "@/lib/services/key-resource-service";
+import * as promptOptimizerService from "@/lib/services/video-prompt-optimizer-service";
 import { setKeyResourceMetadata } from "@/lib/services/video-asset-generation-service";
 
 /* ------------------------------------------------------------------ */
@@ -211,10 +212,24 @@ const TOOLS: Tool[] = [
 
   // --- Prompt Persistence & Video Execution ---
   {
+    name: "optimize_video_prompts",
+    description:
+      "服务端确定性执行 EP 视频 Prompt Optimizer。只传 scriptId；工具会按 scriptId 读取当前 EP、前后一集 episodeWindow 原文、资源状态和换装 URL，构造 Optimizer 输入并调度 Writer/Reviewer。EP 主控禁止自行拼接或转述 episodeWindow，必须调用本工具。",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        scriptId: { type: "string", description: "Episode script DB ID" },
+        savePrompts: { type: "boolean", description: "通过后是否保存 reviewed prompts，默认 true" },
+        stopBeforeVideoGeneration: { type: "boolean", description: "是否在生成视频前停止，默认 true" },
+        model: { type: "string", description: "可选：Optimizer 使用的模型" },
+      },
+      required: ["scriptId"],
+    },
+  },
+  {
     name: "save_reviewed_video_prompt",
     description:
-      "保存 Reviewer 已通过的视频 prompt。EP 主控在 Prompt Writer subagent 和 Reviewer subagent 都通过后调用；" +
-      "只持久化 prompt/review 元数据，不生成视频。",
+      "低层保存工具：保存 Reviewer 已通过的视频 prompt。通常不要由 EP 主控直接调用；EP 主控应调用 optimize_video_prompts，由服务端确定性组装上下文、调度 Optimizer 并保存。此工具会校验 refUrls 必须属于当前 scriptId 可见资源。",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -292,6 +307,7 @@ export const videoWorkflowMcp: McpProvider = {
   async callTool(
     name: string,
     args: Record<string, unknown>,
+    context?: ToolContext,
   ): Promise<CallToolResult> {
     try {
       switch (name) {
@@ -370,8 +386,15 @@ export const videoWorkflowMcp: McpProvider = {
           return json(tasks);
         }
 
+        case "optimize_video_prompts": {
+          const params = promptOptimizerService.OptimizeVideoPromptsParams.parse(args);
+          const result = await promptOptimizerService.optimizeVideoPrompts(params, context);
+          return json(result);
+        }
+
         case "save_reviewed_video_prompt": {
           const params = SaveReviewedVideoPromptParams.parse(args);
+          await promptOptimizerService.assertReferenceUrlsBelongToScript(params.scriptId, params.refUrls);
           const data = {
             ...(params.definition ? { definition: params.definition } : {}),
             ...(params.duration ? { duration: params.duration } : {}),
