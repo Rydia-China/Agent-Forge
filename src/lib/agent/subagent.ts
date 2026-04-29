@@ -221,6 +221,16 @@ function buildToolLoopSystemPrompt(
   return parts.join("\n\n");
 }
 
+function buildSingleShotSystemPrompt(
+  context?: string,
+  skillContent?: string,
+): string | undefined {
+  const parts: string[] = [];
+  if (skillContent) parts.push(`## Reference Material\n${skillContent}`);
+  if (context) parts.push(`## Additional Context\n${context}`);
+  return parts.length > 0 ? parts.join("\n\n") : undefined;
+}
+
 /* ================================================================== */
 /*  General helpers                                                    */
 /* ================================================================== */
@@ -581,11 +591,20 @@ export class SubAgent {
         { role: "user", content: this.config.instruction },
       ];
     } else {
+      this.systemPrompt = buildSingleShotSystemPrompt(
+        this.config.context,
+        this.skillContent,
+      ) ?? "";
       const content = buildContent(
         this.config.instruction,
         this.config.imageUrls,
       );
-      this.messages = [{ role: "user", content }];
+      this.messages = this.systemPrompt
+        ? [
+            { role: "system", content: this.systemPrompt },
+            { role: "user", content },
+          ]
+        : [{ role: "user", content }];
     }
   }
 
