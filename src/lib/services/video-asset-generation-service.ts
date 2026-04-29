@@ -462,7 +462,7 @@ export const ExecuteVideoPromptParams = z.object({
   duration: z.number().min(4).max(15),
   provider: z.enum(["jimeng", "happyhorse"]).optional().default("jimeng"),
   resolution: z.enum(["1080P", "720P"]).optional(),
-  ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional(),
+  ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional().default("9:16"),
   model: z.string().min(1).optional(),
   previousVideoUrl: z.string().url().optional(),
   previousFrameUrl: z.string().url().optional(),
@@ -662,6 +662,8 @@ export async function executeVideoPrompt(
       referenceImageUrls: videoRefImageUrls.length > 0 ? videoRefImageUrls : undefined,
       sourceVideoUrls,
       duration: input.duration,
+      ratio: input.ratio,
+      resolution: input.resolution,
     });
   const videoUrl = generatedVideo.videoUrl;
   const lastFrameUrl = await resolveLastFrameUrl(videoUrl, generatedVideo.lastFrameUrl);
@@ -671,6 +673,8 @@ export async function executeVideoPrompt(
     promptKey: input.key,
     duration: input.duration,
     provider: input.provider,
+    ratio: input.ratio,
+    ...(input.resolution ? { resolution: input.resolution } : {}),
     lastFrameUrl,
     continuationTailSeconds: input.continuationTailSeconds,
     ...(input.previousVideoUrl ? { previousVideoUrl: input.previousVideoUrl } : {}),
