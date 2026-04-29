@@ -309,7 +309,17 @@ async function executeSubAgent(
       agentConfig,
     );
 
-    if (result.interruption) {
+    if (ac.signal.aborted) {
+      await prisma.subAgent.update({
+        where: { id: subagentId },
+        data: {
+          status: "cancelled",
+          output: result.reply || null,
+          error: "SubAgent cancelled",
+        },
+      });
+      await pushEvent(subagentId, "error", { error: "SubAgent cancelled" });
+    } else if (result.interruption) {
       await prisma.subAgent.update({
         where: { id: subagentId },
         data: {
