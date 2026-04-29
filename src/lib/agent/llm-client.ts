@@ -70,7 +70,12 @@ function getThinkingMode(): LlmThinkingMode | undefined {
   return "disabled";
 }
 
-function applyThinkingMode(body: ThinkingRequest): void {
+function supportsThinkingMode(model: string): boolean {
+  return model.startsWith("deepseek/") || model.startsWith("deepseek-");
+}
+
+function applyThinkingMode(body: ThinkingRequest, model: string): void {
+  if (!supportsThinkingMode(model)) return;
   const mode = getThinkingMode();
   if (mode) body.thinking = { type: mode };
 }
@@ -82,13 +87,14 @@ export async function chatCompletion(
   options?: ChatCompletionOptions,
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   const client = getClient();
+  const resolvedModel = model ?? DEFAULT_MODEL;
   const body: NonStreamingRequest = {
-    model: model ?? DEFAULT_MODEL,
+    model: resolvedModel,
     messages,
     tools: tools?.length ? tools : undefined,
     response_format: options?.responseFormat,
   };
-  applyThinkingMode(body);
+  applyThinkingMode(body, resolvedModel);
   const rawRes: unknown = options?.signal
     ? await client.chat.completions.create(body, { signal: options.signal })
     : await client.chat.completions.create(body);
@@ -122,9 +128,10 @@ export async function chatCompletionStream(
   model?: string,
 ): Promise<AsyncIterable<ChatCompletionChunk>> {
   const client = getClient();
+  const resolvedModel = model ?? DEFAULT_MODEL;
   
   console.log("[llm-client] Creating stream with:", {
-    model: model ?? DEFAULT_MODEL,
+    model: resolvedModel,
     messageCount: messages.length,
     toolCount: tools?.length ?? 0,
     baseURL: process.env.LLM_BASE_URL,
@@ -132,12 +139,12 @@ export async function chatCompletionStream(
   });
   
   const body: StreamingRequest = {
-    model: model ?? DEFAULT_MODEL,
+    model: resolvedModel,
     messages,
     tools: tools?.length ? tools : undefined,
     stream: true,
   };
-  applyThinkingMode(body);
+  applyThinkingMode(body, resolvedModel);
   const stream = await client.chat.completions.create(
     body,
     signal ? { signal } : undefined,
@@ -181,7 +188,7 @@ export async function generateTitle(userMessage: string): Promise<string> {
         },
       ],
     };
-    applyThinkingMode(body);
+    applyThinkingMode(body, model);
     const rawRes: unknown = await client.chat.completions.create(body);
     
     // Handle case where OpenAI SDK returns a string instead of object

@@ -27,6 +27,9 @@ const REVIEWER_SKILLS = [
   ...VIDEO_STANDARD_SKILLS,
 ] as const;
 
+const PROMPT_WRITER_MODEL = "anthropic/claude-opus-4.6";
+const PROMPT_REVIEWER_MODEL = "anthropic/claude-opus-4.7";
+
 const PromptSchema = z.object({
   key: z.string().min(1),
   title: z.string().min(1),
@@ -762,7 +765,7 @@ export async function optimizeVideoPrompts(
       maxRetries: 2,
       includeTrace: true,
       keyJsonTitle: `EP${episode.scriptKey.replace(/^EP/i, "")} Prompt Writer Iteration ${iteration}`,
-      ...(input.model ? { model: input.model } : {}),
+      model: PROMPT_WRITER_MODEL,
     }, context);
     if (writerResult.taskId && !optimizerTaskId) optimizerTaskId = writerResult.taskId;
     optimizerAgentId = writerResult.agentId;
@@ -847,7 +850,7 @@ export async function optimizeVideoPrompts(
       maxRetries: 2,
       includeTrace: true,
       keyJsonTitle: `EP${episode.scriptKey.replace(/^EP/i, "")} Prompt Reviewer Iteration ${iteration}`,
-      ...(input.model ? { model: input.model } : {}),
+      model: PROMPT_REVIEWER_MODEL,
     }, context);
     optimizerAgentId = reviewerResult.agentId;
     if (context?.signal?.aborted || reviewerResult.status === "cancelled") {

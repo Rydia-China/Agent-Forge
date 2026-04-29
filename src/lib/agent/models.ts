@@ -16,17 +16,14 @@ export interface ModelOption {
  * Allowed models for the main controller.
  * Order matters — the UI will display them in this order.
  * 
- * Model IDs must match the API provider's format.
- * For cc-vibe.com: use "claude-sonnet-4-6" (no prefix, hyphens instead of dots).
+ * Model IDs must match the OpenAI-compatible gateway's format.
  * LLM_DEFAULT_MODEL can temporarily override the code default when it matches one
  * of the IDs below.
  */
 export const MODEL_OPTIONS: ModelOption[] = [
-  // { id: "claude-sonnet-4-6", label: "Sonnet 4.6", default: true },
-  // { id: "claude-opus-4-6", label: "Opus 4.6" },
-  // { id: "claude-opus-4-7", label: "Opus 4.7" },
-  // { id: "claude-haiku-4-5-20251001", label: "Haiku 4.5" },
-  { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", default: true },
+  { id: "deepseek/deepseek-v4-pro", label: "DeepSeek V4 Pro", default: true },
+  { id: "anthropic/claude-opus-4.6", label: "Claude Opus 4.6" },
+  { id: "anthropic/claude-opus-4.7", label: "Claude Opus 4.7" },
 ];
 
 /* ---- Derived helpers (do not edit) ---- */
