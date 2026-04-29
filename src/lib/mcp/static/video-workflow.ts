@@ -143,7 +143,8 @@ const TOOLS: Tool[] = [
     name: "submit_scenes_task",
     description:
       "批量生成场景图片（小说级）。异步执行，立即返回 taskId。" +
-      "单个生成时传入长度为 1 的数组。适用于生成小说中所有场景的背景图。",
+      "单个生成时传入长度为 1 的数组。适用于生成小说中所有场景的背景图。" +
+      "mode=grid 时按父地点编排：先用 location_grid_style 生成宫格参照图，再把该参照图传给 sub_location_style 生成各子地点实际场景图。",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -157,7 +158,7 @@ const TOOLS: Tool[] = [
         mode: {
           type: "string",
           enum: ["single", "grid", "hd"],
-          description: "生成模式（可选，默认 single）",
+          description: "生成模式（可选，默认 single）。grid 是父地点工作流，hd 是使用已生成父 grid 参照图生成子地点实际图。",
         },
         model: { type: "string", description: "图片生成模型（可选）：'gemini'/'google/gemini-*' 走 Gemini FC；'gpt'/'gpt-*' 走 GPT Image FC" },
       },
