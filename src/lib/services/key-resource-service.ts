@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import type { Prisma as PrismaTypes } from "@/generated/prisma";
+import type { KeyResource, Prisma as PrismaTypes } from "@/generated/prisma";
+import { compileTemplate } from "@/lib/mcp/static/langfuse-helpers";
 import { callFcGenerateImage } from "./fc-image-client";
 import {
   compressImageUrlLossless,
@@ -59,6 +60,7 @@ export interface KeyResourceDetail {
   scopeId: string;
   key: string;
   mediaType: string;
+  category: string | null;
   currentVersion: number;
   title: string | null;
   url: string | null;
@@ -187,6 +189,197 @@ async function compressGeneratedImageData(
       compressedUrl: imageUrl,
     };
   }
+}
+
+interface DerivedPromptData {
+  title: string | null;
+  prompt: string | null;
+  refUrls: string[];
+}
+
+interface SceneLookupResult {
+  name: string;
+  visualPrompt: string | null;
+  parentName: string | null;
+  parentVisualPrompt: string | null;
+  siblingSlots: string[];
+}
+
+function stringField(value: unknown, field: string): string | null {
+  if (!isPlainJsonObject(value)) return null;
+  const fieldValue = value[field];
+  return typeof fieldValue === "string" && fieldValue.trim() ? fieldValue : null;
+}
+
+function arrayField(value: unknown, field: string): unknown[] {
+  if (!isPlainJsonObject(value)) return [];
+  const fieldValue = value[field];
+  return Array.isArray(fieldValue) ? fieldValue : [];
+}
+
+async function getStylePrompt(name: string): Promise<{ prompt: string; refUrls: string[] } | null> {
+  const style = await prisma.stylePreset.findUnique({ where: { name } });
+  if (!style) return null;
+  return {
+    prompt: style.prompt,
+    refUrls: style.referenceImageUrl ? [style.referenceImageUrl] : [],
+  };
+}
+
+async function derivePortraitPrompt(resource: KeyResource): Promise<DerivedPromptData | null> {
+  const characterName = resource.title?.trim();
+  if (!characterName || resource.scopeType !== "novel") return null;
+
+  const novel = await prisma.novel.findUnique({
+    where: { id: resource.scopeId },
+    select: { characterArcs: true },
+  });
+  const arc = Array.isArray(novel?.characterArcs)
+    ? novel.characterArcs.find((item) => stringField(item, "name") === characterName)
+    : undefined;
+  const appearance = stringField(arc, "appearance");
+  const style = await getStylePrompt("portrait-style");
+  if (!appearance || !style) return null;
+
+  return {
+    title: characterName,
+    prompt: compileTemplate(style.prompt, { demographics: appearance }),
+    refUrls: style.refUrls,
+  };
+}
+
+function findScene(locationBible: unknown, sceneName: string): SceneLookupResult | null {
+  const locations = Array.isArray(locationBible) ? locationBible : [];
+  for (const location of locations) {
+    const parentName = stringField(location, "name");
+    const parentVisualPrompt = stringField(location, "visual_prompt");
+    const subLocations = arrayField(location, "sub_locations");
+    const siblingSlots = subLocations
+      .filter((subLocation) => stringField(subLocation, "id") !== stringField(location, "id"))
+      .map((subLocation) => {
+        const name = stringField(subLocation, "name");
+        const visualPrompt = stringField(subLocation, "visual_prompt");
+        return name && visualPrompt ? `【格】${name}：${visualPrompt}` : null;
+      })
+      .filter((slot): slot is string => slot != null);
+
+    if (parentName === sceneName) {
+      return {
+        name: parentName,
+        visualPrompt: parentVisualPrompt,
+        parentName: null,
+        parentVisualPrompt,
+        siblingSlots,
+      };
+    }
+
+    for (const subLocation of subLocations) {
+      const subName = stringField(subLocation, "name");
+      if (subName === sceneName) {
+        return {
+          name: subName,
+          visualPrompt: stringField(subLocation, "visual_prompt"),
+          parentName,
+          parentVisualPrompt,
+          siblingSlots,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+async function deriveScenePrompt(resource: KeyResource): Promise<DerivedPromptData | null> {
+  if (resource.scopeType !== "novel") return null;
+  const rawTitle = resource.title?.trim();
+  if (!rawTitle) return null;
+  const isGrid = resource.key.endsWith("_grid") || rawTitle.endsWith(" (grid)");
+  const sceneName = rawTitle.endsWith(" (grid)") ? rawTitle.slice(0, -" (grid)".length) : rawTitle;
+
+  const novel = await prisma.novel.findUnique({
+    where: { id: resource.scopeId },
+    select: { locationBible: true },
+  });
+  const scene = findScene(novel?.locationBible, sceneName);
+  if (!scene) return null;
+
+  if (isGrid) {
+    const style = await getStylePrompt("location_grid_style");
+    if (!style || !scene.visualPrompt) return null;
+    const slots = [`【格 1】${scene.name}：${scene.visualPrompt}`, ...scene.siblingSlots];
+    return {
+      title: rawTitle,
+      prompt: compileTemplate(style.prompt, {
+        name: scene.name,
+        gridSize: String(slots.length),
+        gridSlots: slots.join("\n"),
+      }),
+      refUrls: style.refUrls,
+    };
+  }
+
+  if (scene.parentName) {
+    const style = await getStylePrompt("sub_location_style");
+    if (!style) return null;
+    return {
+      title: rawTitle,
+      prompt: compileTemplate(style.prompt, { name: scene.name, sceneName: scene.name }),
+      refUrls: style.refUrls,
+    };
+  }
+
+  const style = await getStylePrompt("location_style");
+  if (!style || !scene.visualPrompt) return null;
+  return {
+    title: rawTitle,
+    prompt: compileTemplate(style.prompt, { name: scene.name, scenePrompt: scene.visualPrompt }),
+    refUrls: style.refUrls,
+  };
+}
+
+async function deriveCostumePrompt(resource: KeyResource): Promise<DerivedPromptData | null> {
+  const characterName = resource.title?.trim();
+  if (!characterName || resource.scopeType !== "script") return null;
+  const script = await prisma.novelScript.findUnique({
+    where: { id: resource.scopeId },
+    select: { novelId: true, initResult: true, costumes: true },
+  });
+  if (!script) return null;
+
+  const initResult = isPlainJsonObject(script.initResult) ? script.initResult : null;
+  const outfits = isPlainJsonObject(initResult?.character_outfits)
+    ? initResult.character_outfits
+    : isPlainJsonObject(script.costumes)
+      ? script.costumes
+      : null;
+  const outfit = outfits ? outfits[characterName] : null;
+  const style = await getStylePrompt("update_portrait_style");
+  if (typeof outfit !== "string" || !outfit.trim() || !style) return null;
+
+  const portraitKey = `char_${characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
+  const portrait = await prisma.keyResource.findFirst({
+    where: { scopeType: "novel", scopeId: script.novelId, key: portraitKey, currentVersion: { gt: 0 } },
+    include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+  });
+  const portraitUrl = portrait?.versions[0]?.url;
+
+  return {
+    title: characterName,
+    prompt: compileTemplate(style.prompt, { appearance_desc: outfit }),
+    refUrls: portraitUrl ? [...style.refUrls, portraitUrl] : style.refUrls,
+  };
+}
+
+async function derivePromptData(resource: KeyResource): Promise<DerivedPromptData> {
+  const derived = resource.category === "角色立绘"
+    ? await derivePortraitPrompt(resource)
+    : resource.category === "场景"
+      ? await deriveScenePrompt(resource)
+      : resource.category === "换装"
+        ? await deriveCostumePrompt(resource)
+        : null;
+
+  return derived ?? { title: resource.title, prompt: null, refUrls: [] };
 }
 
 /* ------------------------------------------------------------------ */
@@ -329,12 +522,13 @@ export async function regenerate(
         },
       })
     : null;
+  const derived = curVer ? null : await derivePromptData(resource);
 
-  const prompt = promptOverride ?? curVer?.prompt ?? "";
+  const prompt = promptOverride ?? curVer?.prompt ?? derived?.prompt ?? "";
   if (!prompt.trim()) {
     throw new Error("Prompt is required to generate an image");
   }
-  const refUrls = curVer?.refUrls ?? [];
+  const refUrls = curVer?.refUrls ?? derived?.refUrls ?? [];
 
   const imageUrl = await callFcGenerateImage(prompt, refUrls.length > 0 ? refUrls : undefined);
   const compression = await compressGeneratedImageData(imageUrl, resource.key);
@@ -531,6 +725,7 @@ export async function getById(id: string): Promise<KeyResourceDetail | null> {
   if (!resource) return null;
 
   const cur = currentVersionData(resource.versions, resource.currentVersion);
+  const derived = cur.prompt ? null : await derivePromptData(resource);
 
   return {
     id: resource.id,
@@ -538,8 +733,13 @@ export async function getById(id: string): Promise<KeyResourceDetail | null> {
     scopeId: resource.scopeId,
     key: resource.key,
     mediaType: resource.mediaType,
+    category: resource.category,
     currentVersion: resource.currentVersion,
-    ...cur,
+    title: cur.title ?? derived?.title ?? resource.title,
+    url: cur.url,
+    data: cur.data,
+    prompt: cur.prompt ?? derived?.prompt ?? null,
+    refUrls: cur.refUrls.length > 0 ? cur.refUrls : derived?.refUrls ?? [],
     versions: resource.versions.map((v) => ({
       id: v.id,
       version: v.version,
