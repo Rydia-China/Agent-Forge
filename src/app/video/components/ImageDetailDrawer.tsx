@@ -88,11 +88,16 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
   /* ---- Derived state ---- */
   const viewedVerRow = detail?.versions.find((v) => v.version === viewedVersion) ?? null;
   const isViewingCurrent = !detail || viewedVersion === detail.currentVersion;
-  const promptDirty = viewedVerRow != null && editPrompt !== viewedVerRow.prompt;
+  const hasVersions = (detail?.versions.length ?? 0) > 0;
+  const basePrompt = viewedVerRow?.prompt ?? detail?.prompt ?? "";
+  const hasPromptInput = editPrompt.trim().length > 0;
+  const promptDirty = detail != null && editPrompt !== basePrompt;
+  const canSavePrompt = promptDirty && hasPromptInput;
+  const canGenerate = hasPromptInput || Boolean(viewedVerRow?.prompt);
 
   /* ---- Save prompt ---- */
   const handleSavePrompt = useCallback(async () => {
-    if (!detail || !promptDirty) return;
+    if (!detail || !canSavePrompt) return;
     setIsSavingPrompt(true);
     try {
       await fetchJson(`/api/key-resources/${detail.id}`, {
@@ -108,14 +113,14 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
     } finally {
       setIsSavingPrompt(false);
     }
-  }, [detail, editPrompt, promptDirty, fetchDetail, message, onRefresh]);
+  }, [detail, editPrompt, canSavePrompt, fetchDetail, message, onRefresh]);
 
   /* ---- Regenerate ---- */
   const handleRegenerate = useCallback(async () => {
     if (!detail) return;
     setIsRegenerating(true);
     try {
-      const promptOverride = promptDirty ? editPrompt : undefined;
+      const promptOverride = hasPromptInput ? editPrompt : undefined;
       await fetchJson(`/api/key-resources/${detail.id}/regenerate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,12 +129,12 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
       void message.success("Image regenerated");
       void fetchDetail(detail.id, true);
       onRefresh?.();
-    } catch {
-      void message.error("Regeneration failed");
+    } catch (err: unknown) {
+      void message.error(err instanceof Error ? err.message : "Regeneration failed");
     } finally {
       setIsRegenerating(false);
     }
-  }, [detail, editPrompt, promptDirty, fetchDetail, message, onRefresh]);
+  }, [detail, editPrompt, hasPromptInput, fetchDetail, message, onRefresh]);
 
   /* ---- Rollback ---- */
   const handleRollback = useCallback(async (version: number) => {
@@ -159,7 +164,7 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
           <div className="flex items-center gap-2">
             <span className="truncate font-mono text-sm">{detail.key}</span>
             <Tag color="blue" style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>
-              v{detail.currentVersion}
+              {detail.currentVersion > 0 ? `v${detail.currentVersion}` : "pending"}
             </Tag>
             {!isViewingCurrent && (
               <Tag color="orange" style={{ fontSize: 10, lineHeight: "16px", margin: 0 }}>
@@ -264,6 +269,7 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
                 value={editPrompt}
                 onChange={(e) => setEditPrompt(e.target.value)}
                 autoSize={{ minRows: 6, maxRows: 24 }}
+                placeholder="Enter a prompt to generate this image"
                 style={{ fontSize: 12 }}
               />
             </div>
@@ -275,7 +281,7 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
                 icon={<SaveOutlined />}
                 onClick={() => void handleSavePrompt()}
                 loading={isSavingPrompt}
-                disabled={!promptDirty}
+                disabled={!canSavePrompt}
               >
                 Save Prompt
               </Button>
@@ -285,8 +291,9 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
                 icon={<ReloadOutlined />}
                 onClick={() => void handleRegenerate()}
                 loading={isRegenerating}
+                disabled={!canGenerate}
               >
-                {promptDirty ? "Save & Regenerate" : "Regenerate"}
+                {!hasVersions ? "Generate" : promptDirty ? "Save & Regenerate" : "Regenerate"}
               </Button>
               {!isViewingCurrent && (
                 <Button
