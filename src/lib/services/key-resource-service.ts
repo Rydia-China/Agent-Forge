@@ -322,15 +322,19 @@ export async function regenerate(
   const resource = await prisma.keyResource.findUniqueOrThrow({ where: { id } });
 
   // Find the current version row to derive prompt / refUrls
-  const curVer = await prisma.keyResourceVersion.findUnique({
-    where: {
-      keyResourceId_version: { keyResourceId: resource.id, version: resource.currentVersion },
-    },
-  });
-  if (!curVer) throw new Error(`Current version ${resource.currentVersion} not found`);
+  const curVer = resource.currentVersion > 0
+    ? await prisma.keyResourceVersion.findUnique({
+        where: {
+          keyResourceId_version: { keyResourceId: resource.id, version: resource.currentVersion },
+        },
+      })
+    : null;
 
-  const prompt = promptOverride ?? curVer.prompt ?? "";
-  const refUrls = curVer.refUrls ?? [];
+  const prompt = promptOverride ?? curVer?.prompt ?? "";
+  if (!prompt.trim()) {
+    throw new Error("Prompt is required to generate an image");
+  }
+  const refUrls = curVer?.refUrls ?? [];
 
   const imageUrl = await callFcGenerateImage(prompt, refUrls.length > 0 ? refUrls : undefined);
   const compression = await compressGeneratedImageData(imageUrl, resource.key);
