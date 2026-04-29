@@ -327,7 +327,7 @@ set -euo pipefail
 DB=\$(docker ps --filter "name=agent-forge-db" --format "{{.Names}}" | head -n1)
 test -n "\$DB"
 docker exec -i "\$DB" psql -U postgres -d "$REMOTE_DB_NAME" -v ON_ERROR_STOP=1 -c 'TRUNCATE ${table_list} RESTART IDENTITY;'
-docker exec -i "\$DB" psql -U postgres -d "$REMOTE_DB_NAME" -v ON_ERROR_STOP=1 < "$REMOTE_SYNC_SQL"
+cat "$REMOTE_SYNC_SQL" | docker exec -i "\$DB" psql -U postgres -d "$REMOTE_DB_NAME" -v ON_ERROR_STOP=1
 REMOTE_SYNC
 }
 
