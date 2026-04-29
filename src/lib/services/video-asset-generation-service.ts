@@ -486,6 +486,10 @@ export const ExecuteVideoPromptParams = z.object({
 });
 export type ExecuteVideoPromptInput = z.infer<typeof ExecuteVideoPromptParams>;
 
+export function videoResourceKeyFromPromptKey(promptKey: string): string {
+  return promptKey.startsWith("video_") ? promptKey : `video_${promptKey}`;
+}
+
 function dedupeStrings(values: string[]): string[] {
   return Array.from(new Set(values));
 }
@@ -661,8 +665,10 @@ export async function executeVideoPrompt(
     });
   const videoUrl = generatedVideo.videoUrl;
   const lastFrameUrl = await resolveLastFrameUrl(videoUrl, generatedVideo.lastFrameUrl);
+  const videoKey = videoResourceKeyFromPromptKey(input.key);
 
   const videoData: Prisma.InputJsonObject = {
+    promptKey: input.key,
     duration: input.duration,
     provider: input.provider,
     lastFrameUrl,
@@ -679,7 +685,7 @@ export async function executeVideoPrompt(
   const kr = await keyResourceService.upsertResource(
     "script",
     input.scriptId,
-    input.key,
+    videoKey,
     "video",
     {
       prompt: compiledPrompt,
@@ -693,6 +699,7 @@ export async function executeVideoPrompt(
   return {
     status: "ok",
     key: input.key,
+    videoKey,
     keyResourceId: kr.id,
     version: kr.version,
     videoUrl,

@@ -46,6 +46,7 @@ export interface GenerateAndPersistImageResult {
 export interface ExecuteVideoPromptResult {
   status: string;
   key: string;
+  videoKey: string;
   keyResourceId: string;
   version: number;
   videoUrl: string;
