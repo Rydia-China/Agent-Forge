@@ -24,40 +24,6 @@ MCP 初始化是 **惰性** 的——首次 API 请求触发 `initMcp()`。
 
 因此：刚启动后第一次请求会较慢（冷启动）。
 
-## Agent Forge API Key 与 FC 调用计数
-
-`AGENT_FORGE_API_KEYS` 为空时不启用 Agent Forge 层认证，所有 FC 调用按 `apiKeyName="internal"` 计数。
-
-配置固定 key 后，外部请求必须在以下任一 header 中传入 key：
-
-```bash
-Authorization: Bearer <key>
-# 或
-x-agent-forge-api-key: <key>
-```
-
-支持的配置格式：
-
-```bash
-AGENT_FORGE_API_KEYS=customer-a:secret-a,customer-b:secret-b
-AGENT_FORGE_API_KEYS='[{"name":"customer-a","key":"secret-a"},{"name":"customer-b","key":"secret-b"}]'
-```
-
-当前只做最小计数，不提供成套管理 API。FC 调用由 service 层统一写入 `ApiUsageCounter`：
-
-- `totalCount`：尝试调用 FC 的次数
-- `successCount`：FC 调用成功次数
-- `failureCount`：FC 调用失败次数
-- `lastError`：最近一次失败原因
-
-可直接通过 DB 查询追索：
-
-```sql
-SELECT "apiKeyName", product, "totalCount", "successCount", "failureCount", "lastError", "lastUsedAt"
-FROM "ApiUsageCounter"
-ORDER BY "lastUsedAt" DESC;
-```
-
 ## 时序依赖（因果链）
 
 ### Skill → Agent

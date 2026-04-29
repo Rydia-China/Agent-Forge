@@ -20,8 +20,6 @@ export interface ToolContext {
   persistentParentAgentId?: string;
   /** Current subagent nesting depth. */
   agentDepth?: number;
-  /** Fixed Agent Forge API key name for billing attribution. */
-  apiKeyName?: string;
   /** Optional progress bridge used by streaming agent/subagent execution. */
   onProgress?: (event: ToolProgressEvent) => void;
 }

@@ -3,8 +3,6 @@
  * Calls Function Compute endpoints for video generation, cropping, and concatenation.
  */
 
-import { trackBillableFcCall } from "./billing-service";
-
 interface FcResult {
   result?: string;
   error?: string;
@@ -66,22 +64,19 @@ export async function callFcGenerateVideo(
     );
   }
 
-  return trackBillableFcCall(
-    "video.generate",
-    () => callFcEndpoint(
-      url,
-      token,
-      {
-        action: "generate",
-        prompt: options.prompt,
-        imageUrl: options.sourceImageUrl,
-        styleName: options.styleName,
-        referenceImageUrls: options.referenceImageUrls,
-        sourceVideoUrls: options.sourceVideoUrls,
-        duration: options.duration,
-      },
-      300000, // 5 minutes for video generation
-    ),
+  return callFcEndpoint(
+    url,
+    token,
+    {
+      action: "generate",
+      prompt: options.prompt,
+      imageUrl: options.sourceImageUrl,
+      styleName: options.styleName,
+      referenceImageUrls: options.referenceImageUrls,
+      sourceVideoUrls: options.sourceVideoUrls,
+      duration: options.duration,
+    },
+    300000, // 5 minutes for video generation
   );
 }
 
@@ -104,15 +99,12 @@ export async function callFcCropVideo(
     );
   }
 
-  return trackBillableFcCall(
-    "video.crop",
-    () => callFcEndpoint(url, token, {
-      videoUrl: options.videoUrl,
-      startTime: options.startTime,
-      endTime: options.endTime,
-      tailSeconds: options.tailSeconds,
-    }),
-  );
+  return callFcEndpoint(url, token, {
+    videoUrl: options.videoUrl,
+    startTime: options.startTime,
+    endTime: options.endTime,
+    tailSeconds: options.tailSeconds,
+  });
 }
 
 export interface ConcatClipsOptions {
@@ -131,10 +123,7 @@ export async function callFcConcatClips(
     );
   }
 
-  return trackBillableFcCall(
-    "video.concat",
-    () => callFcEndpoint(url, token, {
-      clipUrls: options.clipUrls,
-    }),
-  );
+  return callFcEndpoint(url, token, {
+    clipUrls: options.clipUrls,
+  });
 }

@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { regenerate, getById } from "@/lib/services/key-resource-service";
-import {
-  authenticateAgentForgeApiKey,
-  withBillingContext,
-} from "@/lib/services/billing-service";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -14,11 +10,6 @@ const BodySchema = z.object({
 
 /** POST /api/key-resources/:id/regenerate */
 export async function POST(req: NextRequest, { params }: Params) {
-  const auth = authenticateAgentForgeApiKey(req.headers);
-  if (auth.status === "unauthorized") {
-    return NextResponse.json({ error: auth.message }, { status: 401 });
-  }
-
   const { id } = await params;
 
   let raw: unknown;
@@ -39,10 +30,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const result = await withBillingContext(
-      auth.apiKeyName,
-      () => regenerate(id, parsed.data.prompt),
-    );
+    const result = await regenerate(id, parsed.data.prompt);
     return NextResponse.json(result);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

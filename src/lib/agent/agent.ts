@@ -104,8 +104,6 @@ export interface AgentConfig {
   persistentSubAgentId?: string;
   /** Persisted SubAgent nesting depth for this agent run. */
   subAgentDepth?: number;
-  /** Fixed Agent Forge API key name used for billable tool attribution. */
-  apiKeyName?: string;
 }
 
 
@@ -287,7 +285,6 @@ async function runAgentInner(
     userName,
     persistentParentAgentId: config?.persistentSubAgentId,
     agentDepth: config?.subAgentDepth,
-    apiKeyName: config?.apiKeyName,
   };
   return runAgentInnerCore(userMessage, session, toolCtx, images, config);
 }
@@ -565,7 +562,6 @@ async function runAgentStreamInner(
     userName,
     persistentParentAgentId: config?.persistentSubAgentId,
     agentDepth: config?.subAgentDepth,
-    apiKeyName: config?.apiKeyName,
   };
   return runAgentStreamInnerCore(userMessage, session, toolCtx, callbacks, signal, images, config);
 }

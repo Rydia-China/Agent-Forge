@@ -1,5 +1,5 @@
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
-import type { McpProvider, ToolContext } from "../types";
+import type { McpProvider } from "../types";
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import { resolveModel } from "@/lib/agent/models";
@@ -267,7 +267,6 @@ export const agentForgeMcp: McpProvider = {
   async callTool(
     name: string,
     args: Record<string, unknown>,
-    context?: ToolContext,
   ): Promise<CallToolResult> {
     switch (name) {
       case "request_upload": {
@@ -287,7 +286,6 @@ export const agentForgeMcp: McpProvider = {
           user: params.user,
           images: params.images,
           model: resolveModel(params.model),
-          apiKeyName: context?.apiKeyName,
           agentConfig: params.skills || params.mcpScope ? {
             skills: params.skills,
             mcpScope: params.mcpScope,
@@ -304,7 +302,6 @@ export const agentForgeMcp: McpProvider = {
           user: params.user ?? `video:${params.novelId}`,
           images: params.images,
           model: resolveModel(params.model),
-          apiKeyName: context?.apiKeyName,
           agentConfig: {
             contextProvider: new NovelContextProvider({ novelId: params.novelId }),
             skills: params.skills ?? ["novel-resource-mgr"],
@@ -322,7 +319,6 @@ export const agentForgeMcp: McpProvider = {
           user: params.user ?? `video:${params.novelId}:${params.scriptKey}`,
           images: params.images,
           model: resolveModel(params.model),
-          apiKeyName: context?.apiKeyName,
           agentConfig: {
             contextProvider: new VideoContextProvider({
               novelId: params.novelId,
