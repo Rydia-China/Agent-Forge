@@ -146,6 +146,8 @@ export interface SubmitSubAgentInput {
   agentConfig?: AgentConfig;
   /** Optional pre-subagent initialization hook (e.g. ensureVideoSchema). */
   beforeRun?: () => Promise<void>;
+  /** Fixed Agent Forge API key name used for billable tool attribution. */
+  apiKeyName?: string;
 }
 
 export interface SubmitSubAgentResult {
@@ -295,6 +297,7 @@ async function executeSubAgent(
     const agentConfig: AgentConfig = {
       ...input.agentConfig,
       ...(input.model ? { model: input.model } : {}),
+      apiKeyName: input.apiKeyName ?? input.agentConfig?.apiKeyName,
       persistentSubAgentId: subagentId,
       subAgentDepth: subagentDepth,
     };

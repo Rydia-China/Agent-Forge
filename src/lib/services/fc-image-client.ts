@@ -3,6 +3,8 @@
  * Calls the Function Compute image generation endpoint.
  */
 
+import { trackBillableFcCall } from "./billing-service";
+
 const DEFAULT_IMAGE_MODEL = "gemini";
 const DEFAULT_GEMINI_IMAGE_MODEL = "google/gemini-3-pro-image-preview";
 
@@ -81,43 +83,45 @@ export async function callFcGenerateImage(
     payload.referenceImageUrls = refUrls;
   }
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  return trackBillableFcCall(`image.${resolvedModel.provider}`, async () => {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => "Unknown error");
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Unknown error");
+      throw new Error(
+        `FC image generation failed (${response.status}): ${errorText}`
+      );
+    }
+
+    const result: unknown = await response.json();
+
+    // Extract image URL from response - try multiple field names
+    if (typeof result === "object" && result !== null) {
+      // Check 'result' field (GPT FC returns this)
+      if ("result" in result && typeof result.result === "string") {
+        return result.result;
+      }
+
+      // Check 'imageUrl' field
+      if ("imageUrl" in result && typeof result.imageUrl === "string") {
+        return result.imageUrl;
+      }
+
+      // Check 'url' field
+      if ("url" in result && typeof result.url === "string") {
+        return result.url;
+      }
+    }
+
     throw new Error(
-      `FC image generation failed (${response.status}): ${errorText}`
+      `FC image generation response missing image URL field: ${JSON.stringify(result)}`
     );
-  }
-
-  const result: unknown = await response.json();
-
-  // Extract image URL from response - try multiple field names
-  if (typeof result === "object" && result !== null) {
-    // Check 'result' field (GPT FC returns this)
-    if ("result" in result && typeof result.result === "string") {
-      return result.result;
-    }
-
-    // Check 'imageUrl' field
-    if ("imageUrl" in result && typeof result.imageUrl === "string") {
-      return result.imageUrl;
-    }
-
-    // Check 'url' field
-    if ("url" in result && typeof result.url === "string") {
-      return result.url;
-    }
-  }
-
-  throw new Error(
-    `FC image generation response missing image URL field: ${JSON.stringify(result)}`
-  );
+  });
 }
