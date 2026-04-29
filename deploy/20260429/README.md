@@ -51,6 +51,39 @@ docker compose restart
 
 ## 部署步骤
 
+### 推荐：固定脚本部署
+
+后续生产离线部署优先使用统一脚本，避免手工遗漏备份、`.env` 覆盖、核心表同步和健康检查：
+
+```bash
+SSHPASS=... pnpm deploy:prod:offline -- --tag v0.0.2 --retag
+```
+
+脚本固定执行：
+- 校验当前 worktree 干净，`--tag` 指向当前 `HEAD`（或通过 `--retag` 重打本地 tag）
+- 本地备份 `.env`、`agent_forge`、`biz`，并导出核心同步表
+- 服务器备份 `.env`、compose 文件、`agent_forge`、`biz`，并拉回本地备份目录
+- 本地构建 `linux/amd64` 镜像并上传到服务器
+- 覆盖服务器 `.env`（覆盖前再备份一次）
+- 重建 app 容器，等待 healthcheck
+- 同步 `Skill`、`StylePreset`、`ApiUsageCounter`
+- 验证公网 `/api/health` 和外部分发 OSS 上传接口认证链路
+
+默认服务器为 `root@agent.mob-ai.cn`，默认项目目录为 `/var/www/agent-forge`。密码只能通过 `SSHPASS` 环境变量传递，脚本内部统一使用 `sshpass -e`。
+
+常用变体：
+
+```bash
+# tag 必须已经指向当前 HEAD
+SSHPASS=... pnpm deploy:prod:offline -- --tag v0.0.2
+
+# 不覆盖服务器 .env
+SSHPASS=... pnpm deploy:prod:offline -- --tag v0.0.2 --skip-env
+
+# 不同步核心表
+SSHPASS=... pnpm deploy:prod:offline -- --tag v0.0.2 --skip-table-sync
+```
+
 ### 1. 执行服务器端备份（已完成）
 ```bash
 sshpass -p "$SSHPASS" ssh root@agent.mob-ai.cn 'bash -s' < deploy/20260429/backup-server.sh
