@@ -3,17 +3,42 @@
  * Calls Function Compute endpoints for video generation, cropping, and concatenation.
  */
 
-interface FcResult {
-  result?: string;
-  error?: string;
+import { z } from "zod";
+
+const FcEnvelopeSchema = z.object({
+  result: z.unknown().optional(),
+  error: z.string().optional(),
+});
+
+const UrlResultSchema = z.string().url();
+
+const GenerateVideoResultSchema = z.union([
+  z.string().url().transform((videoUrl) => ({ videoUrl })),
+  z.object({
+    videoUrl: z.string().url(),
+    lastFrameUrl: z.string().url().optional(),
+  }),
+  z.object({
+    video_url: z.string().url(),
+    last_frame_url: z.string().url().optional(),
+  }).transform((value) => ({
+    videoUrl: value.video_url,
+    lastFrameUrl: value.last_frame_url,
+  })),
+]);
+
+export interface GeneratedVideoResult {
+  videoUrl: string;
+  lastFrameUrl?: string;
 }
 
-async function callFcEndpoint(
+async function callFcEndpointResult<T>(
   url: string,
   token: string,
   body: Record<string, unknown>,
+  resultSchema: z.ZodType<T>,
   timeoutMs = 120000,
-): Promise<string> {
+): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -28,7 +53,7 @@ async function callFcEndpoint(
       signal: controller.signal,
     });
 
-    const data = (await res.json()) as FcResult;
+    const data = FcEnvelopeSchema.parse(await res.json());
 
     if (!res.ok || data.error) {
       throw new Error(data.error ?? res.statusText);
@@ -37,10 +62,19 @@ async function callFcEndpoint(
       throw new Error("FC returned no result");
     }
 
-    return data.result;
+    return resultSchema.parse(data.result);
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+async function callFcEndpoint(
+  url: string,
+  token: string,
+  body: Record<string, unknown>,
+  timeoutMs = 120000,
+): Promise<string> {
+  return callFcEndpointResult(url, token, body, UrlResultSchema, timeoutMs);
 }
 
 export interface GenerateVideoOptions {
@@ -54,7 +88,7 @@ export interface GenerateVideoOptions {
 
 export async function callFcGenerateVideo(
   options: GenerateVideoOptions,
-): Promise<string> {
+): Promise<GeneratedVideoResult> {
   const url = process.env.FC_GENERATE_VIDEO_URL;
   const token = process.env.FC_GENERATE_VIDEO_TOKEN;
 
@@ -64,7 +98,7 @@ export async function callFcGenerateVideo(
     );
   }
 
-  return callFcEndpoint(
+  return callFcEndpointResult(
     url,
     token,
     {
@@ -76,8 +110,30 @@ export async function callFcGenerateVideo(
       sourceVideoUrls: options.sourceVideoUrls,
       duration: options.duration,
     },
+    GenerateVideoResultSchema,
     300000, // 5 minutes for video generation
   );
+}
+
+export interface ExtractLastFrameOptions {
+  videoUrl: string;
+}
+
+export async function callFcExtractLastFrame(
+  options: ExtractLastFrameOptions,
+): Promise<string> {
+  const url = process.env.FC_EXTRACT_LAST_FRAME_URL;
+  const token = process.env.FC_EXTRACT_LAST_FRAME_TOKEN;
+
+  if (!url || !token) {
+    throw new Error(
+      "FC_EXTRACT_LAST_FRAME_URL and FC_EXTRACT_LAST_FRAME_TOKEN must be configured in .env",
+    );
+  }
+
+  return callFcEndpoint(url, token, {
+    videoUrl: options.videoUrl,
+  });
 }
 
 export interface CropVideoOptions {
