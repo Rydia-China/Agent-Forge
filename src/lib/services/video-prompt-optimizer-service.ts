@@ -627,6 +627,9 @@ function buildWriterInstruction(input: {
     lines.push(jsonBlock(input.doNotRegress));
   }
 
+  lines.push("");
+  lines.push("FINAL OUTPUT CONSTRAINT: return ONLY the JSON object. The first character must be `{` and the last character must be `}`. Do not include analysis, plan, recap, markdown, or prose outside JSON.");
+
   return lines.join("\n");
 }
 
