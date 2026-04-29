@@ -16,7 +16,7 @@ const HappyHorseRequestSchema = z.object({
   ).min(1),
   resolution: z.enum(["1080P", "720P"]).optional(),
   ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional(),
-  duration: z.number().min(1).max(15).optional(),
+  duration: z.number().min(3).max(15).optional(),
   model: z.string().min(1).optional(),
 });
 
