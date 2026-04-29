@@ -214,13 +214,8 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
 
   const renderVideoItem = (r: DomainResource) => {
     const vData = r.data as VideoResourceData | null;
-    const handleClick = () => {
-      if (r.keyResourceId) {
-        setSelectedImageGenId(r.keyResourceId);
-      } else {
-        setSelectedVideoResource(r);
-      }
-    };
+    const prompt = r.prompt ?? vData?.prompt ?? "";
+    const handleClick = () => setSelectedVideoResource(r);
     return (
       <div key={r.id} className="group/card relative cursor-pointer overflow-hidden rounded-lg" onClick={handleClick}>
         {renderDeleteBtn(r.id)}
@@ -236,9 +231,9 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
             />
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 px-2">
               <span className="mb-1 text-[10px] font-medium text-amber-400">待生成</span>
-              {vData.prompt && (
+              {prompt && (
                 <p className="line-clamp-3 text-center text-[10px] leading-relaxed text-white/80">
-                  {vData.prompt}
+                  {prompt}
                 </p>
               )}
             </div>
@@ -246,9 +241,9 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
         ) : (
           <div className="flex aspect-[9/16] flex-col items-center justify-center bg-slate-800 px-2">
             <span className="mb-1 text-[10px] font-medium text-amber-400">待生成</span>
-            {vData?.prompt ? (
+            {prompt ? (
               <p className="line-clamp-4 text-center text-[10px] leading-relaxed text-slate-500">
-                {vData.prompt}
+                {prompt}
               </p>
             ) : (
               <span className="text-xs text-slate-600">No prompt</span>
