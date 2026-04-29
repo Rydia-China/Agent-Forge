@@ -155,7 +155,7 @@ function resourceSummary(status: GetStatusResult): Array<{
     }));
 }
 
-function buildOptimizerInstruction(input: {
+function buildCanonicalContextPackage(input: {
   scriptId: string;
   scriptKey: string;
   episode: { scriptKey: string; initResult: unknown };
@@ -164,20 +164,17 @@ function buildOptimizerInstruction(input: {
   stopBeforeVideoGeneration: boolean;
 }): string {
   const lines: string[] = [
-    "你是 Prompt Optimizer。你的任务是为指定 EP 进行增量迭代式的视频 prompt 生成和审查。",
+    "以下是服务端为视频 prompt pipeline 准备的 canonical context package。",
     "",
-    "## 调度边界",
+    "## 数据边界",
     "- 只处理下方 canonical scriptId 对应的当前 EP。",
     "- 下方 episodeWindow、episodeInitResult、resourceStatus 是服务端按 scriptId 读取的原始数据；不得转述、改写、替换或凭记忆补全。",
-    "- 你可以调度 Prompt Writer / Reviewer subagent，但传给它们的 EP 内容必须逐字来自下方原始数据块。",
     "- 不允许使用其他小说、其他 EP、示例 EP、历史 EP 或你记忆中的 James/Kennedy/墓园等内容替换当前数据。",
-    "- 不调用 video_workflow 工具；保存和视频生成由外层服务端处理。",
     "",
     "## 当前任务",
     `scriptId: ${input.scriptId}`,
     `scriptKey: ${input.scriptKey}`,
     `stopBeforeVideoGeneration: ${input.stopBeforeVideoGeneration}`,
-    "最多 5 轮增量迭代。Reviewer 通过后返回 status=\"passed\"；不要自行保存 prompt，不要生成视频。",
     "",
     "## Canonical Episode Init Result",
     jsonBlock(input.episode.initResult),
@@ -203,9 +200,6 @@ function buildOptimizerInstruction(input: {
     progress: input.status.progress,
     imageResources: resourceSummary(input.status),
   }));
-  lines.push("");
-  lines.push("## 输出格式");
-  lines.push("只返回纯 JSON 对象，字段必须包含：status, iterationCount, finalPrompts, finalReview, iterationHistory, resolvedIssues, remainingIssues, newIssues, doNotRegress, bestVersion, conflict, summary。");
 
   return lines.join("\n");
 }
@@ -239,16 +233,134 @@ type Review = z.infer<typeof ReviewSchema>;
 type WriterOutput = z.infer<typeof WriterOutputSchema>;
 type OptimizerOutput = z.infer<typeof OptimizerOutputSchema>;
 
+interface PromptBrief {
+  key: string;
+  title: string;
+  definition: string;
+  duration: number;
+  refUrlCount: number;
+  promptPreview: string;
+}
+
+interface IssueBrief {
+  issueId?: string;
+  rule?: string;
+  key?: string;
+  blocking?: boolean;
+  severity?: string;
+  description: string;
+  suggestion?: string;
+}
+
+interface IterationBrief {
+  iteration: number;
+  promptCount: number;
+  passed: boolean;
+  allowVideoGeneration: boolean;
+  issueCount: number;
+  blockingIssueCount: number;
+  writerSummary: string;
+  reviewerSummary: string;
+  issueIds: string[];
+}
+
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new Error("Video prompt optimization cancelled");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function booleanField(record: Record<string, unknown>, key: string): boolean | undefined {
+  const value = record[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function summarizePrompts(prompts: Prompt[]): PromptBrief[] {
+  return prompts.map((prompt) => ({
+    key: prompt.key,
+    title: prompt.title,
+    definition: prompt.definition,
+    duration: prompt.duration,
+    refUrlCount: prompt.refUrls.length,
+    promptPreview: prompt.prompt.slice(0, 1200),
+  }));
+}
+
+function summarizeIssue(issue: unknown): IssueBrief {
+  if (!isRecord(issue)) {
+    return { description: String(issue) };
+  }
+
+  const issueId = stringField(issue, "issueId");
+  const rule = stringField(issue, "rule");
+  const key = stringField(issue, "key");
+  const blocking = booleanField(issue, "blocking");
+  const severity = stringField(issue, "severity");
+  const suggestion = stringField(issue, "suggestion");
+  const description =
+    stringField(issue, "description") ??
+    stringField(issue, "message") ??
+    stringField(issue, "summary") ??
+    JSON.stringify(issue);
+
+  return {
+    ...(issueId ? { issueId } : {}),
+    ...(rule ? { rule } : {}),
+    ...(key ? { key } : {}),
+    ...(blocking !== undefined ? { blocking } : {}),
+    ...(severity ? { severity } : {}),
+    description,
+    ...(suggestion ? { suggestion } : {}),
+  };
+}
+
+function isBlockingIssue(issue: unknown): boolean {
+  if (!isRecord(issue)) return false;
+  const blocking = booleanField(issue, "blocking");
+  if (blocking !== undefined) return blocking;
+  const severity = stringField(issue, "severity")?.toLowerCase();
+  return severity === "blocking" || severity === "critical" || severity === "p0";
+}
+
+function summarizeIssues(issues: unknown[], blockingOnly: boolean): IssueBrief[] {
+  return issues
+    .filter((issue) => !blockingOnly || isBlockingIssue(issue))
+    .map(summarizeIssue)
+    .slice(0, 24);
+}
+
+function issueIdentity(issue: unknown): string {
+  if (!isRecord(issue)) return String(issue).slice(0, 160);
+  return (
+    stringField(issue, "issueId") ??
+    stringField(issue, "rule") ??
+    stringField(issue, "description") ??
+    JSON.stringify(issue)
+  ).slice(0, 160);
+}
+
+function mergeDoNotRegress(existing: string[], suggestions: string[]): string[] {
+  const normalized = [...existing, ...suggestions]
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .map((item) => item.slice(0, 240));
+  return Array.from(new Set(normalized)).slice(-20);
+}
+
 function buildWriterInstruction(input: {
-  baseInstruction: string;
+  canonicalContext: string;
   iteration: number;
-  latestPrompts: Prompt[] | null;
-  latestReview: Review | null;
-  iterationHistory: unknown[];
+  previousPromptBriefs: PromptBrief[] | null;
+  latestReviewSummary: string | null;
+  blockingIssues: IssueBrief[];
+  iterationBriefs: IterationBrief[];
   doNotRegress: string[];
 }): string {
   const lines: string[] = [
@@ -257,33 +369,39 @@ function buildWriterInstruction(input: {
     "## 不可违反的边界",
     "- 只使用下方 canonical 原始数据块；不得凭记忆补全、替换或转述为其他 EP。",
     "- 不执行文件操作，不调用工具，不保存 prompt，不生成视频。",
-    "- 如果这是第 2-5 轮，必须基于 latestPromptJson 和 latestReviewJson 做增量修订，不得回退已解决内容。",
+    "- 服务端会持久化完整 latestPromptJson、latestReviewJson、iterationHistory 和 doNotRegress；你本轮只会收到必要的增量修订包。",
+    "- 如果这是第 2-5 轮，必须基于 Revision Packet 做增量修订，不得回退已解决内容。",
     "- 只返回纯 JSON 对象，字段必须是 prompts 和 summary。",
     "",
     `## Iteration ${input.iteration}`,
     "",
     "## Canonical Context",
-    input.baseInstruction,
+    input.canonicalContext,
   ];
 
-  if (input.latestPrompts) {
+  if (input.previousPromptBriefs) {
     lines.push("");
-    lines.push("## latestPromptJson");
-    lines.push(jsonBlock(input.latestPrompts));
+    lines.push("## Revision Packet: previousPromptBriefs");
+    lines.push(jsonBlock(input.previousPromptBriefs));
   }
-  if (input.latestReview) {
+  if (input.latestReviewSummary) {
     lines.push("");
-    lines.push("## latestReviewJson");
-    lines.push(jsonBlock(input.latestReview));
+    lines.push("## Revision Packet: latestReviewSummary");
+    lines.push(textBlock(input.latestReviewSummary));
   }
-  if (input.iterationHistory.length > 0) {
+  if (input.blockingIssues.length > 0) {
     lines.push("");
-    lines.push("## iterationHistory");
-    lines.push(jsonBlock(input.iterationHistory));
+    lines.push("## Revision Packet: blockingIssuesToFix");
+    lines.push(jsonBlock(input.blockingIssues));
+  }
+  if (input.iterationBriefs.length > 0) {
+    lines.push("");
+    lines.push("## Revision Packet: iterationBriefs");
+    lines.push(jsonBlock(input.iterationBriefs));
   }
   if (input.doNotRegress.length > 0) {
     lines.push("");
-    lines.push("## doNotRegress");
+    lines.push("## Revision Packet: doNotRegress");
     lines.push(jsonBlock(input.doNotRegress));
   }
 
@@ -291,11 +409,10 @@ function buildWriterInstruction(input: {
 }
 
 function buildReviewerInstruction(input: {
-  baseInstruction: string;
+  canonicalContext: string;
   iteration: number;
   prompts: Prompt[];
-  latestReview: Review | null;
-  iterationHistory: unknown[];
+  iterationBriefs: IterationBrief[];
   doNotRegress: string[];
 }): string {
   const lines: string[] = [
@@ -311,21 +428,16 @@ function buildReviewerInstruction(input: {
     `## Iteration ${input.iteration}`,
     "",
     "## Canonical Context",
-    input.baseInstruction,
+    input.canonicalContext,
     "",
     "## promptJson",
     jsonBlock(input.prompts),
   ];
 
-  if (input.latestReview) {
+  if (input.iterationBriefs.length > 0) {
     lines.push("");
-    lines.push("## previousReviewJson");
-    lines.push(jsonBlock(input.latestReview));
-  }
-  if (input.iterationHistory.length > 0) {
-    lines.push("");
-    lines.push("## iterationHistory");
-    lines.push(jsonBlock(input.iterationHistory));
+    lines.push("## Prior Iteration Briefs");
+    lines.push(jsonBlock(input.iterationBriefs));
   }
   if (input.doNotRegress.length > 0) {
     lines.push("");
@@ -408,7 +520,7 @@ export async function optimizeVideoPrompts(
     );
   }
 
-  const baseInstruction = buildOptimizerInstruction({
+  const canonicalContext = buildCanonicalContextPackage({
     scriptId: input.scriptId,
     scriptKey: episode.scriptKey,
     episode,
@@ -418,6 +530,7 @@ export async function optimizeVideoPrompts(
   });
 
   const iterationHistory: unknown[] = [];
+  const iterationBriefs: IterationBrief[] = [];
   const resolvedIssues: unknown[] = [];
   let remainingIssues: unknown[] = [];
   let newIssues: unknown[] = [];
@@ -448,11 +561,12 @@ export async function optimizeVideoPrompts(
     throwIfAborted(context?.signal);
     const writerResult = await runSubAgentTask({
       instruction: buildWriterInstruction({
-        baseInstruction,
+        canonicalContext,
         iteration,
-        latestPrompts,
-        latestReview,
-        iterationHistory,
+        previousPromptBriefs: latestPrompts ? summarizePrompts(latestPrompts) : null,
+        latestReviewSummary: latestReview?.summary ?? null,
+        blockingIssues: latestReview ? summarizeIssues(latestReview.issues, true) : [],
+        iterationBriefs,
         doNotRegress,
       }),
       skills: [...WRITER_SKILLS],
@@ -479,11 +593,10 @@ export async function optimizeVideoPrompts(
     throwIfAborted(context?.signal);
     const reviewerResult = await runSubAgentTask({
       instruction: buildReviewerInstruction({
-        baseInstruction,
+        canonicalContext,
         iteration,
         prompts: writerOutput.prompts,
-        latestReview,
-        iterationHistory,
+        iterationBriefs,
         doNotRegress,
       }),
       skills: [...REVIEWER_SKILLS],
@@ -509,7 +622,7 @@ export async function optimizeVideoPrompts(
     completedIterations = iteration;
     remainingIssues = review.issues;
     newIssues = review.issues;
-    doNotRegress = Array.from(new Set([...doNotRegress, ...review.suggestions]));
+    doNotRegress = mergeDoNotRegress(doNotRegress, review.suggestions);
 
     const historyItem: Prisma.InputJsonObject = {
       iteration,
@@ -527,6 +640,17 @@ export async function optimizeVideoPrompts(
       suggestions: review.suggestions,
     };
     iterationHistory.push(historyItem);
+    iterationBriefs.push({
+      iteration,
+      promptCount: writerOutput.prompts.length,
+      passed: review.passed,
+      allowVideoGeneration: review.allowVideoGeneration,
+      issueCount: review.issues.length,
+      blockingIssueCount: review.issues.filter(isBlockingIssue).length,
+      writerSummary: writerOutput.summary,
+      reviewerSummary: review.summary,
+      issueIds: review.issues.map(issueIdentity).slice(0, 24),
+    });
 
     if (issueCount(review) < bestIssueCount) {
       bestIssueCount = issueCount(review);
