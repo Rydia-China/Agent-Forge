@@ -363,11 +363,23 @@ export async function generateScene(
 
   if (input.mode === "single") {
     const { locationBible } = await getNovelLevelData(input.novelId);
-    const gridParent = analyzeLocations(locationBible).find(
+    const analyzed = analyzeLocations(locationBible);
+    const gridParent = analyzed.find((loc) => loc.mode === "grid" && loc.name === sceneName);
+    if (gridParent) {
+      return generateScene({
+        novelId: input.novelId,
+        sceneName,
+        referenceUrls: input.referenceUrls,
+        model: input.model,
+        mode: "grid",
+      });
+    }
+
+    const subLocationGridParent = analyzed.find(
       (loc) => loc.mode === "grid" && loc.realSubs.some((sub) => sub.name === sceneName),
     );
-    if (gridParent) {
-      const gridKey = `scene_${gridParent.name.replace(/\s+/g, "_")}_grid`;
+    if (subLocationGridParent) {
+      const gridKey = `scene_${subLocationGridParent.name.replace(/\s+/g, "_")}_grid`;
       const gridResource = await prisma.keyResource.findFirst({
         where: { scopeType: "novel", scopeId: input.novelId, key: gridKey, currentVersion: { gt: 0 } },
         include: { versions: { orderBy: { version: "desc" }, take: 1 } },
@@ -376,7 +388,7 @@ export async function generateScene(
       if (!gridUrl) {
         await generateScene({
           novelId: input.novelId,
-          sceneName: gridParent.name,
+          sceneName: subLocationGridParent.name,
           mode: "grid",
           model: input.model,
         });
@@ -1170,6 +1182,15 @@ export async function batchGenerateScenes(
     const effectiveMode = requested.placeholderMode === "grid" ? "grid" : input.mode;
     const dedupeKey = `${effectiveMode}:${requested.sceneName}`;
     if (processedScenes.has(dedupeKey)) continue;
+
+    const requestedGridParent = analyzed.find(
+      (loc) => loc.mode === "grid" && loc.name === requested.sceneName,
+    );
+    if (input.mode === "single" && requestedGridParent) {
+      gridRequests.push(requested.sceneName);
+      processedScenes.add(dedupeKey);
+      continue;
+    }
 
     const parentName = parentNameForSubScene(analyzed, requested.sceneName);
     const gridParent = parentName
