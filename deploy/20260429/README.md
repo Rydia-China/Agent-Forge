@@ -51,24 +51,27 @@ docker compose restart
 
 ## 部署步骤
 
-### 1. 执行服务器端备份
+### 1. 执行服务器端备份（已完成）
 ```bash
 sshpass -p "$SSHPASS" ssh root@agent.mob-ai.cn 'bash -s' < deploy/20260429/backup-server.sh
 ```
+✅ 备份已完成：56MB agent_forge.sql + 248KB biz.sql
 
-### 2. 推送代码
+### 2. 构建并部署
 ```bash
-git push origin main
+bash deploy/20260429/build-and-deploy.sh
 ```
 
-### 3. 服务器端更新
-```bash
-sshpass -p "$SSHPASS" ssh root@agent.mob-ai.cn 'bash -s' < deploy/20260429/deploy-server.sh
-```
+此脚本会：
+- 构建 Docker 镜像（linux/amd64）
+- 保存并传输镜像到服务器
+- 服务器端加载镜像
+- 执行数据库迁移
+- 重启服务
 
-### 4. 验证部署
+### 3. 验证部署
 ```bash
-curl https://agent.mob-ai.cn/health
+curl https://agent.mob-ai.cn/api/health
 ```
 
 ## 注意事项
