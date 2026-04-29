@@ -9,6 +9,8 @@ const BYTEPLUS_ARK_VERSION = '2024-01-01'
 const ALGORITHM = 'HMAC-SHA256'
 const DEFAULT_SEEDANCE_MODEL = 'dreamina-seedance-2-0-260128'
 const DEFAULT_CONTENT_GENERATION_TASKS_PATH = '/contents/generations/tasks'
+const DEFAULT_MODEL_ARK_API_KEY_TTL_SECONDS = 3600
+let cachedModelArkApiKey
 
 function sha256(data) {
   return crypto.createHash('sha256').update(data).digest('hex')
@@ -248,6 +250,7 @@ async function convertImageUrlsToAssetUris(imageUrls) {
 function getModelArkRuntimeConfig() {
   const controlPlaneConfig = getBytePlusArkConfig()
   const apiKey = process.env.ARK_API_KEY
+  const endpointId = process.env.ARK_ENDPOINT_ID
   const model = process.env.SEEDANCE_MODEL || DEFAULT_SEEDANCE_MODEL
   const regionBase = controlPlaneConfig.region.replace(/-1$/, '')
   const baseUrl = process.env.ARK_BASE_URL || `https://ark.${regionBase}.bytepluses.com/api/v3`
@@ -260,6 +263,7 @@ function getModelArkRuntimeConfig() {
   return {
     ...controlPlaneConfig,
     apiKey,
+    endpointId,
     model,
     baseUrl: baseUrl.replace(/\/$/, ''),
     tasksPath,
@@ -268,6 +272,37 @@ function getModelArkRuntimeConfig() {
     watermark,
     generateAudio
   }
+}
+
+async function getModelArkApiKey(config) {
+  if (config.apiKey) return config.apiKey
+
+  const now = Date.now()
+  if (cachedModelArkApiKey && cachedModelArkApiKey.expiresAt > now + 60000) {
+    return cachedModelArkApiKey.value
+  }
+
+  if (!config.endpointId) {
+    throw new Error('请配置 ARK_API_KEY，或配置 ARK_ENDPOINT_ID 并授予 AK/SK ark:GetApiKey 权限')
+  }
+
+  const durationSeconds = Number(process.env.ARK_API_KEY_TTL_SECONDS || DEFAULT_MODEL_ARK_API_KEY_TTL_SECONDS)
+  const result = await callBytePlusArkOpenAPI('GetApiKey', {
+    DurationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : DEFAULT_MODEL_ARK_API_KEY_TTL_SECONDS,
+    ResourceType: 'endpoint',
+    ResourceIds: [config.endpointId],
+    ProjectName: config.projectName
+  })
+  const apiKey = result.ApiKey || result.api_key
+  if (typeof apiKey !== 'string' || apiKey.length === 0) {
+    throw new Error('GetApiKey returned no ApiKey')
+  }
+
+  cachedModelArkApiKey = {
+    value: apiKey,
+    expiresAt: now + Math.max(60, durationSeconds - 60) * 1000
+  }
+  return apiKey
 }
 
 function clampDuration(value) {
@@ -314,40 +349,15 @@ function buildModelArkContent(prompt, imageUrls, options = {}) {
 
 async function callModelArkRuntime(path, method, payload) {
   const config = getModelArkRuntimeConfig()
+  const apiKey = await getModelArkApiKey(config)
   const normalizedPath = config.baseUrl.endsWith('/api/v3') && path.startsWith('/api/v3/')
     ? path.slice('/api/v3'.length)
     : path
   const url = new URL(`${config.baseUrl}${normalizedPath}`)
   const payloadStr = payload === undefined ? '' : JSON.stringify(payload)
   const headers = {
-    'Content-Type': 'application/json'
-  }
-
-  if (config.apiKey) {
-    headers.Authorization = `Bearer ${config.apiKey}`
-  } else {
-    const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '')
-    const signedHeaders = {
-      'Content-Type': 'application/json',
-      Host: url.host,
-      'X-Content-Sha256': sha256(payloadStr),
-      'X-Date': amzDate
-    }
-    headers.Host = signedHeaders.Host
-    headers['X-Content-Sha256'] = signedHeaders['X-Content-Sha256']
-    headers['X-Date'] = signedHeaders['X-Date']
-    headers.Authorization = getBytePlusAuthorizationHeader(
-      config.accessKeyId,
-      config.secretAccessKey,
-      method,
-      url.pathname,
-      url.search ? url.search.slice(1) : '',
-      signedHeaders,
-      payloadStr,
-      amzDate,
-      config.region,
-      BYTEPLUS_ARK_SERVICE
-    )
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`
   }
 
   const response = await fetch(url.toString(), {
