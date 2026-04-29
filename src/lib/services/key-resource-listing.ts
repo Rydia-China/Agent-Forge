@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db";
 
 export interface ResourceItem {
   id: string;
+  keyResourceId: string;
   key: string;
   category: string;
   mediaType: string;
@@ -116,6 +117,7 @@ export async function listResourcesByScope(
 
     const item: ResourceItem = {
       id: resource.id,
+      keyResourceId: resource.id,
       key: resource.key,
       category: resource.category,
       mediaType: resource.mediaType,
