@@ -17,8 +17,7 @@
     "release": "docker buildx build --platform linux/amd64 -t ghcr.io/rydia-china/agent-forge:latest -f Dockerfile . --load && docker push ghcr.io/rydia-china/agent-forge:latest && echo '✅ 已推送到 ghcr.io/rydia-china/agent-forge:latest'",
     "db:backup": "bash scripts/db-backup.sh",
     "db:restore": "echo 'Usage: docker exec -i agent-forge-db-dev psql -U postgres -d agent_forge < backups/YOUR_FILE.sql'",
-    "deploy:prod": "ssh root@47.97.112.115 'cd /war/www/soft/agent-forge && docker compose -f docker-compose.prod.yml pull && docker compose -f docker-compose.prod.yml up -d'",
-    "deploy:prod:offline": "bash scripts/deploy-prod-offline.sh"
+    "deploy:prod": "bash scripts/deploy-prod-offline.sh"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
