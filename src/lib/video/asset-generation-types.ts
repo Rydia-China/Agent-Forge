@@ -38,6 +38,7 @@ export interface GenerateAndPersistImageResult {
   key: string;
   keyResourceId: string;
   imageUrl?: string;
+  compressedImageUrl?: string;
   version: number;
   error?: string;
 }
