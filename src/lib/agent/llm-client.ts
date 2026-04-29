@@ -60,6 +60,7 @@ type StreamingRequest = ChatCompletionCreateParamsStreaming & ThinkingRequest;
 
 export interface ChatCompletionOptions {
   responseFormat?: JsonResponseFormat;
+  signal?: AbortSignal;
 }
 
 function getThinkingMode(): LlmThinkingMode | undefined {
@@ -88,7 +89,9 @@ export async function chatCompletion(
     response_format: options?.responseFormat,
   };
   applyThinkingMode(body);
-  const rawRes: unknown = await client.chat.completions.create(body);
+  const rawRes: unknown = options?.signal
+    ? await client.chat.completions.create(body, { signal: options.signal })
+    : await client.chat.completions.create(body);
 
   let res: ChatCompletion;
   if (typeof rawRes === "string") {

@@ -22,6 +22,8 @@ export interface ToolContext {
   agentDepth?: number;
   /** Fixed Agent Forge API key name for billing attribution. */
   apiKeyName?: string;
+  /** Parent execution cancellation signal. */
+  signal?: AbortSignal;
   /** Optional progress bridge used by streaming agent/subagent execution. */
   onProgress?: (event: ToolProgressEvent) => void;
 }

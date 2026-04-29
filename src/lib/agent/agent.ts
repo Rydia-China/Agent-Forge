@@ -566,6 +566,7 @@ async function runAgentStreamInner(
     persistentParentAgentId: config?.persistentSubAgentId,
     agentDepth: config?.subAgentDepth,
     apiKeyName: config?.apiKeyName,
+    signal,
   };
   return runAgentStreamInnerCore(userMessage, session, toolCtx, callbacks, signal, images, config);
 }
