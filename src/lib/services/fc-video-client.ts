@@ -111,7 +111,7 @@ export async function callFcGenerateVideo(
       duration: options.duration,
     },
     GenerateVideoResultSchema,
-    300000, // 5 minutes for video generation
+    900000, // 15 minutes for video generation
   );
 }
 
