@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/db";
 import type { Prisma as PrismaTypes } from "@/generated/prisma";
 import { callFcGenerateImage } from "./fc-image-client";
+import {
+  compressImageUrlLossless,
+  type ImageCompressionResult,
+} from "./image-compression-service";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -142,6 +146,49 @@ function refUrlsFromData(data: PrismaTypes.InputJsonValue | PrismaTypes.JsonValu
     : null;
 }
 
+function imageCompressionToJson(
+  compression: ImageCompressionResult,
+): PrismaTypes.InputJsonValue {
+  return {
+    originalUrl: compression.originalUrl,
+    compressedUrl: compression.compressedUrl,
+    originalBytes: compression.originalBytes,
+    compressedBytes: compression.compressedBytes,
+    format: compression.format,
+    uploaded: compression.uploaded,
+    ...(compression.note ? { note: compression.note } : {}),
+  } as PrismaTypes.InputJsonValue;
+}
+
+async function compressGeneratedImageData(
+  imageUrl: string,
+  key: string,
+): Promise<{ data: PrismaTypes.InputJsonValue; compressedUrl: string }> {
+  try {
+    const compression = await compressImageUrlLossless(imageUrl, key);
+    return {
+      data: { imageCompression: imageCompressionToJson(compression) } as PrismaTypes.InputJsonValue,
+      compressedUrl: compression.compressedUrl,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      data: {
+        imageCompression: {
+          originalUrl: imageUrl,
+          compressedUrl: imageUrl,
+          originalBytes: 0,
+          compressedBytes: 0,
+          format: "unknown",
+          uploaded: false,
+          note: `lossless compression failed; using original URL: ${message}`,
+        },
+      } as PrismaTypes.InputJsonValue,
+      compressedUrl: imageUrl,
+    };
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  upsertResource — universal entry point                             */
 /* ------------------------------------------------------------------ */
@@ -209,6 +256,7 @@ export interface GenerateImageResult {
   id: string;
   key: string;
   imageUrl: string;
+  compressedImageUrl: string;
   version: number;
 }
 
@@ -237,12 +285,13 @@ export async function generateImage(
 
   // 3. Call FC
   const imageUrl = await callFcGenerateImage(prompt, refUrls, model);
+  const compression = await compressGeneratedImageData(imageUrl, key);
 
   // 4. Update version url + bump currentVersion
   await prisma.$transaction([
     prisma.keyResourceVersion.update({
       where: { id: versionRow.id },
-      data: { url: imageUrl },
+      data: { url: imageUrl, data: compression.data },
     }),
     prisma.keyResource.update({
       where: { id: resource.id },
@@ -250,7 +299,7 @@ export async function generateImage(
     }),
   ]);
 
-  return { id: resource.id, key, imageUrl, version: ver };
+  return { id: resource.id, key, imageUrl, compressedImageUrl: compression.compressedUrl, version: ver };
 }
 
 /* ------------------------------------------------------------------ */
@@ -261,6 +310,7 @@ export interface RegenerateResult {
   id: string;
   key: string;
   imageUrl: string;
+  compressedImageUrl: string;
   version: number;
   prompt: string;
 }
@@ -283,6 +333,7 @@ export async function regenerate(
   const refUrls = curVer.refUrls ?? [];
 
   const imageUrl = await callFcGenerateImage(prompt, refUrls.length > 0 ? refUrls : undefined);
+  const compression = await compressGeneratedImageData(imageUrl, resource.key);
 
   // Create a NEW version instead of overwriting the current one.
   // Previous versions remain as rollback targets.
@@ -294,6 +345,7 @@ export async function regenerate(
         version: ver,
         prompt,
         url: imageUrl,
+        data: compression.data,
         refUrls: refUrls,
       },
     }),
@@ -303,7 +355,14 @@ export async function regenerate(
     }),
   ]);
 
-  return { id: resource.id, key: resource.key, imageUrl, version: ver, prompt };
+  return {
+    id: resource.id,
+    key: resource.key,
+    imageUrl,
+    compressedImageUrl: compression.compressedUrl,
+    version: ver,
+    prompt,
+  };
 }
 
 /* ------------------------------------------------------------------ */

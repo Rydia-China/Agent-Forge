@@ -27,6 +27,11 @@ import {
   callFcHappyHorseGenerate,
   type MediaItem,
 } from "./fc-happyhorse-client";
+import {
+  compressedUrlFromResourceData,
+  compressImageUrlLosslessBestEffort,
+  type ImageCompressionResult,
+} from "./image-compression-service";
 import { compileTemplate } from "@/lib/mcp/static/langfuse-helpers";
 import { getNovelLevelData } from "./novel-service";
 
@@ -129,6 +134,7 @@ export async function generateAndPersistImage(
     key: input.key,
     keyResourceId: gen.id,
     imageUrl: gen.imageUrl,
+    compressedImageUrl: gen.compressedImageUrl,
     version: gen.version,
   };
 }
@@ -465,6 +471,49 @@ export const ExecuteVideoPromptParams = z.object({
 });
 export type ExecuteVideoPromptInput = z.infer<typeof ExecuteVideoPromptParams>;
 
+function dedupeStrings(values: string[]): string[] {
+  return Array.from(new Set(values));
+}
+
+async function resolveVideoReferenceImages(
+  urls: string[],
+  compressedUrlByOriginal: Map<string, string>,
+  key: string,
+): Promise<{ urls: string[]; compression: ImageCompressionResult[] }> {
+  const cache = new Map<string, ImageCompressionResult>();
+  const compression: ImageCompressionResult[] = [];
+  const resolvedUrls: string[] = [];
+
+  for (const url of dedupeStrings(urls)) {
+    const knownCompressedUrl = compressedUrlByOriginal.get(url);
+    if (knownCompressedUrl) {
+      const result: ImageCompressionResult = {
+        originalUrl: url,
+        compressedUrl: knownCompressedUrl,
+        originalBytes: 0,
+        compressedBytes: 0,
+        format: "known-resource",
+        uploaded: knownCompressedUrl !== url,
+        note: "reused compressed URL from image resource metadata",
+      };
+      compression.push(result);
+      resolvedUrls.push(result.compressedUrl);
+      continue;
+    }
+
+    const cached = cache.get(url);
+    const result = cached ?? await compressImageUrlLosslessBestEffort(url, key);
+    cache.set(url, result);
+    compression.push(result);
+    resolvedUrls.push(result.compressedUrl);
+  }
+
+  return {
+    urls: dedupeStrings(resolvedUrls),
+    compression,
+  };
+}
+
 export async function executeVideoPrompt(
   input: ExecuteVideoPromptInput,
 ): Promise<ExecuteVideoPromptResult> {
@@ -484,6 +533,17 @@ export async function executeVideoPrompt(
     },
     include: { versions: { orderBy: { version: "desc" }, take: 1 } },
   });
+
+  const compressedUrlByOriginal = new Map<string, string>();
+  for (const resource of allResources) {
+    const version = resource.versions[0];
+    const originalUrl = version?.url;
+    const compressedUrl = compressedUrlFromResourceData(version?.data);
+    if (originalUrl && compressedUrl) {
+      compressedUrlByOriginal.set(originalUrl, compressedUrl);
+      compressedUrlByOriginal.set(compressedUrl, compressedUrl);
+    }
+  }
 
   const refImageUrls: string[] = [];
   for (const url of extractUrls(input.definition)) {
@@ -517,6 +577,17 @@ export async function executeVideoPrompt(
   }
   if (videoStyle.styleRefUrl) refImageUrls.unshift(videoStyle.styleRefUrl);
 
+  const resolvedReferenceImages = await resolveVideoReferenceImages(
+    refImageUrls,
+    compressedUrlByOriginal,
+    input.key,
+  );
+  const videoRefImageUrls = resolvedReferenceImages.urls;
+  const sourceImageUrl = input.previousFrameUrl
+    ? (resolvedReferenceImages.compression.find((item) => item.originalUrl === input.previousFrameUrl)?.compressedUrl
+      ?? input.previousFrameUrl)
+    : videoRefImageUrls[0];
+
   let sourceVideoUrls: string[] | undefined;
   if (input.previousVideoUrl) {
     try {
@@ -539,7 +610,7 @@ export async function executeVideoPrompt(
   const videoUrl = input.provider === "happyhorse"
     ? await generateHappyHorseVideo({
       prompt: compiledPrompt,
-      referenceImageUrls: refImageUrls,
+      referenceImageUrls: videoRefImageUrls,
       sourceVideoUrls: sourceVideoUrls ?? [],
       duration: input.duration,
       resolution: input.resolution,
@@ -548,11 +619,21 @@ export async function executeVideoPrompt(
     })
     : await callFcGenerateVideo({
       prompt: compiledPrompt,
-      sourceImageUrl: input.previousFrameUrl ?? refImageUrls[0],
-      referenceImageUrls: refImageUrls.length > 0 ? refImageUrls : undefined,
+      sourceImageUrl,
+      referenceImageUrls: videoRefImageUrls.length > 0 ? videoRefImageUrls : undefined,
       sourceVideoUrls,
       duration: input.duration,
     });
+
+  const videoData = {
+    duration: input.duration,
+    provider: input.provider,
+    continuationTailSeconds: input.continuationTailSeconds,
+    referenceImageCompression: resolvedReferenceImages.compression,
+    originalReferenceImageUrls: refImageUrls,
+    compressedReferenceImageUrls: videoRefImageUrls,
+    ...(sourceImageUrl ? { sourceImageUrl } : {}),
+  } as Prisma.InputJsonValue;
 
   const kr = await keyResourceService.upsertResource(
     "script",
@@ -562,12 +643,8 @@ export async function executeVideoPrompt(
     {
       prompt: compiledPrompt,
       url: videoUrl,
-      refUrls: [...refImageUrls, ...(sourceVideoUrls ?? [])],
-      data: {
-        duration: input.duration,
-        provider: input.provider,
-        continuationTailSeconds: input.continuationTailSeconds,
-      } as Prisma.InputJsonValue,
+      refUrls: [...videoRefImageUrls, ...(sourceVideoUrls ?? [])],
+      data: videoData,
     },
   );
   await setKeyResourceMetadata(kr.id, "视频", input.title ?? input.key);
