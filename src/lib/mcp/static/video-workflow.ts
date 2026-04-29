@@ -152,7 +152,7 @@ const TOOLS: Tool[] = [
         sceneNames: {
           type: "array",
           items: { type: "string" },
-          description: "场景名称列表（单个生成时传入长度为 1 的数组）",
+          description: "场景名称或占位资源 key/title 列表（单个生成时传入长度为 1 的数组）。例如 scene_银月领地_豪宅_grid 会解析为父地点 grid 工作流。",
           minItems: 1,
         },
         mode: {
