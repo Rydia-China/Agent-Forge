@@ -25,19 +25,18 @@ cd /var/www/agent-forge
 echo "加载新镜像..."
 docker load < /tmp/agent-forge-latest.tar.gz
 
-echo "停止旧服务..."
-docker compose -f docker-compose.prod.yml down app
+echo "停止旧应用容器..."
+docker compose -f docker-compose.prod.yml stop app
+docker compose -f docker-compose.prod.yml rm -f app
 
 echo "执行数据库迁移..."
 # 临时启动容器执行迁移
 docker run --rm --network agent-forge_app-network \
   --env-file .env \
-  -e DATABASE_URL="postgresql://postgres:12345678@agent-forge-db-1:5432/agent_forge" \
-  -e BUSINESS_DATABASE_URL="postgresql://postgres:12345678@agent-forge-db-1:5432/biz" \
   agent-forge:latest \
   sh -c "npx prisma db push"
 
-echo "启动新服务..."
+echo "启动新应用容器..."
 docker compose -f docker-compose.prod.yml up -d app
 
 echo "清理临时文件..."
