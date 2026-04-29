@@ -25,7 +25,7 @@ function getSignatureKey(secretKey, dateStamp, region, service) {
 }
 
 function getBytePlusSignatureKey(secretKey, dateStamp, region, service) {
-  const kDate = hmacSha256(`VOLC${secretKey}`, dateStamp)
+  const kDate = hmacSha256(secretKey, dateStamp)
   const kRegion = hmacSha256(kDate, region)
   const kService = hmacSha256(kRegion, service)
   const kSigning = hmacSha256(kService, 'request')
