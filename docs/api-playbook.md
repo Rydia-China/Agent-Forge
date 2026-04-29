@@ -24,6 +24,51 @@ MCP 初始化是 **惰性** 的——首次 API 请求触发 `initMcp()`。
 
 因此：刚启动后第一次请求会较慢（冷启动）。
 
+## 外部分发视频 API
+
+外部分发 key 只用于以下两个视频接口，不影响 `/api/chat`、`/api/subagents`、`/mcp` 或内部 agent workflow。
+
+配置固定 key：
+
+```bash
+EXTERNAL_VIDEO_API_KEYS=customer-a:secret-a,customer-b:secret-b
+EXTERNAL_VIDEO_API_KEYS='[{"name":"customer-a","key":"secret-a"},{"name":"customer-b","key":"secret-b"}]'
+```
+
+调用时使用任一 header：
+
+```bash
+Authorization: Bearer <key>
+# 或
+x-video-api-key: <key>
+```
+
+Seedance 视频生成：
+
+```bash
+curl -X POST http://localhost:8001/api/external/video/generate \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <key>' \
+  -d '{"prompt":"a cinematic shot of a city at sunset","duration":5}'
+```
+
+HappyHorse 视频生成：
+
+```bash
+curl -X POST http://localhost:8001/api/external/video/happyhorse \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <key>' \
+  -d '{"prompt":"animate this reference image","media":[{"type":"reference_image","url":"https://example.com/image.png"}],"duration":5}'
+```
+
+两个接口成功/失败都会按 `apiKeyName + product` 写入 `ApiUsageCounter`，用于后续追索：
+
+```sql
+SELECT "apiKeyName", product, "totalCount", "successCount", "failureCount", "lastError", "lastUsedAt"
+FROM "ApiUsageCounter"
+ORDER BY "lastUsedAt" DESC;
+```
+
 ## 时序依赖（因果链）
 
 ### Skill → Agent

@@ -13,13 +13,13 @@ datasource db {
 /// 每个版本一条记录，通过 isProduction 标记当前生产版本
 model Skill {
   id           String   @id @default(cuid())
-  name         String   // skill 名称（非唯一，支持多版本）
-  version      Int      // 版本号
-  description  String   // 用于 system prompt 索引
+  name         String // skill 名称（非唯一，支持多版本）
+  version      Int // 版本号
+  description  String // 用于 system prompt 索引
   tags         String[]
   ossKey       String   @unique // OSS 对象 key，如 "skills/skill-creator/v1.md"
   isProduction Boolean  @default(false) // 是否为当前生产版本
-  metadata     Json?    // 扩展字段（如 requiredSchemas）
+  metadata     Json? // 扩展字段（如 requiredSchemas）
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt // 用于冲突解决（Last-Write-Wins）
 
@@ -37,32 +37,32 @@ model User {
 
 /// ChatSession — 对话会话，持久化多轮对话，按 user 隔离
 model ChatSession {
-  id           String         @id @default(cuid())
-  title        String?
-  userId       String
-  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String            @id @default(cuid())
+  title            String?
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages         ChatMessage[]
   subagents        SubAgent[]
   imageGenerations ImageGeneration[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   @@index([userId])
 }
 
 /// ChatMessage — 单条对话消息
 model ChatMessage {
-  id         String      @id @default(cuid())
-  sessionId  String
-  session    ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  role       String      // "user" | "assistant" | "tool"
-  content    String?
-  images     String[]    // 附带的图片 URL 列表（视觉模型用）
-  toolCalls  Json?       // OpenAI tool_calls 数组
-  toolCallId String?
-  providerMetadata Json?  // 供应商特定消息元数据，如 DeepSeek reasoning_content
-  hidden     Boolean     @default(false)
-  createdAt  DateTime    @default(now())
+  id               String      @id @default(cuid())
+  sessionId        String
+  session          ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role             String // "user" | "assistant" | "tool"
+  content          String?
+  images           String[] // 附带的图片 URL 列表（视觉模型用）
+  toolCalls        Json? // OpenAI tool_calls 数组
+  toolCallId       String?
+  providerMetadata Json? // 供应商特定消息元数据，如 DeepSeek reasoning_content
+  hidden           Boolean     @default(false)
+  createdAt        DateTime    @default(now())
 
   @@index([sessionId, createdAt])
 }
@@ -71,12 +71,12 @@ model ChatMessage {
 /// scopeType + scopeId 决定归属，key 在 scope 内唯一
 model KeyResource {
   id             String               @id @default(cuid())
-  scopeType      String               // "novel" | "script"
-  scopeId        String               // novel ID / script DB ID
+  scopeType      String // "novel" | "script"
+  scopeId        String // novel ID / script DB ID
   key            String
-  mediaType      String               // "image" | "video" | "json"
-  category       String?              // UI grouping: 角色立绘, 场景, 换装, 视频
-  title          String?              // Display name: character name, scene name, etc.
+  mediaType      String // "image" | "video" | "json"
+  category       String? // UI grouping: 角色立绘, 场景, 换装, 视频
+  title          String? // Display name: character name, scene name, etc.
   currentVersion Int                  @default(0)
   versions       KeyResourceVersion[]
   createdAt      DateTime             @default(now())
@@ -106,14 +106,14 @@ model KeyResourceVersion {
 /// ImageGeneration — 图片生成实体，session 级别
 /// 主记录只保留身份 + 指针，所有可变数据存 ImageGenerationVersion
 model ImageGeneration {
-  id              String                   @id @default(cuid())
-  sessionId       String
-  session         ChatSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  key             String                   // LLM 指定的语义 key，session 内唯一
-  currentVersion  Int                      @default(0)
-  versions        ImageGenerationVersion[]
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
+  id             String                   @id @default(cuid())
+  sessionId      String
+  session        ChatSession              @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  key            String // LLM 指定的语义 key，session 内唯一
+  currentVersion Int                      @default(0)
+  versions       ImageGenerationVersion[]
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
 
   @@unique([sessionId, key])
   @@index([sessionId])
@@ -126,7 +126,7 @@ model ImageGenerationVersion {
   imageGen   ImageGeneration @relation(fields: [imageGenId], references: [id], onDelete: Cascade)
   version    Int
   prompt     String
-  imageUrl   String?         // 生成完成前为 null
+  imageUrl   String? // 生成完成前为 null
   refUrls    String[]
   createdAt  DateTime        @default(now())
 
@@ -164,15 +164,15 @@ model SubAgent {
   id            String          @id @default(cuid())
   sessionId     String
   session       ChatSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  parentAgentId String?         // 父 agent ID（嵌套时）
+  parentAgentId String? // 父 agent ID（嵌套时）
   parent        SubAgent?       @relation("SubAgentHierarchy", fields: [parentAgentId], references: [id], onDelete: Cascade)
   children      SubAgent[]      @relation("SubAgentHierarchy")
   depth         Int             @default(0) // 嵌套深度（0 = 顶层）
   status        String          @default("pending") // pending | running | completed | failed | interrupted | cancelled | max_iterations
-  config        Json            // SubAgentConfig（instruction, mcpScope, model, etc.）
-  output        String?         // 最终输出
-  error         String?         // 错误信息
-  trace         Json?           // SubAgentTrace（完整执行轨迹）
+  config        Json // SubAgentConfig（instruction, mcpScope, model, etc.）
+  output        String? // 最终输出
+  error         String? // 错误信息
+  trace         Json? // SubAgentTrace（完整执行轨迹）
   events        SubAgentEvent[]
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -186,11 +186,28 @@ model SubAgentEvent {
   id         Int      @id @default(autoincrement())
   subagentId String
   subagent   SubAgent @relation(fields: [subagentId], references: [id], onDelete: Cascade)
-  type       String   // delta | tool_start | tool_end | child_spawn | done | error | session | upload_request | key_resource
+  type       String // delta | tool_start | tool_end | child_spawn | done | error | session | upload_request | key_resource
   data       Json
   createdAt  DateTime @default(now())
 
   @@index([subagentId, id])
+}
+
+/// ApiUsageCounter — external video API key usage aggregate
+model ApiUsageCounter {
+  id           String   @id @default(cuid())
+  apiKeyName   String
+  product      String
+  totalCount   Int      @default(0)
+  successCount Int      @default(0)
+  failureCount Int      @default(0)
+  lastError    String?
+  lastUsedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([apiKeyName, product])
+  @@index([apiKeyName])
 }
 
 /// BizSchema — biz-db 表结构的声明式注册表（版本化）
@@ -210,8 +227,8 @@ model BizSchemaVersion {
   bizSchemaId String
   bizSchema   BizSchema @relation(fields: [bizSchemaId], references: [id], onDelete: Cascade)
   version     Int
-  columns     Json      /// [{ name, type, nullable?, default? }]
-  constraints Json?     /// [{ type: "pk"|"unique", columns: string[] }]
+  columns     Json /// [{ name, type, nullable?, default? }]
+  constraints Json? /// [{ type: "pk"|"unique", columns: string[] }]
   description String?
   createdAt   DateTime  @default(now())
 
@@ -257,14 +274,14 @@ model NovelScript {
 /// 代码只按 mediaType (image/video/json) 渲染
 model DomainResource {
   id            String   @id @default(cuid())
-  scopeType     String   // "novel" | "script"
-  scopeId       String   // novel ID / script ID
-  category      String   // LLM 自由分类：角色立绘、场景、换装、视频Prompt、视频等
-  mediaType     String   // "image" | "video" | "json"
+  scopeType     String // "novel" | "script"
+  scopeId       String // novel ID / script ID
+  category      String // LLM 自由分类：角色立绘、场景、换装、视频Prompt、视频等
+  mediaType     String // "image" | "video" | "json"
   title         String?
   url           String?
   data          Json?
-  keyResourceId String?  // 链接到 KeyResource（版本化资源）
+  keyResourceId String? // 链接到 KeyResource（版本化资源）
   sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -276,22 +293,21 @@ model DomainResource {
 /// BatchGenerationTask — 批量图片生成异步任务
 /// 用于处理耗时的批量生成操作（portraits, scenes, costumes）
 model BatchGenerationTask {
-  id          String   @id @default(cuid())
-  type        String   // "portrait" | "scene" | "costume" | "update_portrait" | "batch_portraits" | "batch_scenes" | "batch_costumes"
-  scopeType   String   // "novel" | "script"
-  scopeId     String   // novel ID / script ID
-  status      String   @default("pending") // pending | running | completed | failed
-  input       Json     // 输入参数（characterName/characterNames, sceneName/sceneNames, styleName, model 等）
-  result      Json?    // 生成结果（单个或批量）
-  error       String?  // 错误信息
-  progress    Int      @default(0) // 已完成数量
-  total       Int      // 总数量（单个任务为 1）
+  id          String    @id @default(cuid())
+  type        String // "portrait" | "scene" | "costume" | "update_portrait" | "batch_portraits" | "batch_scenes" | "batch_costumes"
+  scopeType   String // "novel" | "script"
+  scopeId     String // novel ID / script ID
+  status      String    @default("pending") // pending | running | completed | failed
+  input       Json // 输入参数（characterName/characterNames, sceneName/sceneNames, styleName, model 等）
+  result      Json? // 生成结果（单个或批量）
+  error       String? // 错误信息
+  progress    Int       @default(0) // 已完成数量
+  total       Int // 总数量（单个任务为 1）
   startedAt   DateTime?
   completedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([status, createdAt])
   @@index([scopeType, scopeId])
 }
-
