@@ -102,7 +102,7 @@ const TOOLS: Tool[] = [
     name: "get_status",
     description:
       "Unified status & resource query. Returns identity, ALL generated resources with URLs, " +
-      "progress summary (portraits/scenes/costumes/videos done/total), and running async tasks. " +
+      "resource completion summary (portraits/scenes/costumes/videos done/total), and running async tasks. " +
       "Pass scriptId for EP-level detail (auto-resolves novelId, includes novel + EP resources). " +
       "Pass novelId alone for novel-wide overview (all EPs included). " +
       "Use mediaType/keyPattern to filter resources (e.g. mediaType='video', keyPattern='clip_1').",
@@ -189,7 +189,7 @@ const TOOLS: Tool[] = [
   {
     name: "get_task_status",
     description:
-      "查询异步任务状态和结果。返回任务的当前状态（pending/running/completed/failed）、进度、结果或错误信息。",
+      "查询异步任务状态和结果。返回任务的当前状态（pending/running/completed/failed）、结果或错误信息。",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -294,6 +294,23 @@ const TOOLS: Tool[] = [
   },
 ];
 
+type McpTaskResult = Omit<batchTaskService.TaskResult, "progress" | "total">;
+
+function toMcpTaskResult(task: batchTaskService.TaskResult): McpTaskResult {
+  return {
+    id: task.id,
+    type: task.type,
+    scopeType: task.scopeType,
+    scopeId: task.scopeId,
+    status: task.status,
+    result: task.result,
+    error: task.error,
+    startedAt: task.startedAt,
+    completedAt: task.completedAt,
+    createdAt: task.createdAt,
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Tool Implementations                                               */
 /* ------------------------------------------------------------------ */
@@ -368,7 +385,7 @@ export const videoWorkflowMcp: McpProvider = {
           if (!result) {
             return json({ status: "error", error: "Task not found" });
           }
-          return json(result);
+          return json(toMcpTaskResult(result));
         }
 
         case "list_tasks": {
@@ -384,7 +401,7 @@ export const videoWorkflowMcp: McpProvider = {
           const scopeType = novelId ? "novel" : "script";
           const scopeId = (novelId || scriptId) as string;
           const tasks = await batchTaskService.listTasks(scopeType, scopeId);
-          return json(tasks);
+          return json(tasks.map(toMcpTaskResult));
         }
 
         case "optimize_video_prompts": {
