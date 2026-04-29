@@ -180,9 +180,8 @@ export const SubmitBatchPortraitsParams = z.object({
 export const SubmitBatchScenesParams = z.object({
   novelId: z.string().min(1),
   sceneNames: z.array(z.string().min(1)),
-  mode: z.enum(["single", "grid", "hd"]).default("single"),
   model: z.string().min(1).optional(),
-});
+}).strict();
 
 export const SubmitBatchCostumesParams = z.object({
   scriptId: z.string().min(1),
@@ -463,7 +462,10 @@ async function executeBatchScenesTask(
       data: { status: "running", startedAt: new Date() },
     });
 
-    const result = await assetGenerationService.batchGenerateScenes(input);
+    const result = await assetGenerationService.batchGenerateScenes({
+      ...input,
+      mode: "single",
+    });
 
     await prisma.batchGenerationTask.update({
       where: { id: taskId },

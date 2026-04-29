@@ -199,11 +199,11 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 5. 默认 skill 为 `novel-resource-mgr`，默认 MCP scope 为 `video_workflow`，用于生成/管理 `scopeType="novel"` 的角色立绘和场景资源
 
 小说级场景生成：
-1. 普通地点使用 `video_workflow__submit_scenes_task` 的 `mode="single"`，输出 `scene_<地点名>`
-2. 带 2 个及以上真实子地点的父地点使用 `mode="grid"`，只提交父地点名即可
-3. `mode="grid"` 会先用 `location_grid_style` 输出 `scene_<父地点名>_grid` 作为宫格参照图，再把该参照图传给 `sub_location_style`，逐个生成子地点实际图 `scene_<子地点名>`
+1. 调用方只传 `sceneNames`，不能传 `mode`；生成类型由服务端根据 `location_bible` 与资源占位自动裁决
+2. 普通地点输出 `scene_<地点名>`
+3. 带 2 个及以上真实子地点的父地点一律走 grid 工作流：先用 `location_grid_style` 输出 `scene_<父地点名>_grid`，再把该参照图传给 `sub_location_style`，逐个生成子地点实际图 `scene_<子地点名>`
 4. `sceneNames` 可以传占位资源的 `key` 或 `title`；服务端会把 `scene_...` key 解析回 `location_bible` 的真实标题，并把 `_grid` key 识别为 grid 工作流
-5. grid 父地点及其子地点即使被误提交为 `mode="single"`，服务端也必须自动转为 grid → hd；grid 父地点永远不能单独用 `location_style` 裸生成，子地点实际图也不能裸生成
+5. grid 父地点永远不能单独用 `location_style` 裸生成，子地点实际图也不能裸生成
 
 EP 级资源 agent：
 1. 前端选择具体 episode
