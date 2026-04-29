@@ -10,6 +10,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
 import type { InitWorkflowResult, GetStatusResult } from "@/lib/video/workflow-types";
+import { costumeKey, parseRecord } from "@/lib/video/resource-key-utils";
 import { registry } from "@/lib/mcp/registry";
 
 /* ------------------------------------------------------------------ */
@@ -78,6 +79,13 @@ export const GetStatusParams = z.object({
 
 export type GetStatusInput = z.infer<typeof GetStatusParams>;
 
+function expectedCostumeKeys(initResult: unknown): Set<string> {
+  const parsed = parseRecord(initResult);
+  const outfits = parseRecord(parsed?.character_outfits);
+  if (!outfits) return new Set<string>();
+  return new Set(Object.keys(outfits).map((name) => costumeKey(name)));
+}
+
 function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -100,15 +108,17 @@ function mergePromptFieldsIntoData(
 export async function getStatus(input: GetStatusInput): Promise<GetStatusResult> {
   let novelId = input.novelId;
   let scriptKey: string | undefined;
+  let expectedEpisodeCostumeKeys: Set<string> | null = null;
 
   if (input.scriptId) {
     const script = await prisma.novelScript.findUnique({
       where: { id: input.scriptId },
-      select: { novelId: true, scriptKey: true },
+      select: { novelId: true, scriptKey: true, initResult: true },
     });
     if (!script) throw new Error(`Episode not found: ${input.scriptId}`);
     if (!novelId) novelId = script.novelId;
     scriptKey = script.scriptKey;
+    expectedEpisodeCostumeKeys = expectedCostumeKeys(script.initResult);
   }
 
   if (!novelId) throw new Error("At least one of scriptId or novelId is required");
@@ -135,6 +145,11 @@ export async function getStatus(input: GetStatusInput): Promise<GetStatusResult>
       include: includeOpts,
       orderBy: { createdAt: "asc" },
     });
+    if (expectedEpisodeCostumeKeys) {
+      scriptResources = scriptResources.filter((resource) => (
+        resource.category !== "换装" || expectedEpisodeCostumeKeys.has(resource.key)
+      ));
+    }
   } else {
     const scripts = await prisma.novelScript.findMany({
       where: { novelId },

@@ -117,13 +117,11 @@ function addOutfitsFromValue(
   seen: Set<string>,
   scriptId: string,
   value: unknown,
-  nameMapping?: Map<string, string>,
 ): void {
   const outfits = parseRecord(value);
   if (!outfits) return;
   for (const name of Object.keys(outfits)) {
-    const normalizedName = nameMapping?.get(name) ?? name;
-    addScriptCostumeResource(items, seen, scriptId, normalizedName);
+    addScriptCostumeResource(items, seen, scriptId, name);
   }
 }
 
@@ -169,29 +167,6 @@ async function listKeyResourceMetaByScopeIds(
 }
 
 /* ------------------------------------------------------------------ */
-/*  Helper: Build character name mapping (short name -> full name)    */
-/* ------------------------------------------------------------------ */
-
-function buildCharacterNameMapping(characterArcs: unknown): Map<string, string> {
-  const mapping = new Map<string, string>();
-  for (const arc of parseArray(characterArcs)) {
-    if (!isRecord(arc)) continue;
-    const fullName = arc.name;
-    if (typeof fullName !== "string") continue;
-    
-    // Map full name to itself
-    mapping.set(fullName, fullName);
-    
-    // Extract first name (before first space) and map to full name
-    const firstName = fullName.split(/\s+/)[0];
-    if (firstName && firstName !== fullName) {
-      mapping.set(firstName, fullName);
-    }
-  }
-  return mapping;
-}
-
-/* ------------------------------------------------------------------ */
 /*  Expected resource computation from uploads                         */
 /* ------------------------------------------------------------------ */
 
@@ -202,9 +177,6 @@ function computeExpectedKeys(
 ): ExpectedResourceMeta[] {
   const items: ExpectedResourceMeta[] = [];
   const seen = new Set<string>();
-
-  // Build name mapping from character arcs
-  const nameMapping = buildCharacterNameMapping(upload.character_arcs);
 
   for (const arc of upload.character_arcs ?? []) {
     addNovelCharacterResource(items, seen, novelId, arc.name);
@@ -237,7 +209,7 @@ function computeExpectedKeys(
     if (!episode || !scriptId) continue;
     // Episode data may reference local characters/scenes, but it only creates script-scope resources.
     const outfits = episode.output.character_outfits;
-    if (outfits) addOutfitsFromValue(items, seen, scriptId, outfits, nameMapping);
+    if (outfits) addOutfitsFromValue(items, seen, scriptId, outfits);
   }
 
   return items;
@@ -265,9 +237,6 @@ async function computeStoredExpectedKeys(
 
   const items: ExpectedResourceMeta[] = [];
   const seen = new Set<string>();
-
-  // Build name mapping from character arcs
-  const nameMapping = buildCharacterNameMapping(novel?.characterArcs);
 
   for (const arc of parseArray(novel?.characterArcs)) {
     if (!isRecord(arc)) continue;
@@ -308,7 +277,7 @@ async function computeStoredExpectedKeys(
     const initResult = parseRecord(script.initResult);
     // Stored episode data may only add script-scoped resources for the requested script.
     if (scriptScopeIds.has(scriptId)) {
-      addOutfitsFromValue(items, seen, scriptId, initResult?.character_outfits ?? script.costumes, nameMapping);
+      addOutfitsFromValue(items, seen, scriptId, initResult?.character_outfits ?? script.costumes);
     }
   }
 
