@@ -360,6 +360,37 @@ export async function generateScene(
 ): Promise<GenerateAndPersistImageResult> {
   const [resolvedScene] = await resolveSceneIdentifiers(input.novelId, [input.sceneName]);
   const sceneName = resolvedScene?.sceneName ?? input.sceneName;
+
+  if (input.mode === "single") {
+    const { locationBible } = await getNovelLevelData(input.novelId);
+    const gridParent = analyzeLocations(locationBible).find(
+      (loc) => loc.mode === "grid" && loc.realSubs.some((sub) => sub.name === sceneName),
+    );
+    if (gridParent) {
+      const gridKey = `scene_${gridParent.name.replace(/\s+/g, "_")}_grid`;
+      const gridResource = await prisma.keyResource.findFirst({
+        where: { scopeType: "novel", scopeId: input.novelId, key: gridKey, currentVersion: { gt: 0 } },
+        include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+      });
+      const gridUrl = gridResource?.versions[0]?.url ?? null;
+      if (!gridUrl) {
+        await generateScene({
+          novelId: input.novelId,
+          sceneName: gridParent.name,
+          mode: "grid",
+          model: input.model,
+        });
+      }
+      return generateScene({
+        novelId: input.novelId,
+        sceneName,
+        referenceUrls: input.referenceUrls,
+        model: input.model,
+        mode: "hd",
+      });
+    }
+  }
+
   const styleByMode: Record<string, string> = {
     single: "location_style",
     grid: "location_grid_style",
@@ -1130,14 +1161,8 @@ export async function batchGenerateScenes(
     input.novelId,
     uniqueNonEmptyNames(input.sceneNames),
   );
-  const gridParentNames = new Set(
-    requestedScenes
-      .filter((scene) => scene.placeholderMode === "grid")
-      .map((scene) => scene.sceneName),
-  );
   const results: BatchGenerateScenesResult["results"] = [];
   const processedScenes = new Set<string>();
-  const processedGridParents = new Set<string>();
   const singleOrHdRequests: Array<{ sceneName: string; mode: "single" | "hd" }> = [];
   const gridRequests: string[] = [];
 
@@ -1147,15 +1172,17 @@ export async function batchGenerateScenes(
     if (processedScenes.has(dedupeKey)) continue;
 
     const parentName = parentNameForSubScene(analyzed, requested.sceneName);
-    if (input.mode === "single" && parentName && gridParentNames.has(parentName)) {
+    const gridParent = parentName
+      ? analyzed.find((loc) => loc.name === parentName && loc.mode === "grid")
+      : undefined;
+    if (input.mode === "single" && gridParent) {
+      gridRequests.push(requested.sceneName);
       processedScenes.add(dedupeKey);
       continue;
     }
 
     if (effectiveMode === "grid") {
-      if (processedGridParents.has(requested.sceneName)) continue;
       gridRequests.push(requested.sceneName);
-      processedGridParents.add(requested.sceneName);
       processedScenes.add(dedupeKey);
       continue;
     }
@@ -1174,10 +1201,10 @@ export async function batchGenerateScenes(
       )),
     ),
     Promise.all(
-      gridRequests.map(async (sceneName) => {
+      gridRequests.length === 0 ? [] : [gridRequests].map(async (sceneNames) => {
         const gridResult = await batchGenerateGridSceneWorkflow({
           novelId: input.novelId,
-          sceneNames: [sceneName],
+          sceneNames,
           mode: "grid",
           model: input.model,
         });

@@ -203,7 +203,7 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 2. 带 2 个及以上真实子地点的父地点使用 `mode="grid"`，只提交父地点名即可
 3. `mode="grid"` 会先用 `location_grid_style` 输出 `scene_<父地点名>_grid` 作为宫格参照图，再把该参照图传给 `sub_location_style`，逐个生成子地点实际图 `scene_<子地点名>`
 4. `sceneNames` 可以传占位资源的 `key` 或 `title`；服务端会把 `scene_...` key 解析回 `location_bible` 的真实标题，并把 `_grid` key 识别为 grid 工作流
-5. 子地点实际图不是单独用 `location_style` 生成；不要把父地点和子地点混成同一批 `mode="single"` 任务来替代 grid 工作流
+5. grid 父地点下的子地点即使被误提交为 `mode="single"`，服务端也必须自动转为 grid → hd；子地点实际图永远不能单独用 `location_style` 裸生成
 
 EP 级资源 agent：
 1. 前端选择具体 episode
