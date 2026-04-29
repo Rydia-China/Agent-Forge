@@ -444,7 +444,24 @@ export const ExecuteVideoPromptParams = z.object({
   ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional(),
   model: z.string().min(1).optional(),
   previousVideoUrl: z.string().url().optional(),
+  previousFrameUrl: z.string().url().optional(),
+  continuationTailSeconds: z.number().min(1).max(15).optional().default(15),
   title: z.string().optional(),
+}).superRefine((value, ctx) => {
+  if (value.previousVideoUrl && !value.previousFrameUrl) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["previousFrameUrl"],
+      message: "previousFrameUrl is required when previousVideoUrl is provided",
+    });
+  }
+  if (value.previousFrameUrl && !value.previousVideoUrl) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["previousVideoUrl"],
+      message: "previousVideoUrl is required when previousFrameUrl is provided",
+    });
+  }
 });
 export type ExecuteVideoPromptInput = z.infer<typeof ExecuteVideoPromptParams>;
 
@@ -495,6 +512,9 @@ export async function executeVideoPrompt(
   }
 
   const videoStyle = await resolveStyle("video_style");
+  if (input.previousFrameUrl && !refImageUrls.includes(input.previousFrameUrl)) {
+    refImageUrls.unshift(input.previousFrameUrl);
+  }
   if (videoStyle.styleRefUrl) refImageUrls.unshift(videoStyle.styleRefUrl);
 
   let sourceVideoUrls: string[] | undefined;
@@ -502,12 +522,12 @@ export async function executeVideoPrompt(
     try {
       const tailUrl = await callFcCropVideo({
         videoUrl: input.previousVideoUrl,
-        startTime: Math.max(0, input.duration - 5),
-        endTime: input.duration,
+        tailSeconds: input.continuationTailSeconds,
       });
       sourceVideoUrls = [tailUrl];
-    } catch {
-      // Continue without continuation
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to prepare previous clip continuation video: ${message}`);
     }
   }
 
@@ -528,9 +548,10 @@ export async function executeVideoPrompt(
     })
     : await callFcGenerateVideo({
       prompt: compiledPrompt,
-      sourceImageUrl: refImageUrls[0],
+      sourceImageUrl: input.previousFrameUrl ?? refImageUrls[0],
       referenceImageUrls: refImageUrls.length > 0 ? refImageUrls : undefined,
       sourceVideoUrls,
+      duration: input.duration,
     });
 
   const kr = await keyResourceService.upsertResource(
@@ -545,6 +566,7 @@ export async function executeVideoPrompt(
       data: {
         duration: input.duration,
         provider: input.provider,
+        continuationTailSeconds: input.continuationTailSeconds,
       } as Prisma.InputJsonValue,
     },
   );
