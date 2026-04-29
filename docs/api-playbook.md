@@ -24,9 +24,9 @@ MCP 初始化是 **惰性** 的——首次 API 请求触发 `initMcp()`。
 
 因此：刚启动后第一次请求会较慢（冷启动）。
 
-## 外部分发视频 API
+## 外部分发 API
 
-外部分发 key 只用于以下两个视频接口，不影响 `/api/chat`、`/api/subagents`、`/mcp` 或内部 agent workflow。
+外部分发 key 只用于以下三个接口，不影响 `/api/chat`、`/api/subagents`、`/mcp` 或内部 agent workflow。
 
 配置固定 key：
 
@@ -61,7 +61,17 @@ curl -X POST http://localhost:8001/api/external/video/happyhorse \
   -d '{"prompt":"animate this reference image","media":[{"type":"reference_image","url":"https://example.com/image.png"}],"duration":5}'
 ```
 
-两个接口成功/失败都会按 `apiKeyName + product` 写入 `ApiUsageCounter`，用于后续追索：
+独立 OSS 上传：
+
+```bash
+curl -X POST http://localhost:8001/api/external/video/oss/upload \
+  -H 'Authorization: Bearer <key>' \
+  -F 'file=@/path/to/file.mp4' \
+  -F 'folder=video' \
+  -F 'prefix=clip'
+```
+
+三个接口成功/失败都会按 `apiKeyName + product` 写入 `ApiUsageCounter`，用于后续追索：
 
 ```sql
 SELECT "apiKeyName", product, "totalCount", "successCount", "failureCount", "lastError", "lastUsedAt"
