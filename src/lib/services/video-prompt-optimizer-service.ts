@@ -298,6 +298,10 @@ export async function optimizeVideoPrompts(
     ...(input.model ? { model: input.model } : {}),
   }, context);
 
+  if (context?.signal?.aborted || result.status === "cancelled") {
+    throw new Error("Video prompt optimization cancelled");
+  }
+
   const optimizerOutput = parseOptimizerOutput(result.output);
   const savedPrompts: SavedPrompt[] = [];
 

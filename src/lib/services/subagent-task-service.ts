@@ -307,7 +307,8 @@ export async function getTaskResults(taskIds: string[]): Promise<AsyncTaskResult
       row.status === "completed" ||
       row.status === "failed" ||
       row.status === "interrupted" ||
-      row.status === "max_iterations";
+      row.status === "max_iterations" ||
+      row.status === "cancelled";
 
     if (isTerminal) {
       if (isRecord(row.trace)) {
