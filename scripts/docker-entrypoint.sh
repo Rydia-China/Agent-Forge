@@ -25,7 +25,7 @@ wait_for_db() {
 wait_for_db "$DATABASE_URL" "数据库"
 
 echo "📦 同步数据库 schema..."
-npx prisma db push --skip-generate
+npx prisma db push --skip-generate --accept-data-loss
 
 echo "🚀 启动应用..."
 exec pnpm start
