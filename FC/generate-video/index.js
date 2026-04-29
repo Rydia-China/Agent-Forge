@@ -324,7 +324,7 @@ function getModelArkRuntimeConfig() {
   const regionBase = controlPlaneConfig.region.replace(/-1$/, '')
   const baseUrl = process.env.ARK_BASE_URL || `https://ark.${regionBase}.bytepluses.com/api/v3`
   const tasksPath = process.env.ARK_CONTENT_GENERATION_TASKS_PATH || DEFAULT_CONTENT_GENERATION_TASKS_PATH
-  const ratio = process.env.SEEDANCE_RATIO || 'adaptive'
+  const ratio = process.env.SEEDANCE_RATIO || '9:16'
   const resolution = process.env.SEEDANCE_RESOLUTION || '720p'
   const watermark = process.env.SEEDANCE_WATERMARK === 'true'
   const generateAudio = process.env.SEEDANCE_GENERATE_AUDIO === 'true'
@@ -387,6 +387,17 @@ function getDurationFromOptions(options = {}) {
     return clampDuration(options.frames / 24)
   }
   return clampDuration(undefined)
+}
+
+function normalizeRatio(value, fallback) {
+  const allowed = new Set(['16:9', '9:16', '1:1', '4:3', '3:4', 'adaptive'])
+  return typeof value === 'string' && allowed.has(value) ? value : fallback
+}
+
+function normalizeResolution(value, fallback) {
+  if (typeof value !== 'string') return fallback
+  const normalized = value.toLowerCase()
+  return normalized === '720p' || normalized === '1080p' ? normalized : fallback
 }
 
 function buildModelArkContent(prompt, imageUrls, options = {}) {
@@ -452,8 +463,8 @@ async function submitModelArkVideoTask(imageUrls, prompt, options = {}) {
   const payload = {
     model: config.model,
     content: buildModelArkContent(prompt, assetImageUrls, options),
-    ratio: options.ratio || config.ratio,
-    resolution: options.resolution || config.resolution,
+    ratio: normalizeRatio(options.ratio, config.ratio),
+    resolution: normalizeResolution(options.resolution, config.resolution),
     duration: getDurationFromOptions(options),
     watermark: config.watermark,
     generate_audio: config.generateAudio
@@ -644,7 +655,7 @@ exports.handler = async (event, context) => {
     // 支持两种模式：直接生成完整视频 或 分步操作（提交/查询）
     if (action === 'generate') {
       // 完整生成模式：提交任务 + 轮询 + 上传OSS
-      const { imageUrl, prompt, referenceImageUrls, sourceVideoUrls, duration } = body
+      const { imageUrl, prompt, referenceImageUrls, sourceVideoUrls, duration, ratio, resolution } = body
 
       if (!imageUrl || !prompt) {
         return {
@@ -663,13 +674,17 @@ exports.handler = async (event, context) => {
         imageUrl,
         referenceImageCount: imageUrls.length,
         sourceVideoCount: Array.isArray(sourceVideoUrls) ? sourceVideoUrls.length : 0,
+        ratio,
+        resolution,
         promptLength: prompt.length
       })
 
       const result = await generateVideo(accessKeyId, secretAccessKey, imageUrls, prompt, {
         sourceVideoUrls: Array.isArray(sourceVideoUrls) ? sourceVideoUrls : [],
         frames,
-        duration
+        duration,
+        ratio,
+        resolution
       })
 
       return {
@@ -679,7 +694,7 @@ exports.handler = async (event, context) => {
       }
     } else if (action === 'CVSync2AsyncSubmitTask') {
       // 仅提交任务
-      const { image_urls, prompt, frames, sourceVideoUrls, video_urls, duration } = body
+      const { image_urls, prompt, frames, sourceVideoUrls, video_urls, duration, ratio, resolution } = body
 
       const continuationVideos = uniqueStrings([
         ...((Array.isArray(video_urls) ? video_urls : [])),
@@ -688,7 +703,9 @@ exports.handler = async (event, context) => {
       const taskId = await submitTask(accessKeyId, secretAccessKey, Array.isArray(image_urls) ? image_urls : [], prompt, {
         sourceVideoUrls: continuationVideos,
         frames,
-        duration
+        duration,
+        ratio,
+        resolution
       })
       const result = {
         code: 10000,

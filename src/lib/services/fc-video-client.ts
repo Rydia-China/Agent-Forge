@@ -84,6 +84,8 @@ export interface GenerateVideoOptions {
   referenceImageUrls?: string[];
   sourceVideoUrls?: string[];
   duration?: number;
+  ratio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
+  resolution?: "1080P" | "720P";
 }
 
 export async function callFcGenerateVideo(
@@ -109,6 +111,8 @@ export async function callFcGenerateVideo(
       referenceImageUrls: options.referenceImageUrls,
       sourceVideoUrls: options.sourceVideoUrls,
       duration: options.duration,
+      ratio: options.ratio,
+      resolution: options.resolution,
     },
     GenerateVideoResultSchema,
     900000, // 15 minutes for video generation

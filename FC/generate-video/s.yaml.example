@@ -49,7 +49,7 @@ resources:
         ARK_BASE_URL: https://ark.ap-southeast.bytepluses.com/api/v3
         ARK_CONTENT_GENERATION_TASKS_PATH: /contents/generations/tasks
         SEEDANCE_MODEL: dreamina-seedance-2-0-260128
-        SEEDANCE_RATIO: adaptive
+        SEEDANCE_RATIO: "9:16"
         SEEDANCE_RESOLUTION: 720p
         SEEDANCE_WATERMARK: 'false'
         SEEDANCE_GENERATE_AUDIO: 'false'
