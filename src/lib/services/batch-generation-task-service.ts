@@ -84,6 +84,8 @@ export const SubmitUpdatePortraitParams = z.object({
 export async function submitPortraitTask(
   input: z.infer<typeof SubmitPortraitParams>,
 ): Promise<string> {
+  await assertNovelExists(input.novelId);
+
   const task = await prisma.batchGenerationTask.create({
     data: {
       type: "portrait",
@@ -106,6 +108,8 @@ export async function submitPortraitTask(
 export async function submitSceneTask(
   input: z.infer<typeof SubmitSceneParams>,
 ): Promise<string> {
+  await assertNovelExists(input.novelId);
+
   const task = await prisma.batchGenerationTask.create({
     data: {
       type: "scene",
@@ -187,12 +191,22 @@ export const SubmitBatchCostumesParams = z.object({
   model: z.string().min(1).optional(),
 });
 
+async function assertNovelExists(novelId: string): Promise<void> {
+  const exists = await prisma.novel.findUnique({
+    where: { id: novelId },
+    select: { id: true },
+  });
+  if (!exists) throw new Error(`Novel not found: ${novelId}`);
+}
+
 /**
  * Submit a batch portraits generation task
  */
 export async function submitBatchPortraitsTask(
   input: z.infer<typeof SubmitBatchPortraitsParams>,
 ): Promise<string> {
+  await assertNovelExists(input.novelId);
+
   const task = await prisma.batchGenerationTask.create({
     data: {
       type: "batch_portraits",
@@ -217,6 +231,8 @@ export async function submitBatchPortraitsTask(
 export async function submitBatchScenesTask(
   input: z.infer<typeof SubmitBatchScenesParams>,
 ): Promise<string> {
+  await assertNovelExists(input.novelId);
+
   const task = await prisma.batchGenerationTask.create({
     data: {
       type: "batch_scenes",

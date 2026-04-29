@@ -108,6 +108,100 @@ export function analyzeLocations(locationBible: Array<Record<string, unknown>>):
     .filter((location): location is AnalyzedLocation => location !== null);
 }
 
+type SceneGenerationMode = "single" | "grid" | "hd";
+
+interface ResolvedSceneIdentifier {
+  requestedName: string;
+  sceneName: string;
+  placeholderMode: SceneGenerationMode | null;
+}
+
+function stripGridTitleSuffix(title: string): string {
+  return title.endsWith(" (grid)") ? title.slice(0, -" (grid)".length) : title;
+}
+
+function keyNameAlias(key: string): string | null {
+  return key.startsWith("scene_") ? key.slice("scene_".length) : null;
+}
+
+function addSceneAlias(
+  aliases: Map<string, ResolvedSceneIdentifier>,
+  alias: string | null,
+  value: ResolvedSceneIdentifier,
+): void {
+  const normalized = alias?.trim();
+  if (!normalized || aliases.has(normalized)) return;
+  aliases.set(normalized, value);
+}
+
+async function resolveSceneIdentifiers(
+  novelId: string,
+  requestedNames: string[],
+): Promise<ResolvedSceneIdentifier[]> {
+  const resources = await prisma.keyResource.findMany({
+    where: {
+      scopeType: "novel",
+      scopeId: novelId,
+      category: "场景",
+    },
+    select: { key: true, title: true },
+  });
+
+  const aliases = new Map<string, ResolvedSceneIdentifier>();
+  for (const resource of resources) {
+    const title = resource.title?.trim();
+    if (!title) continue;
+
+    const isGrid = resource.key.endsWith("_grid") || title.endsWith(" (grid)");
+    const sceneName = stripGridTitleSuffix(title);
+    const value: ResolvedSceneIdentifier = {
+      requestedName: sceneName,
+      sceneName,
+      placeholderMode: isGrid ? "grid" : "single",
+    };
+
+    addSceneAlias(aliases, resource.key, value);
+    addSceneAlias(aliases, keyNameAlias(resource.key), value);
+    addSceneAlias(aliases, title, value);
+  }
+
+  return requestedNames.map((requestedName) => {
+    const trimmed = requestedName.trim();
+    const fromResource = aliases.get(trimmed);
+    if (fromResource) return { ...fromResource, requestedName: trimmed };
+
+    if (trimmed.startsWith("scene_")) {
+      const withoutPrefix = trimmed.slice("scene_".length);
+      if (withoutPrefix.endsWith("_grid")) {
+        return {
+          requestedName: trimmed,
+          sceneName: withoutPrefix.slice(0, -"_grid".length).replace(/_/g, " "),
+          placeholderMode: "grid",
+        };
+      }
+      return {
+        requestedName: trimmed,
+        sceneName: withoutPrefix.replace(/_/g, " "),
+        placeholderMode: null,
+      };
+    }
+
+    if (trimmed.endsWith("_grid")) {
+      return {
+        requestedName: trimmed,
+        sceneName: trimmed.slice(0, -"_grid".length).replace(/_/g, " "),
+        placeholderMode: "grid",
+      };
+    }
+
+    return {
+      requestedName: trimmed,
+      sceneName: trimmed,
+      placeholderMode: null,
+    };
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  KeyResource metadata update                                        */
 /* ------------------------------------------------------------------ */
@@ -264,6 +358,8 @@ export type GenerateSceneInput = z.infer<typeof GenerateSceneParams>;
 export async function generateScene(
   input: GenerateSceneInput,
 ): Promise<GenerateAndPersistImageResult> {
+  const [resolvedScene] = await resolveSceneIdentifiers(input.novelId, [input.sceneName]);
+  const sceneName = resolvedScene?.sceneName ?? input.sceneName;
   const styleByMode: Record<string, string> = {
     single: "location_style",
     grid: "location_grid_style",
@@ -275,10 +371,10 @@ export async function generateScene(
   if (input.mode === "grid") {
     const { locationBible } = await getNovelLevelData(input.novelId);
     const analyzed = analyzeLocations(locationBible);
-    const parent = analyzed.find((loc) => loc.name === input.sceneName);
-    if (!parent) throw new Error(`Parent location "${input.sceneName}" not found`);
+    const parent = analyzed.find((loc) => loc.name === sceneName);
+    if (!parent) throw new Error(`Parent location "${sceneName}" not found`);
     if (parent.mode !== "grid") {
-      throw new Error(`Location "${input.sceneName}" not eligible for grid mode (need ≥2 sub-locations)`);
+      throw new Error(`Location "${sceneName}" not eligible for grid mode (need ≥2 sub-locations)`);
     }
 
     const slots: string[] = [`【格 1】${parent.name}：${parent.visualPrompt}`];
@@ -287,7 +383,7 @@ export async function generateScene(
     });
 
     const prompt = compileTemplate(style.stylePrompt, {
-      name: input.sceneName,
+      name: sceneName,
       gridSize: String(parent.gridSize),
       gridSlots: slots.join("\n"),
     });
@@ -296,14 +392,14 @@ export async function generateScene(
       ? [styleRefUrl, ...(input.referenceUrls ?? [])]
       : input.referenceUrls;
 
-    const key = `scene_${input.sceneName.replace(/\s+/g, "_")}_grid`;
+    const key = `scene_${sceneName.replace(/\s+/g, "_")}_grid`;
     return generateAndPersistImage({
       scopeType: "novel",
       scopeId: input.novelId,
       key,
       category: "场景",
       prompt,
-      title: `${input.sceneName} (grid)`,
+      title: `${sceneName} (grid)`,
       refUrls: gridRefs,
       model: input.model,
     });
@@ -313,13 +409,13 @@ export async function generateScene(
 
     let parentLoc: AnalyzedLocation | undefined;
     for (const loc of analyzed) {
-      if (loc.realSubs.some((s) => s.name === input.sceneName)) {
+      if (loc.realSubs.some((s) => s.name === sceneName)) {
         parentLoc = loc;
         break;
       }
     }
     if (!parentLoc) {
-      throw new Error(`Scene "${input.sceneName}" not found as a sub-location`);
+      throw new Error(`Scene "${sceneName}" not found as a sub-location`);
     }
 
     const gridKey = `scene_${parentLoc.name.replace(/\s+/g, "_")}_grid`;
@@ -332,20 +428,20 @@ export async function generateScene(
       throw new Error(`Grid image for parent "${parentLoc.name}" not yet generated`);
     }
 
-    const prompt = compileTemplate(style.stylePrompt, { name: input.sceneName, sceneName: input.sceneName });
+    const prompt = compileTemplate(style.stylePrompt, { name: sceneName, sceneName });
 
     const hdRefs: string[] = [gridUrl];
     if (styleRefUrl) hdRefs.push(styleRefUrl);
     if (input.referenceUrls) hdRefs.push(...input.referenceUrls);
 
-    const key = `scene_${input.sceneName.replace(/\s+/g, "_")}`;
+    const key = `scene_${sceneName.replace(/\s+/g, "_")}`;
     return generateAndPersistImage({
       scopeType: "novel",
       scopeId: input.novelId,
       key,
       category: "场景",
       prompt,
-      title: input.sceneName,
+      title: sceneName,
       refUrls: hdRefs,
       model: input.model,
     });
@@ -353,13 +449,13 @@ export async function generateScene(
     const { locationBible } = await getNovelLevelData(input.novelId);
     let visualPrompt: string | undefined;
     for (const loc of locationBible) {
-      if (String(loc.name) === input.sceneName && loc.visual_prompt) {
+      if (String(loc.name) === sceneName && loc.visual_prompt) {
         visualPrompt = String(loc.visual_prompt);
         break;
       }
       const subs = loc.sub_locations as Array<Record<string, unknown>> | undefined;
       if (subs) {
-        const sub = subs.find((s) => String(s.name) === input.sceneName);
+        const sub = subs.find((s) => String(s.name) === sceneName);
         if (sub?.visual_prompt) {
           visualPrompt = String(sub.visual_prompt);
           break;
@@ -367,23 +463,23 @@ export async function generateScene(
       }
     }
     if (!visualPrompt) {
-      throw new Error(`No visual_prompt found for scene "${input.sceneName}"`);
+      throw new Error(`No visual_prompt found for scene "${sceneName}"`);
     }
 
-    const prompt = compileTemplate(style.stylePrompt, { name: input.sceneName, scenePrompt: visualPrompt });
+    const prompt = compileTemplate(style.stylePrompt, { name: sceneName, scenePrompt: visualPrompt });
 
     const singleRefs = styleRefUrl
       ? [styleRefUrl, ...(input.referenceUrls ?? [])]
       : input.referenceUrls;
 
-    const key = `scene_${input.sceneName.replace(/\s+/g, "_")}`;
+    const key = `scene_${sceneName.replace(/\s+/g, "_")}`;
     return generateAndPersistImage({
       scopeType: "novel",
       scopeId: input.novelId,
       key,
       category: "场景",
       prompt,
-      title: input.sceneName,
+      title: sceneName,
       refUrls: singleRefs,
       model: input.model,
     });
@@ -904,20 +1000,33 @@ function findGridParentForScene(
   return null;
 }
 
+function parentNameForSubScene(
+  analyzed: AnalyzedLocation[],
+  sceneName: string,
+): string | null {
+  for (const loc of analyzed) {
+    if (loc.realSubs.some((sub) => sub.name === sceneName)) return loc.name;
+  }
+  return null;
+}
+
 async function batchGenerateGridSceneWorkflow(
   input: BatchGenerateScenesInput,
 ): Promise<BatchGenerateScenesResult> {
   const { locationBible } = await getNovelLevelData(input.novelId);
   const analyzed = analyzeLocations(locationBible);
-  const requestedNames = uniqueNonEmptyNames(input.sceneNames);
+  const requestedNames = await resolveSceneIdentifiers(
+    input.novelId,
+    uniqueNonEmptyNames(input.sceneNames),
+  );
   const results: BatchGenerateScenesResult["results"] = [];
   const processedGridParents = new Set<string>();
   const processedHdScenes = new Set<string>();
 
-  for (const requestedName of requestedNames) {
-    const match = findGridParentForScene(analyzed, requestedName);
+  for (const requested of requestedNames) {
+    const match = findGridParentForScene(analyzed, requested.sceneName);
     if (!match) {
-      results.push(sceneErrorResult(requestedName, "grid", new Error(`Scene "${requestedName}" not found`)));
+      results.push(sceneErrorResult(requested.requestedName, "grid", new Error(`Scene "${requested.sceneName}" not found`)));
       continue;
     }
 
@@ -926,13 +1035,13 @@ async function batchGenerateGridSceneWorkflow(
       try {
         const single = await generateScene({
           novelId: input.novelId,
-          sceneName: requestedName,
+          sceneName: requested.sceneName,
           mode: "single",
           model: input.model,
         });
-        results.push(sceneSuccessResult(requestedName, "single", single));
+        results.push(sceneSuccessResult(requested.sceneName, "single", single));
       } catch (error: unknown) {
-        results.push(sceneErrorResult(requestedName, "single", error));
+        results.push(sceneErrorResult(requested.sceneName, "single", error));
       }
       continue;
     }
@@ -985,28 +1094,61 @@ export async function batchGenerateScenes(
     return batchGenerateGridSceneWorkflow(input);
   }
 
-  const sceneNames = uniqueNonEmptyNames(input.sceneNames);
-  const results = await Promise.allSettled(
-    sceneNames.map((sceneName) =>
-      generateScene({
-        novelId: input.novelId,
-        sceneName,
-        mode: input.mode,
-        model: input.model,
-      }),
-    ),
+  const { locationBible } = await getNovelLevelData(input.novelId);
+  const analyzed = analyzeLocations(locationBible);
+  const requestedScenes = await resolveSceneIdentifiers(
+    input.novelId,
+    uniqueNonEmptyNames(input.sceneNames),
   );
+  const gridParentNames = new Set(
+    requestedScenes
+      .filter((scene) => scene.placeholderMode === "grid")
+      .map((scene) => scene.sceneName),
+  );
+  const results: BatchGenerateScenesResult["results"] = [];
+  const processedScenes = new Set<string>();
+  const processedGridParents = new Set<string>();
 
-  return {
-    results: results.map((result, index) => {
-      const sceneName = sceneNames[index]!;
-      if (result.status === "fulfilled") {
-        return sceneSuccessResult(sceneName, input.mode, result.value);
-      } else {
-        return sceneErrorResult(sceneName, input.mode, result.reason);
-      }
-    }),
-  };
+  for (const requested of requestedScenes) {
+    const effectiveMode = requested.placeholderMode === "grid" ? "grid" : input.mode;
+    const dedupeKey = `${effectiveMode}:${requested.sceneName}`;
+    if (processedScenes.has(dedupeKey)) continue;
+
+    const parentName = parentNameForSubScene(analyzed, requested.sceneName);
+    if (input.mode === "single" && parentName && gridParentNames.has(parentName)) {
+      processedScenes.add(dedupeKey);
+      continue;
+    }
+
+    if (effectiveMode === "grid") {
+      if (processedGridParents.has(requested.sceneName)) continue;
+      const gridResult = await batchGenerateGridSceneWorkflow({
+        novelId: input.novelId,
+        sceneNames: [requested.sceneName],
+        mode: "grid",
+        model: input.model,
+      });
+      results.push(...gridResult.results);
+      processedGridParents.add(requested.sceneName);
+      processedScenes.add(dedupeKey);
+      continue;
+    }
+
+    try {
+      const data = await generateScene({
+        novelId: input.novelId,
+        sceneName: requested.sceneName,
+        mode: effectiveMode,
+        model: input.model,
+      });
+      results.push(sceneSuccessResult(requested.sceneName, effectiveMode, data));
+    } catch (error: unknown) {
+      results.push(sceneErrorResult(requested.sceneName, effectiveMode, error));
+    }
+    processedScenes.add(dedupeKey);
+  }
+
+  return { results };
 }
 
 /* ------------------------------------------------------------------ */
