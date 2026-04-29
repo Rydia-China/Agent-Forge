@@ -27,7 +27,9 @@ interface ImageGenDetail {
   id: string;
   sessionId: string;
   key: string;
+  category: string | null;
   currentVersion: number;
+  title: string | null;
   prompt: string | null;
   url: string | null;
   versions: VersionRow[];
@@ -68,7 +70,7 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
       const data = await fetchJson<ImageGenDetail>(`/api/key-resources/${id}`);
       setDetail(data);
       const curVer = data.versions.find((v) => v.version === data.currentVersion);
-      setEditPrompt(curVer?.prompt ?? "");
+      setEditPrompt(curVer?.prompt ?? data.prompt ?? "");
       setViewedVersion(data.currentVersion);
     } catch {
       void message.error("Failed to load image detail");
