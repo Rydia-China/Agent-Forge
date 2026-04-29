@@ -153,6 +153,10 @@ interface ValidationFail {
 }
 type ValidationResult = ValidationOk | ValidationFail;
 
+function validationParseErrorMessage(error: unknown): string {
+  return `JSON parse failed: ${error instanceof Error ? error.message : String(error)}`;
+}
+
 function validateOutput(
   raw: string,
   schema: Record<string, unknown>,
@@ -164,9 +168,7 @@ function validateOutput(
   } catch (e) {
     return {
       ok: false,
-      error: `JSON parse failed: ${
-        e instanceof Error ? e.message : String(e)
-      }\nRaw output (first 500 chars): ${cleaned.slice(0, 500)}`,
+      error: validationParseErrorMessage(e),
     };
   }
 
@@ -192,6 +194,13 @@ function buildValidationRetryPrompt(error: string): string {
     "",
     "Please fix the issues above and output ONLY valid JSON (no markdown fences, no extra text).",
   ].join("\n");
+}
+
+function failedValidationAssistantMessage(error: string): LlmMessage {
+  return {
+    role: "assistant",
+    content: `[discarded invalid non-JSON/schema-invalid output: ${error}]`,
+  };
 }
 
 /* ================================================================== */
@@ -673,6 +682,8 @@ export class SubAgent {
         });
       }
 
+      this.messages[this.messages.length - 1] = failedValidationAssistantMessage(validation.error);
+
       if (attempt < maxRetries) {
         console.warn(
           `[subagent] Validation failed (attempt ${attempt}/${maxRetries}), retrying`,
@@ -756,6 +767,8 @@ export class SubAgent {
             attempts: validationAttempts,
           });
         }
+
+        this.messages[this.messages.length - 1] = failedValidationAssistantMessage(lastValidation.error);
 
         if (validationAttempts >= maxValidationAttempts) {
           return this.failedValidationResult(t0, maxValidationAttempts, lastValidation);
