@@ -7,6 +7,8 @@ const HOST = 'visual.volcengineapi.com'
 const BYTEPLUS_ARK_SERVICE = 'ark'
 const BYTEPLUS_ARK_VERSION = '2024-01-01'
 const ALGORITHM = 'HMAC-SHA256'
+const DEFAULT_SEEDANCE_MODEL = 'dreamina-seedance-2-0-260128'
+const DEFAULT_CONTENT_GENERATION_TASKS_PATH = '/contents/generations/tasks'
 
 function sha256(data) {
   return crypto.createHash('sha256').update(data).digest('hex')
@@ -243,6 +245,162 @@ async function convertImageUrlsToAssetUris(imageUrls) {
   return normalizedImageUrls.map(url => urlToAssetUri.get(url) || url)
 }
 
+function getModelArkRuntimeConfig() {
+  const controlPlaneConfig = getBytePlusArkConfig()
+  const apiKey = process.env.ARK_API_KEY
+  const model = process.env.SEEDANCE_MODEL || DEFAULT_SEEDANCE_MODEL
+  const regionBase = controlPlaneConfig.region.replace(/-1$/, '')
+  const baseUrl = process.env.ARK_BASE_URL || `https://ark.${regionBase}.bytepluses.com/api/v3`
+  const tasksPath = process.env.ARK_CONTENT_GENERATION_TASKS_PATH || DEFAULT_CONTENT_GENERATION_TASKS_PATH
+  const ratio = process.env.SEEDANCE_RATIO || 'adaptive'
+  const resolution = process.env.SEEDANCE_RESOLUTION || '720p'
+  const watermark = process.env.SEEDANCE_WATERMARK === 'true'
+  const generateAudio = process.env.SEEDANCE_GENERATE_AUDIO === 'true'
+
+  return {
+    ...controlPlaneConfig,
+    apiKey,
+    model,
+    baseUrl: baseUrl.replace(/\/$/, ''),
+    tasksPath,
+    ratio,
+    resolution,
+    watermark,
+    generateAudio
+  }
+}
+
+function clampDuration(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 5
+  return Math.min(15, Math.max(4, Math.round(value)))
+}
+
+function getDurationFromOptions(options = {}) {
+  if (typeof options.duration === 'number' && Number.isFinite(options.duration)) {
+    return clampDuration(options.duration)
+  }
+  if (typeof options.frames === 'number' && Number.isFinite(options.frames)) {
+    return clampDuration(options.frames / 24)
+  }
+  return clampDuration(undefined)
+}
+
+function buildModelArkContent(prompt, imageUrls, options = {}) {
+  const content = [
+    {
+      type: 'text',
+      text: prompt
+    }
+  ]
+
+  for (const url of uniqueStrings(imageUrls)) {
+    content.push({
+      type: 'image_url',
+      image_url: { url },
+      role: 'reference_image'
+    })
+  }
+
+  for (const url of uniqueStrings(options.sourceVideoUrls || [])) {
+    content.push({
+      type: 'video_url',
+      video_url: { url },
+      role: 'reference_video'
+    })
+  }
+
+  return content
+}
+
+async function callModelArkRuntime(path, method, payload) {
+  const config = getModelArkRuntimeConfig()
+  const normalizedPath = config.baseUrl.endsWith('/api/v3') && path.startsWith('/api/v3/')
+    ? path.slice('/api/v3'.length)
+    : path
+  const url = new URL(`${config.baseUrl}${normalizedPath}`)
+  const payloadStr = payload === undefined ? '' : JSON.stringify(payload)
+  const headers = {
+    'Content-Type': 'application/json'
+  }
+
+  if (config.apiKey) {
+    headers.Authorization = `Bearer ${config.apiKey}`
+  } else {
+    const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '')
+    const signedHeaders = {
+      'Content-Type': 'application/json',
+      Host: url.host,
+      'X-Content-Sha256': sha256(payloadStr),
+      'X-Date': amzDate
+    }
+    headers.Host = signedHeaders.Host
+    headers['X-Content-Sha256'] = signedHeaders['X-Content-Sha256']
+    headers['X-Date'] = signedHeaders['X-Date']
+    headers.Authorization = getBytePlusAuthorizationHeader(
+      config.accessKeyId,
+      config.secretAccessKey,
+      method,
+      url.pathname,
+      url.search ? url.search.slice(1) : '',
+      signedHeaders,
+      payloadStr,
+      amzDate,
+      config.region,
+      BYTEPLUS_ARK_SERVICE
+    )
+  }
+
+  const response = await fetch(url.toString(), {
+    method,
+    headers,
+    body: method === 'GET' ? undefined : payloadStr
+  })
+  const text = await response.text()
+  const result = text.length > 0 ? JSON.parse(text) : {}
+
+  if (!response.ok || result.error) {
+    const error = result.error
+    const message = error?.message || error?.Message || result.message || result.Message || `ModelArk ${method} ${path} failed`
+    throw new Error(message)
+  }
+
+  return result
+}
+
+async function submitModelArkVideoTask(imageUrls, prompt, options = {}) {
+  const config = getModelArkRuntimeConfig()
+  const assetImageUrls = await convertImageUrlsToAssetUris(imageUrls)
+  const payload = {
+    model: config.model,
+    content: buildModelArkContent(prompt, assetImageUrls, options),
+    ratio: options.ratio || config.ratio,
+    resolution: options.resolution || config.resolution,
+    duration: getDurationFromOptions(options),
+    watermark: config.watermark,
+    generate_audio: config.generateAudio
+  }
+
+  const result = await callModelArkRuntime(config.tasksPath, 'POST', payload)
+  return extractId(result, 'CreateContentGenerationTask')
+}
+
+async function queryModelArkVideoTask(taskId) {
+  const config = getModelArkRuntimeConfig()
+  const result = await callModelArkRuntime(`${config.tasksPath}/${encodeURIComponent(taskId)}`, 'GET')
+  const statusMap = {
+    succeeded: 'done',
+    failed: 'failed',
+    cancelled: 'failed',
+    canceled: 'failed'
+  }
+
+  return {
+    status: statusMap[result.status] || result.status || 'running',
+    video_url: result.content?.video_url,
+    raw: result
+  }
+}
+
 const uploadToOSS = async (buffer, filename, folder = 'video') => {
   const client = new OSS({
     region: process.env.OSS_REGION,
@@ -269,43 +427,11 @@ function uniqueStrings(values) {
 }
 
 async function submitTask(accessKeyId, secretAccessKey, imageUrls, prompt, options = {}) {
-  const normalizedImageUrls = await convertImageUrlsToAssetUris(imageUrls)
-  if (normalizedImageUrls.length === 1) normalizedImageUrls.push(normalizedImageUrls[0])
-
-  const payload = {
-    req_key: 'jimeng_i2v_first_tail_v30',
-    image_urls: normalizedImageUrls,
-    prompt,
-    seed: -1,
-    frames: options.frames ?? 121
-  }
-
-  const sourceVideoUrls = uniqueStrings(options.sourceVideoUrls || [])
-  if (sourceVideoUrls.length > 0) payload.video_urls = sourceVideoUrls
-
-  const result = await callJimengAPI(accessKeyId, secretAccessKey, 'CVSync2AsyncSubmitTask', payload)
-
-  if (result.code !== 10000) {
-    throw new Error(result.message || '提交任务失败')
-  }
-
-  return result.data.task_id
+  return submitModelArkVideoTask(imageUrls, prompt, options)
 }
 
 async function queryTask(accessKeyId, secretAccessKey, taskId) {
-  const result = await callJimengAPI(accessKeyId, secretAccessKey, 'CVSync2AsyncGetResult', {
-    req_key: 'jimeng_i2v_first_tail_v30',
-    task_id: taskId
-  })
-
-  if (result.code !== 10000) {
-    throw new Error(result.message || '查询任务失败')
-  }
-
-  return {
-    status: result.data.status,
-    video_url: result.data.video_url
-  }
+  return queryModelArkVideoTask(taskId)
 }
 
 async function generateVideo(accessKeyId, secretAccessKey, imageUrls, prompt, options = {}) {
@@ -403,14 +529,6 @@ exports.handler = async (event, context) => {
     const accessKeyId = process.env.JIMENG_ACCESS_KEY_ID
     const secretAccessKey = process.env.JIMENG_SECRET_ACCESS_KEY
 
-    if (!accessKeyId || !secretAccessKey) {
-      return {
-        statusCode: 400,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: '请配置即梦视频 API 环境变量' })
-      }
-    }
-
     // 支持两种模式：直接生成完整视频 或 分步操作（提交/查询）
     if (action === 'generate') {
       // 完整生成模式：提交任务 + 轮询 + 上传OSS
@@ -438,7 +556,8 @@ exports.handler = async (event, context) => {
 
       const result = await generateVideo(accessKeyId, secretAccessKey, imageUrls, prompt, {
         sourceVideoUrls: Array.isArray(sourceVideoUrls) ? sourceVideoUrls : [],
-        frames
+        frames,
+        duration
       })
 
       return {
@@ -448,26 +567,23 @@ exports.handler = async (event, context) => {
       }
     } else if (action === 'CVSync2AsyncSubmitTask') {
       // 仅提交任务
-      const { image_urls, prompt, seed, frames, req_key, sourceVideoUrls, video_urls } = body
-      const assetImageUrls = Array.isArray(image_urls)
-        ? await convertImageUrlsToAssetUris(image_urls)
-        : image_urls
-
-      const payload = {
-        req_key: req_key || 'jimeng_i2v_first_tail_v30',
-        image_urls: assetImageUrls,
-        prompt,
-        seed: seed ?? -1,
-        frames: frames ?? 121
-      }
+      const { image_urls, prompt, frames, sourceVideoUrls, video_urls, duration } = body
 
       const continuationVideos = uniqueStrings([
         ...((Array.isArray(video_urls) ? video_urls : [])),
         ...((Array.isArray(sourceVideoUrls) ? sourceVideoUrls : []))
       ])
-      if (continuationVideos.length > 0) payload.video_urls = continuationVideos
-
-      const result = await callJimengAPI(accessKeyId, secretAccessKey, 'CVSync2AsyncSubmitTask', payload)
+      const taskId = await submitTask(accessKeyId, secretAccessKey, Array.isArray(image_urls) ? image_urls : [], prompt, {
+        sourceVideoUrls: continuationVideos,
+        frames,
+        duration
+      })
+      const result = {
+        code: 10000,
+        data: { task_id: taskId },
+        message: 'Success',
+        status: 10000
+      }
 
       // 如果成功，返回task_id
       return {
@@ -479,10 +595,17 @@ exports.handler = async (event, context) => {
       // 仅查询任务
       const { task_id, req_key } = body
 
-      const result = await callJimengAPI(accessKeyId, secretAccessKey, 'CVSync2AsyncGetResult', {
-        req_key: req_key || 'jimeng_i2v_first_tail_v30',
-        task_id
-      })
+      const taskResult = await queryTask(accessKeyId, secretAccessKey, task_id)
+      const result = {
+        code: 10000,
+        data: {
+          status: taskResult.status,
+          video_url: taskResult.video_url,
+          raw: taskResult.raw
+        },
+        message: 'Success',
+        status: 10000
+      }
 
       // 如果完成且有视频，下载并上传到OSS
       if (result.code === 10000 && result.data?.video_url && result.data?.status === 'done') {

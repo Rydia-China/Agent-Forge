@@ -39,6 +39,14 @@ resources:
         BYTEPLUS_REGION: ap-southeast-1
         BYTEPLUS_PROJECT_NAME: default
         BYTEPLUS_ASSET_GROUP_NAME_PREFIX: agent-forge-video
+        ARK_API_KEY: YOUR_ARK_API_KEY
+        ARK_BASE_URL: https://ark.ap-southeast.bytepluses.com/api/v3
+        ARK_CONTENT_GENERATION_TASKS_PATH: /contents/generations/tasks
+        SEEDANCE_MODEL: dreamina-seedance-2-0-260128
+        SEEDANCE_RATIO: adaptive
+        SEEDANCE_RESOLUTION: 720p
+        SEEDANCE_WATERMARK: 'false'
+        SEEDANCE_GENERATE_AUDIO: 'false'
       code: ./generate-video
       triggers:
         - triggerConfig:
