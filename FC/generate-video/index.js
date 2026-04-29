@@ -10,6 +10,8 @@ const ALGORITHM = 'HMAC-SHA256'
 const DEFAULT_SEEDANCE_MODEL = 'dreamina-seedance-2-0-260128'
 const DEFAULT_CONTENT_GENERATION_TASKS_PATH = '/contents/generations/tasks'
 const DEFAULT_MODEL_ARK_API_KEY_TTL_SECONDS = 3600
+const DEFAULT_ASSET_READY_TIMEOUT_MS = 120000
+const DEFAULT_ASSET_READY_INTERVAL_MS = 3000
 let cachedModelArkApiKey
 
 function sha256(data) {
@@ -190,6 +192,19 @@ function extractId(result, action) {
   throw new Error(`${action} returned no Id`)
 }
 
+function extractAssetStatus(result) {
+  const rawStatus = result?.Status || result?.status || result?.State || result?.state
+  return typeof rawStatus === 'string' ? rawStatus.toLowerCase() : undefined
+}
+
+function isAssetReadyStatus(status) {
+  return ['available', 'success', 'succeeded', 'done', 'ready', 'active'].includes(status)
+}
+
+function isAssetFailedStatus(status) {
+  return ['failed', 'error', 'rejected', 'deleted', 'expired'].includes(status)
+}
+
 function getAssetName(url, index) {
   try {
     const parsed = new URL(url)
@@ -225,6 +240,36 @@ async function createImageAsset(groupId, url, index) {
   return extractId(result, 'CreateAsset')
 }
 
+async function getAsset(assetId) {
+  const config = getBytePlusArkConfig()
+  return callBytePlusArkOpenAPI('GetAsset', {
+    Id: assetId,
+    ProjectName: config.projectName
+  })
+}
+
+async function waitForAssetReady(assetId) {
+  const timeoutMs = Number(process.env.BYTEPLUS_ASSET_READY_TIMEOUT_MS || DEFAULT_ASSET_READY_TIMEOUT_MS)
+  const intervalMs = Number(process.env.BYTEPLUS_ASSET_READY_INTERVAL_MS || DEFAULT_ASSET_READY_INTERVAL_MS)
+  const deadline = Date.now() + (Number.isFinite(timeoutMs) ? timeoutMs : DEFAULT_ASSET_READY_TIMEOUT_MS)
+  const waitMs = Number.isFinite(intervalMs) ? intervalMs : DEFAULT_ASSET_READY_INTERVAL_MS
+  let lastStatus = 'unknown'
+
+  while (Date.now() < deadline) {
+    const result = await getAsset(assetId)
+    const status = extractAssetStatus(result)
+    if (!status) return
+    lastStatus = status
+    if (isAssetReadyStatus(status)) return
+    if (isAssetFailedStatus(status)) {
+      throw new Error(`Asset ${assetId} processing failed with status ${status}`)
+    }
+    await new Promise(resolve => setTimeout(resolve, waitMs))
+  }
+
+  throw new Error(`Asset ${assetId} is not ready before timeout, last status: ${lastStatus}`)
+}
+
 function isExternalImageUrl(value) {
   return typeof value === 'string' && /^https?:\/\//i.test(value)
 }
@@ -241,6 +286,7 @@ async function convertImageUrlsToAssetUris(imageUrls) {
   for (let i = 0; i < urlsToUpload.length; i++) {
     const url = urlsToUpload[i]
     const assetId = await createImageAsset(groupId, url, i)
+    await waitForAssetReady(assetId)
     urlToAssetUri.set(url, `asset://${assetId}`)
   }
 
