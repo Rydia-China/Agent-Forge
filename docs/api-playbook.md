@@ -156,7 +156,8 @@ EP 级资源 agent：
 3. Prompt Optimizer 内部最多 5 轮增量迭代：每轮调独立 Prompt Writer，再调独立 Reviewer；它维护 `iterationHistory`、`resolvedIssues`、`remainingIssues`、`doNotRegress` 和 `bestVersion`
 4. 若 Reviewer 通过，Optimizer 返回 `status="passed"`、最终 prompts 和 final review；若 5 轮未通过，返回 `max_iterations` 和当前 best version；若发现门禁互相矛盾，返回 `conflict`
 5. 主控只有在 Optimizer 返回 `passed` 且 `allowVideoGeneration=true` 后，才调用 `save_reviewed_video_prompt` 保存 prompt
-6. 视频生成时支持系统资源形式的帧参照：从上一个视频抽取末尾帧并保存为后续 shot 的参考资源
+6. Seedance 是默认视频生成路径；HappyHorse 仅作兼容/测试路径
+7. 连续 clip 生成时，`clip_2+` 调用 `execute_video_prompt` 必须同时传 `previousVideoUrl` 与 `previousFrameUrl`：服务层默认从上一 clip 裁最后 15 秒作为 `sourceVideoUrls`，并把上一 clip 最后一帧图片作为首帧/参考图参照
 
 **EP Prompt Optimizer 调试 SOP**：
 适用场景：调整 `video-workflow`、`video-prompt-optimizer`、`video-skill-reviewer` 或资源门禁后，需要验证主控、Optimizer、Writer、Reviewer 的实际调度链路。

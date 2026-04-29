@@ -49,6 +49,7 @@ export interface GenerateVideoOptions {
   styleName?: string;
   referenceImageUrls?: string[];
   sourceVideoUrls?: string[];
+  duration?: number;
 }
 
 export async function callFcGenerateVideo(
@@ -73,6 +74,7 @@ export async function callFcGenerateVideo(
       styleName: options.styleName,
       referenceImageUrls: options.referenceImageUrls,
       sourceVideoUrls: options.sourceVideoUrls,
+      duration: options.duration,
     },
     300000, // 5 minutes for video generation
   );
@@ -80,8 +82,9 @@ export async function callFcGenerateVideo(
 
 export interface CropVideoOptions {
   videoUrl: string;
-  startTime: number;
-  endTime: number;
+  startTime?: number;
+  endTime?: number;
+  tailSeconds?: number;
 }
 
 export async function callFcCropVideo(
@@ -100,6 +103,7 @@ export async function callFcCropVideo(
     videoUrl: options.videoUrl,
     startTime: options.startTime,
     endTime: options.endTime,
+    tailSeconds: options.tailSeconds,
   });
 }
 

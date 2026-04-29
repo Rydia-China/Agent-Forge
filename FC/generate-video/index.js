@@ -108,14 +108,26 @@ const uploadToOSS = async (buffer, filename, folder = 'video') => {
   return url
 }
 
-async function submitTask(accessKeyId, secretAccessKey, imageUrl, prompt) {
-  const result = await callJimengAPI(accessKeyId, secretAccessKey, 'CVSync2AsyncSubmitTask', {
+function uniqueStrings(values) {
+  return [...new Set(values.filter(value => typeof value === 'string' && value.length > 0))]
+}
+
+async function submitTask(accessKeyId, secretAccessKey, imageUrls, prompt, options = {}) {
+  const normalizedImageUrls = uniqueStrings(imageUrls)
+  if (normalizedImageUrls.length === 1) normalizedImageUrls.push(normalizedImageUrls[0])
+
+  const payload = {
     req_key: 'jimeng_i2v_first_tail_v30',
-    image_urls: [imageUrl, imageUrl],
+    image_urls: normalizedImageUrls,
     prompt,
     seed: -1,
-    frames: 121
-  })
+    frames: options.frames ?? 121
+  }
+
+  const sourceVideoUrls = uniqueStrings(options.sourceVideoUrls || [])
+  if (sourceVideoUrls.length > 0) payload.video_urls = sourceVideoUrls
+
+  const result = await callJimengAPI(accessKeyId, secretAccessKey, 'CVSync2AsyncSubmitTask', payload)
 
   if (result.code !== 10000) {
     throw new Error(result.message || '提交任务失败')
@@ -140,9 +152,9 @@ async function queryTask(accessKeyId, secretAccessKey, taskId) {
   }
 }
 
-async function generateVideo(accessKeyId, secretAccessKey, imageUrl, prompt) {
+async function generateVideo(accessKeyId, secretAccessKey, imageUrls, prompt, options = {}) {
   console.log('Submitting video generation task...')
-  const taskId = await submitTask(accessKeyId, secretAccessKey, imageUrl, prompt)
+  const taskId = await submitTask(accessKeyId, secretAccessKey, imageUrls, prompt, options)
   console.log('Task submitted, taskId:', taskId)
 
   const maxRetries = 60
@@ -246,7 +258,7 @@ exports.handler = async (event, context) => {
     // 支持两种模式：直接生成完整视频 或 分步操作（提交/查询）
     if (action === 'generate') {
       // 完整生成模式：提交任务 + 轮询 + 上传OSS
-      const { imageUrl, prompt } = body
+      const { imageUrl, prompt, referenceImageUrls, sourceVideoUrls, duration } = body
 
       if (!imageUrl || !prompt) {
         return {
@@ -256,9 +268,22 @@ exports.handler = async (event, context) => {
         }
       }
 
-      console.log('Video generation request:', { imageUrl, promptLength: prompt.length })
+      const imageUrls = uniqueStrings([imageUrl, ...((Array.isArray(referenceImageUrls) ? referenceImageUrls : []))])
+      const frames = typeof duration === 'number' && Number.isFinite(duration)
+        ? Math.max(1, Math.round(duration * 24))
+        : undefined
 
-      const result = await generateVideo(accessKeyId, secretAccessKey, imageUrl, prompt)
+      console.log('Video generation request:', {
+        imageUrl,
+        referenceImageCount: imageUrls.length,
+        sourceVideoCount: Array.isArray(sourceVideoUrls) ? sourceVideoUrls.length : 0,
+        promptLength: prompt.length
+      })
+
+      const result = await generateVideo(accessKeyId, secretAccessKey, imageUrls, prompt, {
+        sourceVideoUrls: Array.isArray(sourceVideoUrls) ? sourceVideoUrls : [],
+        frames
+      })
 
       return {
         statusCode: 200,
@@ -267,15 +292,23 @@ exports.handler = async (event, context) => {
       }
     } else if (action === 'CVSync2AsyncSubmitTask') {
       // 仅提交任务
-      const { image_urls, prompt, seed, frames, req_key } = body
+      const { image_urls, prompt, seed, frames, req_key, sourceVideoUrls, video_urls } = body
 
-      const result = await callJimengAPI(accessKeyId, secretAccessKey, 'CVSync2AsyncSubmitTask', {
+      const payload = {
         req_key: req_key || 'jimeng_i2v_first_tail_v30',
         image_urls,
         prompt,
         seed: seed ?? -1,
         frames: frames ?? 121
-      })
+      }
+
+      const continuationVideos = uniqueStrings([
+        ...((Array.isArray(video_urls) ? video_urls : [])),
+        ...((Array.isArray(sourceVideoUrls) ? sourceVideoUrls : []))
+      ])
+      if (continuationVideos.length > 0) payload.video_urls = continuationVideos
+
+      const result = await callJimengAPI(accessKeyId, secretAccessKey, 'CVSync2AsyncSubmitTask', payload)
 
       // 如果成功，返回task_id
       return {

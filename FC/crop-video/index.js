@@ -33,6 +33,21 @@ async function cleanupFiles(files) {
   await Promise.allSettled(files.map((file) => unlink(file)))
 }
 
+function assertFiniteNumber(value, name) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`${name} must be a finite number`)
+  }
+}
+
+async function getVideoDuration(inputPath) {
+  const { stdout } = await execAsync(
+    `ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 "${inputPath}"`
+  )
+  const duration = Number(stdout.trim())
+  assertFiniteNumber(duration, 'video duration')
+  return duration
+}
+
 async function uploadToOSS(buffer, filename, folder = 'video') {
   const client = new OSS({
     region: process.env.OSS_REGION,
@@ -54,7 +69,7 @@ async function uploadToOSS(buffer, filename, folder = 'video') {
   return url
 }
 
-async function cropVideo(videoUrl, startTime, endTime) {
+async function cropVideo(videoUrl, options) {
   await ensureTempDir()
 
   const inputPath = generateTempPath('mp4')
@@ -63,6 +78,22 @@ async function cropVideo(videoUrl, startTime, endTime) {
   try {
     console.log('Downloading video from:', videoUrl)
     await downloadVideo(videoUrl, inputPath)
+
+    let startTime = options.startTime
+    let endTime = options.endTime
+    if (options.tailSeconds !== undefined) {
+      assertFiniteNumber(options.tailSeconds, 'tailSeconds')
+      if (options.tailSeconds <= 0) throw new Error('tailSeconds must be greater than 0')
+      const sourceDuration = await getVideoDuration(inputPath)
+      startTime = Math.max(0, sourceDuration - options.tailSeconds)
+      endTime = sourceDuration
+    }
+
+    assertFiniteNumber(startTime, 'startTime')
+    assertFiniteNumber(endTime, 'endTime')
+    if (startTime < 0 || endTime <= startTime) {
+      throw new Error('Invalid crop range')
+    }
 
     console.log('Cropping video:', { startTime, endTime })
     const duration = endTime - startTime
@@ -131,19 +162,19 @@ exports.handler = async (event, context) => {
       body = httpEvent.queryStringParameters || httpEvent
     }
 
-    const { videoUrl, startTime, endTime } = body
+    const { videoUrl, startTime, endTime, tailSeconds } = body
 
-    if (!videoUrl || startTime === undefined || endTime === undefined) {
+    if (!videoUrl || (tailSeconds === undefined && (startTime === undefined || endTime === undefined))) {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Missing videoUrl, startTime, or endTime' })
+        body: JSON.stringify({ error: 'Missing videoUrl and either tailSeconds or startTime/endTime' })
       }
     }
 
-    console.log('Crop video request:', { videoUrl, startTime, endTime })
+    console.log('Crop video request:', { videoUrl, startTime, endTime, tailSeconds })
 
-    const result = await cropVideo(videoUrl, startTime, endTime)
+    const result = await cropVideo(videoUrl, { startTime, endTime, tailSeconds })
 
     return {
       statusCode: 200,

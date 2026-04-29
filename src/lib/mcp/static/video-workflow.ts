@@ -233,7 +233,7 @@ const TOOLS: Tool[] = [
   {
     name: "execute_video_prompt",
     description:
-      "执行一个已通过 review 的视频 prompt。只有用户明确要求生成视频时才调用；工具会解析 definition 中的资源引用、套用 video_style 并调用视频生成。",
+      "执行一个已通过 review 的视频 prompt。只有用户明确要求生成视频时才调用；Seedance 为主路径，连续 clip 必须同时传 previousVideoUrl 和 previousFrameUrl，工具会裁上一 clip 尾段并与末帧图一起作为参照。",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -245,7 +245,7 @@ const TOOLS: Tool[] = [
         provider: {
           type: "string",
           enum: ["jimeng", "happyhorse"],
-          description: "视频生成 provider。默认 jimeng；快乐马测试传 happyhorse。两种 provider 都由工具套用 video_style。",
+          description: "视频生成 provider。默认 jimeng/Seedance 主路径；happyhorse 仅作为兼容/测试路径。两种 provider 都由工具套用 video_style。",
         },
         resolution: {
           type: "string",
@@ -258,7 +258,18 @@ const TOOLS: Tool[] = [
           description: "HappyHorse 可选宽高比",
         },
         model: { type: "string", description: "HappyHorse 可选模型名" },
-        previousVideoUrl: { type: "string", description: "可选：延续上一段视频时传入上一段 URL，工具会截取末帧/尾段" },
+        previousVideoUrl: {
+          type: "string",
+          description: "连续 clip 必填：上一 clip 的视频 URL。工具默认裁最后 15 秒作为 Seedance sourceVideoUrls 参照。",
+        },
+        previousFrameUrl: {
+          type: "string",
+          description: "连续 clip 必填：上一 clip 最后一帧图片 URL。工具会作为 Seedance 首帧/参考图参照传递。",
+        },
+        continuationTailSeconds: {
+          type: "number",
+          description: "可选：从上一 clip 尾部裁取的视频秒数，默认 15，范围 1-15。",
+        },
         title: { type: "string", description: "Human-readable label" },
       },
       required: ["scriptId", "key", "prompt", "definition", "duration"],
