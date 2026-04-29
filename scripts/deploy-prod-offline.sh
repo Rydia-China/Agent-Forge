@@ -313,7 +313,7 @@ REMOTE_HEALTH
 }
 
 sync_tables() {
-  upload_sync_sql
+  [[ -f "$SYNC_DIR/core-tables.sql" ]] || export_sync_tables
   log "Syncing remote tables: $(join_by_comma "${TABLES[@]}")"
   local table_list=""
   for table in "${TABLES[@]}"; do
@@ -327,8 +327,10 @@ set -euo pipefail
 DB=\$(docker ps --filter "name=agent-forge-db" --format "{{.Names}}" | head -n1)
 test -n "\$DB"
 docker exec -i "\$DB" psql -U postgres -d "$REMOTE_DB_NAME" -v ON_ERROR_STOP=1 -c 'TRUNCATE ${table_list} RESTART IDENTITY;'
-cat "$REMOTE_SYNC_SQL" | docker exec -i "\$DB" psql -U postgres -d "$REMOTE_DB_NAME" -v ON_ERROR_STOP=1
 REMOTE_SYNC
+  sshpass -e ssh "${SSH_OPTS[@]}" "$SERVER" \
+    "DB=\$(docker ps --filter \"name=agent-forge-db\" --format \"{{.Names}}\" | head -n1); test -n \"\$DB\"; docker exec -i \"\$DB\" psql -U postgres -d \"$REMOTE_DB_NAME\" -v ON_ERROR_STOP=1" \
+    < "$SYNC_DIR/core-tables.sql"
 }
 
 verify_deploy() {
