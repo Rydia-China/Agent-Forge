@@ -52,6 +52,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function imageCompressionResultToJson(
+  compression: ImageCompressionResult,
+): Prisma.InputJsonObject {
+  return {
+    originalUrl: compression.originalUrl,
+    compressedUrl: compression.compressedUrl,
+    originalBytes: compression.originalBytes,
+    compressedBytes: compression.compressedBytes,
+    format: compression.format,
+    uploaded: compression.uploaded,
+    ...(compression.note ? { note: compression.note } : {}),
+  };
+}
+
 export interface AnalyzedSubLocation {
   id: string;
   name: string;
@@ -625,15 +639,15 @@ export async function executeVideoPrompt(
       duration: input.duration,
     });
 
-  const videoData = {
+  const videoData: Prisma.InputJsonObject = {
     duration: input.duration,
     provider: input.provider,
     continuationTailSeconds: input.continuationTailSeconds,
-    referenceImageCompression: resolvedReferenceImages.compression,
+    referenceImageCompression: resolvedReferenceImages.compression.map(imageCompressionResultToJson),
     originalReferenceImageUrls: refImageUrls,
     compressedReferenceImageUrls: videoRefImageUrls,
     ...(sourceImageUrl ? { sourceImageUrl } : {}),
-  } as Prisma.InputJsonValue;
+  };
 
   const kr = await keyResourceService.upsertResource(
     "script",
