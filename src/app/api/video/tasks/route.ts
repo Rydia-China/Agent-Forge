@@ -53,6 +53,7 @@ export async function POST(req: NextRequest) {
       contextProvider,
       skills: skills ?? ["video-workflow"],
       mcpScope: mcpScope ?? ["video_workflow", "subagent"],
+      delayTime: 5,
     },
   });
 

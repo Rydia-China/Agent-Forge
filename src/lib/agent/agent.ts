@@ -101,6 +101,8 @@ export interface AgentConfig {
   mcpScope?: string[];
   /** LLM model id to use for this run (must be in MODEL_OPTIONS). */
   model?: string;
+  /** Delay in seconds after each tool-call round before the next LLM iteration. */
+  delayTime?: number;
   /** Persisted SubAgent row for this agent run, used as parent for nested traces. */
   persistentSubAgentId?: string;
   /** Persisted SubAgent nesting depth for this agent run. */
@@ -274,6 +276,27 @@ async function listAgentTools(config?: AgentConfig) {
   return registry.listAllTools();
 }
 
+function resolveDelayMs(config?: AgentConfig): number {
+  return Math.max(0, (config?.delayTime ?? 0) * 1000);
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  if (signal?.aborted) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeout);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
 async function runAgentInner(
   userMessage: string,
   session: { id: string; messages: ChatMessage[] },
@@ -305,6 +328,7 @@ async function runAgentInnerCore(
   // --- Eviction setup (compression only; recall reads from DB) ---
   const tracker = new ToolCallTracker();
   scanMessages(session.messages, tracker);
+  const delayAfterToolRoundMs = resolveDelayMs(config);
 
   // Resolve images: data URLs → OSS HTTP URLs
   const resolvedImages = images?.length ? await resolveImages(images) : undefined;
@@ -408,6 +432,7 @@ async function runAgentInnerCore(
 
     // Flush assistant + tool messages so recall can find them
     await flush();
+    await sleep(delayAfterToolRoundMs);
   }
 }
 
@@ -584,6 +609,7 @@ async function runAgentStreamInnerCore(
 
   const tracker = new ToolCallTracker();
   scanMessages(session.messages, tracker);
+  const delayAfterToolRoundMs = resolveDelayMs(config);
 
   // Resolve images: data URLs → OSS HTTP URLs
   const resolvedImages = images?.length ? await resolveImages(images) : undefined;
@@ -759,6 +785,7 @@ async function runAgentStreamInnerCore(
 
       // Flush assistant + tool messages so recall can find them
       await flush();
+      await sleep(delayAfterToolRoundMs, signal);
     } catch (err: unknown) {
       if (signal?.aborted) {
         console.warn(`[agent:stream] Stream aborted; persisting partial context.`);
