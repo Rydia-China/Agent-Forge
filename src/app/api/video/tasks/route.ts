@@ -3,7 +3,6 @@ import { z } from "zod";
 import { submitSubAgent } from "@/lib/services/subagent-service";
 import { VideoContextProvider } from "@/lib/video/context-provider";
 import { resolveModel } from "@/lib/agent/models";
-import { authenticateAgentForgeApiKey } from "@/lib/services/billing-service";
 
 const VideoContextSchema = z.object({
   novelId: z.string().min(1),
@@ -24,11 +23,6 @@ const SubmitSchema = z.object({
 
 /** POST /api/video/tasks — submit a video workflow agent subagent */
 export async function POST(req: NextRequest) {
-  const auth = authenticateAgentForgeApiKey(req.headers);
-  if (auth.status === "unauthorized") {
-    return NextResponse.json({ error: auth.message }, { status: 401 });
-  }
-
   let raw: unknown;
   try {
     raw = await req.json();
@@ -55,7 +49,6 @@ export async function POST(req: NextRequest) {
     user,
     images,
     model: resolveModel(model),
-    apiKeyName: auth.apiKeyName,
     agentConfig: {
       contextProvider,
       skills: skills ?? ["video-workflow"],

@@ -3,8 +3,6 @@
  * Wraps DashScope HappyHorse API as Function Compute endpoint.
  */
 
-import { trackBillableFcCall } from "./billing-service";
-
 export type Resolution = '1080P' | '720P';
 export type Ratio = '16:9' | '9:16' | '1:1' | '4:3' | '3:4';
 export type TaskStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
@@ -46,50 +44,41 @@ export async function callFcHappyHorseGenerate(
     );
   }
 
-  return trackBillableFcCall("video.happyhorse", async () => {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        action: "generate",
-        ...request,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "Unknown error");
-      throw new Error(
-        `FC HappyHorse generate failed (${response.status}): ${errorText}`
-      );
-    }
-
-    const result: unknown = await response.json();
-
-    if (
-      typeof result === "object" &&
-      result !== null &&
-      "taskId" in result &&
-      typeof result.taskId === "string" &&
-      "status" in result &&
-      typeof result.status === "string" &&
-      "videoUrl" in result &&
-      typeof result.videoUrl === "string"
-    ) {
-      return {
-        taskId: result.taskId,
-        status: result.status,
-        videoUrl: result.videoUrl,
-        ...("originalVideoUrl" in result && typeof result.originalVideoUrl === "string"
-          ? { originalVideoUrl: result.originalVideoUrl }
-          : {}),
-      };
-    }
-
-    throw new Error(
-      `FC HappyHorse generate response invalid: ${JSON.stringify(result)}`
-    );
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      action: "generate",
+      ...request,
+    }),
   });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "Unknown error");
+    throw new Error(
+      `FC HappyHorse generate failed (${response.status}): ${errorText}`
+    );
+  }
+
+  const result: unknown = await response.json();
+
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    "taskId" in result &&
+    typeof result.taskId === "string" &&
+    "status" in result &&
+    typeof result.status === "string" &&
+    "videoUrl" in result &&
+    typeof result.videoUrl === "string"
+  ) {
+    return result as GenerateVideoResponse;
+  }
+
+  throw new Error(
+    `FC HappyHorse generate response invalid: ${JSON.stringify(result)}`
+  );
 }

@@ -193,7 +193,7 @@ model SubAgentEvent {
   @@index([subagentId, id])
 }
 
-/// ApiUsageCounter — fixed API key usage aggregate for billable FC calls
+/// ApiUsageCounter — external video API key usage aggregate
 model ApiUsageCounter {
   id           String   @id @default(cuid())
   apiKeyName   String

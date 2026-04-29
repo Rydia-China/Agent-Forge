@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { submitSubAgent } from "@/lib/services/subagent-service";
 import { resolveModel } from "@/lib/agent/models";
-import { authenticateAgentForgeApiKey } from "@/lib/services/billing-service";
 
 const SubmitSchema = z.object({
   message: z.string().min(1),
@@ -14,11 +13,6 @@ const SubmitSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const auth = authenticateAgentForgeApiKey(req.headers);
-  if (auth.status === "unauthorized") {
-    return NextResponse.json({ error: auth.message }, { status: 401 });
-  }
-
   let raw: unknown;
   try {
     raw = await req.json();
@@ -39,7 +33,6 @@ export async function POST(req: NextRequest) {
     images,
     parentAgentId: parent_agent_id,
     model: resolveModel(model),
-    apiKeyName: auth.apiKeyName,
   });
 
   return NextResponse.json({

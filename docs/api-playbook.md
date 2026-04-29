@@ -24,33 +24,44 @@ MCP 初始化是 **惰性** 的——首次 API 请求触发 `initMcp()`。
 
 因此：刚启动后第一次请求会较慢（冷启动）。
 
-## Agent Forge API Key 与 FC 调用计数
+## 外部分发视频 API
 
-`AGENT_FORGE_API_KEYS` 为空时不启用 Agent Forge 层认证，所有 FC 调用按 `apiKeyName="internal"` 计数。
+外部分发 key 只用于以下两个视频接口，不影响 `/api/chat`、`/api/subagents`、`/mcp` 或内部 agent workflow。
 
-配置固定 key 后，外部请求必须在以下任一 header 中传入 key：
+配置固定 key：
+
+```bash
+EXTERNAL_VIDEO_API_KEYS=customer-a:secret-a,customer-b:secret-b
+EXTERNAL_VIDEO_API_KEYS='[{"name":"customer-a","key":"secret-a"},{"name":"customer-b","key":"secret-b"}]'
+```
+
+调用时使用任一 header：
 
 ```bash
 Authorization: Bearer <key>
 # 或
-x-agent-forge-api-key: <key>
+x-video-api-key: <key>
 ```
 
-支持的配置格式：
+Seedance 视频生成：
 
 ```bash
-AGENT_FORGE_API_KEYS=customer-a:secret-a,customer-b:secret-b
-AGENT_FORGE_API_KEYS='[{"name":"customer-a","key":"secret-a"},{"name":"customer-b","key":"secret-b"}]'
+curl -X POST http://localhost:8001/api/external/video/generate \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <key>' \
+  -d '{"prompt":"a cinematic shot of a city at sunset","duration":5}'
 ```
 
-当前只做最小计数，不提供成套管理 API。FC 调用由 service 层统一写入 `ApiUsageCounter`：
+HappyHorse 视频生成：
 
-- `totalCount`：尝试调用 FC 的次数
-- `successCount`：FC 调用成功次数
-- `failureCount`：FC 调用失败次数
-- `lastError`：最近一次失败原因
+```bash
+curl -X POST http://localhost:8001/api/external/video/happyhorse \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <key>' \
+  -d '{"prompt":"animate this reference image","media":[{"type":"reference_image","url":"https://example.com/image.png"}],"duration":5}'
+```
 
-可直接通过 DB 查询追索：
+两个接口成功/失败都会按 `apiKeyName + product` 写入 `ApiUsageCounter`，用于后续追索：
 
 ```sql
 SELECT "apiKeyName", product, "totalCount", "successCount", "failureCount", "lastError", "lastUsedAt"

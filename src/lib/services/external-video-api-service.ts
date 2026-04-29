@@ -1,37 +1,30 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 
-const ApiKeyConfigSchema = z.object({
+const ExternalVideoApiKeyConfigSchema = z.object({
   name: z.string().min(1),
   key: z.string().min(1),
 });
 
-const ApiKeyConfigsSchema = z.array(ApiKeyConfigSchema);
+const ExternalVideoApiKeyConfigsSchema = z.array(ExternalVideoApiKeyConfigSchema);
 
-interface BillingContext {
-  apiKeyName?: string;
-}
+export type ExternalVideoApiAuthResult =
+  | { status: "authenticated"; apiKeyName: string }
+  | { status: "not_configured"; message: string }
+  | { status: "unauthorized"; message: string };
 
-interface AgentForgeApiKey {
+interface ExternalVideoApiKey {
   name: string;
   keyHash: string;
 }
-
-export type ApiKeyAuthResult =
-  | { status: "disabled"; apiKeyName?: undefined }
-  | { status: "authenticated"; apiKeyName: string }
-  | { status: "unauthorized"; message: string };
-
-const billingContext = new AsyncLocalStorage<BillingContext>();
 
 function hashKey(key: string): string {
   return createHash("sha256").update(key).digest("hex");
 }
 
-function parseSimpleApiKeys(raw: string): AgentForgeApiKey[] {
-  const parsed = ApiKeyConfigsSchema.parse(
+function parseSimpleKeys(raw: string): ExternalVideoApiKey[] {
+  const parsed = ExternalVideoApiKeyConfigsSchema.parse(
     raw.split(",").map((entry) => {
       const [name, ...keyParts] = entry.split(":");
       return {
@@ -43,20 +36,20 @@ function parseSimpleApiKeys(raw: string): AgentForgeApiKey[] {
   return parsed.map((item) => ({ name: item.name, keyHash: hashKey(item.key) }));
 }
 
-function parseJsonApiKeys(raw: string): AgentForgeApiKey[] {
+function parseJsonKeys(raw: string): ExternalVideoApiKey[] {
   const jsonValue: unknown = JSON.parse(raw);
-  const parsed = ApiKeyConfigsSchema.parse(jsonValue);
+  const parsed = ExternalVideoApiKeyConfigsSchema.parse(jsonValue);
   return parsed.map((item) => ({ name: item.name, keyHash: hashKey(item.key) }));
 }
 
-function getConfiguredApiKeys(): AgentForgeApiKey[] {
-  const raw = process.env.AGENT_FORGE_API_KEYS?.trim();
+function getConfiguredKeys(): ExternalVideoApiKey[] {
+  const raw = process.env.EXTERNAL_VIDEO_API_KEYS?.trim();
   if (!raw) return [];
-  return raw.startsWith("[") ? parseJsonApiKeys(raw) : parseSimpleApiKeys(raw);
+  return raw.startsWith("[") ? parseJsonKeys(raw) : parseSimpleKeys(raw);
 }
 
 function readPresentedKey(headers: Headers): string | undefined {
-  const direct = headers.get("x-agent-forge-api-key")?.trim();
+  const direct = headers.get("x-video-api-key")?.trim();
   if (direct) return direct;
 
   const authorization = headers.get("authorization")?.trim();
@@ -69,38 +62,29 @@ function readPresentedKey(headers: Headers): string | undefined {
   return token.length > 0 ? token : undefined;
 }
 
-export function authenticateAgentForgeApiKey(headers: Headers): ApiKeyAuthResult {
-  const configuredKeys = getConfiguredApiKeys();
-  if (configuredKeys.length === 0) return { status: "disabled" };
+export function authenticateExternalVideoApiKey(
+  headers: Headers,
+): ExternalVideoApiAuthResult {
+  const configuredKeys = getConfiguredKeys();
+  if (configuredKeys.length === 0) {
+    return {
+      status: "not_configured",
+      message: "EXTERNAL_VIDEO_API_KEYS is not configured",
+    };
+  }
 
   const presentedKey = readPresentedKey(headers);
   if (!presentedKey) {
-    return { status: "unauthorized", message: "Missing Agent Forge API key" };
+    return { status: "unauthorized", message: "Missing video API key" };
   }
 
   const presentedHash = hashKey(presentedKey);
   const match = configuredKeys.find((item) => item.keyHash === presentedHash);
   if (!match) {
-    return { status: "unauthorized", message: "Invalid Agent Forge API key" };
+    return { status: "unauthorized", message: "Invalid video API key" };
   }
 
   return { status: "authenticated", apiKeyName: match.name };
-}
-
-export function withBillingContext<T>(
-  apiKeyName: string | undefined,
-  fn: () => Promise<T>,
-): Promise<T> {
-  return billingContext.run({ apiKeyName }, fn);
-}
-
-function resolveApiKeyName(): string {
-  const configuredKeys = getConfiguredApiKeys();
-  const apiKeyName = billingContext.getStore()?.apiKeyName;
-  if (configuredKeys.length > 0 && !apiKeyName) {
-    throw new Error("Agent Forge API key is required for billable FC calls");
-  }
-  return apiKeyName ?? "internal";
 }
 
 async function incrementUsage(
@@ -131,11 +115,11 @@ async function incrementUsage(
   });
 }
 
-export async function trackBillableFcCall<T>(
+export async function trackExternalVideoApiCall<T>(
+  apiKeyName: string,
   product: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  const apiKeyName = resolveApiKeyName();
   await incrementUsage(apiKeyName, product, "attempt");
 
   try {

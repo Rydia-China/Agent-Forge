@@ -10,7 +10,6 @@ import { registry } from "./registry";
 import { runAgent } from "@/lib/agent/agent";
 import { writeChatLog } from "@/lib/agent/chat-log";
 import { prisma } from "@/lib/db";
-import { withBillingContext } from "@/lib/services/billing-service";
 
 const AgentChatArgs = z.object({
   message: z.string(),
@@ -26,7 +25,7 @@ const AgentChatArgs = z.object({
  * Note: MCP providers are initialized at server startup via instrumentation.ts,
  * not on-demand during requests.
  */
-export async function createAsMcpServer(apiKeyName?: string): Promise<Server> {
+export async function createAsMcpServer(): Promise<Server> {
   const server = new Server(
     { name: "agent-forge", version: "1.0.0" },
     {
@@ -65,13 +64,7 @@ export async function createAsMcpServer(apiKeyName?: string): Promise<Server> {
 
     if (name === "agent__chat") {
       const parsed = AgentChatArgs.parse(args ?? {});
-      const result = await runAgent(
-        parsed.message,
-        parsed.session_id,
-        undefined,
-        undefined,
-        { apiKeyName },
-      );
+      const result = await runAgent(parsed.message, parsed.session_id);
       if (parsed.logs) {
         await writeChatLog(result.sessionId, result.messages);
       }
@@ -88,11 +81,7 @@ export async function createAsMcpServer(apiKeyName?: string): Promise<Server> {
       };
     }
 
-    return registry.callTool(
-      name,
-      (args ?? {}) as Record<string, unknown>,
-      { apiKeyName },
-    );
+    return registry.callTool(name, (args ?? {}) as Record<string, unknown>);
   });
 
   // --- resources/list (skills as MCP resources, using production version) ---
@@ -153,7 +142,6 @@ export async function createAsMcpServer(apiKeyName?: string): Promise<Server> {
  */
 export async function createScopedMcpServer(
   providerName: string,
-  apiKeyName?: string,
 ): Promise<Server | null> {
   const provider = registry.getProvider(providerName);
   if (!provider) return null;
@@ -171,13 +159,9 @@ export async function createScopedMcpServer(
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const { name, arguments: args } = req.params;
     try {
-      return await withBillingContext(
-        apiKeyName,
-        () => provider.callTool(
-          name,
-          (args ?? {}) as Record<string, unknown>,
-          { apiKeyName },
-        ),
+      return await provider.callTool(
+        name,
+        (args ?? {}) as Record<string, unknown>,
       );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
