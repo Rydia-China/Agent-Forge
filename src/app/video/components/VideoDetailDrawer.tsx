@@ -20,7 +20,7 @@ export interface VideoDetailDrawerProps {
 
 export function VideoDetailDrawer({ resource, onClose }: VideoDetailDrawerProps) {
   const vData = resource?.data as VideoResourceData | null;
-  const prompt = vData?.prompt ?? "";
+  const prompt = resource?.prompt ?? vData?.prompt ?? "";
 
   return (
     <Drawer

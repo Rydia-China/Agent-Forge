@@ -276,6 +276,7 @@ export function useSubAgentStream(
               currentVersion: typeof data.version === "number" ? data.version : 1,
               url: typeof data.url === "string" ? data.url : null,
               data: data.data,
+              prompt: typeof data.prompt === "string" ? data.prompt : null,
               title: typeof data.title === "string" ? data.title : null,
             };
             setKeyResources((prev) => {

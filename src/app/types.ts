@@ -100,6 +100,7 @@ export type KeyResourceItem = {
   currentVersion: number;
   url?: string | null;
   data?: unknown;
+  prompt?: string | null;
   title?: string | null;
 };
 

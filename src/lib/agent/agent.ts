@@ -31,6 +31,7 @@ export interface KeyResourceEvent {
   mediaType: "image" | "video" | "json";
   url?: string;
   data?: unknown;
+  prompt?: string;
   title?: string;
   /**
    * When set, the resource was already persisted by the MCP tool.
