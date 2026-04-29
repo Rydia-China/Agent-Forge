@@ -51,6 +51,8 @@ resources:
         SEEDANCE_RESOLUTION: 720p
         SEEDANCE_WATERMARK: 'false'
         SEEDANCE_GENERATE_AUDIO: 'false'
+        SEEDANCE_POLL_MAX_RETRIES: '120'
+        SEEDANCE_POLL_INTERVAL_MS: '5000'
       code: ./generate-video
       triggers:
         - triggerConfig:

@@ -12,6 +12,8 @@ const DEFAULT_CONTENT_GENERATION_TASKS_PATH = '/contents/generations/tasks'
 const DEFAULT_MODEL_ARK_API_KEY_TTL_SECONDS = 3600
 const DEFAULT_ASSET_READY_TIMEOUT_MS = 120000
 const DEFAULT_ASSET_READY_INTERVAL_MS = 3000
+const DEFAULT_VIDEO_POLL_MAX_RETRIES = 120
+const DEFAULT_VIDEO_POLL_INTERVAL_MS = 5000
 let cachedModelArkApiKey
 
 function sha256(data) {
@@ -452,7 +454,7 @@ async function queryModelArkVideoTask(taskId) {
 
   return {
     status: statusMap[result.status] || result.status || 'running',
-    video_url: result.content?.video_url,
+    video_url: result.content?.video_url || result.output?.video_url || result.video_url,
     raw: result
   }
 }
@@ -495,12 +497,14 @@ async function generateVideo(accessKeyId, secretAccessKey, imageUrls, prompt, op
   const taskId = await submitTask(accessKeyId, secretAccessKey, imageUrls, prompt, options)
   console.log('Task submitted, taskId:', taskId)
 
-  const maxRetries = 60
-  const retryInterval = 5000
+  const maxRetries = Number(process.env.SEEDANCE_POLL_MAX_RETRIES || DEFAULT_VIDEO_POLL_MAX_RETRIES)
+  const retryInterval = Number(process.env.SEEDANCE_POLL_INTERVAL_MS || DEFAULT_VIDEO_POLL_INTERVAL_MS)
+  const retryCount = Number.isFinite(maxRetries) ? maxRetries : DEFAULT_VIDEO_POLL_MAX_RETRIES
+  const waitMs = Number.isFinite(retryInterval) ? retryInterval : DEFAULT_VIDEO_POLL_INTERVAL_MS
 
-  for (let i = 0; i < maxRetries; i++) {
-    console.log(`Polling task status... attempt ${i + 1}/${maxRetries}`)
-    await new Promise(resolve => setTimeout(resolve, retryInterval))
+  for (let i = 0; i < retryCount; i++) {
+    console.log(`Polling task status... attempt ${i + 1}/${retryCount}`)
+    await new Promise(resolve => setTimeout(resolve, waitMs))
 
     const result = await queryTask(accessKeyId, secretAccessKey, taskId)
     console.log('Task status:', result.status)
@@ -521,7 +525,7 @@ async function generateVideo(accessKeyId, secretAccessKey, imageUrls, prompt, op
       console.log('Video uploaded to OSS:', ossUrl)
 
       return ossUrl
-    } else if (result.status === 'expired' || result.status === 'not_found') {
+    } else if (['expired', 'not_found', 'failed'].includes(result.status)) {
       throw new Error(`任务失败: ${result.status}`)
     }
   }
