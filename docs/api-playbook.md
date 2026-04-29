@@ -198,6 +198,12 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 4. 服务端注入 `NovelContextProvider`，只暴露小说级上下文和已有 novel scope 资源统计
 5. 默认 skill 为 `novel-resource-mgr`，默认 MCP scope 为 `video_workflow`，用于生成/管理 `scopeType="novel"` 的角色立绘和场景资源
 
+小说级场景生成：
+1. 普通地点使用 `video_workflow__submit_scenes_task` 的 `mode="single"`，输出 `scene_<地点名>`
+2. 带 2 个及以上真实子地点的父地点使用 `mode="grid"`，只提交父地点名即可
+3. `mode="grid"` 会先用 `location_grid_style` 输出 `scene_<父地点名>_grid` 作为宫格参照图，再把该参照图传给 `sub_location_style`，逐个生成子地点实际图 `scene_<子地点名>`
+4. 子地点实际图不是单独用 `location_style` 生成；不要把父地点和子地点混成同一批 `mode="single"` 任务来替代 grid 工作流
+
 EP 级资源 agent：
 1. 前端选择具体 episode
 2. 会话 user scope 为 `video:{novelId}:{scriptKey}`

@@ -454,7 +454,8 @@ async function executeBatchScenesTask(
       data: {
         status: "completed",
         result: result as unknown as Prisma.InputJsonValue,
-        progress: input.sceneNames.length,
+        progress: result.results.length,
+        total: result.results.length,
         completedAt: new Date(),
       },
     });

@@ -837,6 +837,7 @@ export type BatchGenerateScenesInput = z.infer<typeof BatchGenerateScenesParams>
 export interface BatchGenerateScenesResult {
   results: Array<{
     sceneName: string;
+    mode?: "single" | "grid" | "hd";
     status: "ok" | "error";
     key?: string;
     keyResourceId?: string;
@@ -846,11 +847,147 @@ export interface BatchGenerateScenesResult {
   }>;
 }
 
+function uniqueNonEmptyNames(names: string[]): string[] {
+  const seen = new Set<string>();
+  const uniqueNames: string[] = [];
+  for (const rawName of names) {
+    const name = rawName.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    uniqueNames.push(name);
+  }
+  return uniqueNames;
+}
+
+function sceneSuccessResult(
+  sceneName: string,
+  mode: "single" | "grid" | "hd",
+  data: GenerateAndPersistImageResult,
+): BatchGenerateScenesResult["results"][number] {
+  return {
+    sceneName,
+    mode,
+    status: data.status,
+    key: data.key,
+    keyResourceId: data.keyResourceId,
+    imageUrl: data.imageUrl,
+    version: data.version,
+    error: data.error,
+  };
+}
+
+function sceneErrorResult(
+  sceneName: string,
+  mode: "single" | "grid" | "hd",
+  error: unknown,
+): BatchGenerateScenesResult["results"][number] {
+  return {
+    sceneName,
+    mode,
+    status: "error",
+    error: error instanceof Error ? error.message : String(error),
+  };
+}
+
+function findGridParentForScene(
+  analyzed: AnalyzedLocation[],
+  sceneName: string,
+): { parent: AnalyzedLocation; requestedSubName: string | null } | null {
+  const directParent = analyzed.find((loc) => loc.name === sceneName);
+  if (directParent) return { parent: directParent, requestedSubName: null };
+
+  for (const loc of analyzed) {
+    const sub = loc.realSubs.find((candidate) => candidate.name === sceneName);
+    if (sub) return { parent: loc, requestedSubName: sub.name };
+  }
+
+  return null;
+}
+
+async function batchGenerateGridSceneWorkflow(
+  input: BatchGenerateScenesInput,
+): Promise<BatchGenerateScenesResult> {
+  const { locationBible } = await getNovelLevelData(input.novelId);
+  const analyzed = analyzeLocations(locationBible);
+  const requestedNames = uniqueNonEmptyNames(input.sceneNames);
+  const results: BatchGenerateScenesResult["results"] = [];
+  const processedGridParents = new Set<string>();
+  const processedHdScenes = new Set<string>();
+
+  for (const requestedName of requestedNames) {
+    const match = findGridParentForScene(analyzed, requestedName);
+    if (!match) {
+      results.push(sceneErrorResult(requestedName, "grid", new Error(`Scene "${requestedName}" not found`)));
+      continue;
+    }
+
+    const { parent, requestedSubName } = match;
+    if (parent.mode !== "grid") {
+      try {
+        const single = await generateScene({
+          novelId: input.novelId,
+          sceneName: requestedName,
+          mode: "single",
+          model: input.model,
+        });
+        results.push(sceneSuccessResult(requestedName, "single", single));
+      } catch (error: unknown) {
+        results.push(sceneErrorResult(requestedName, "single", error));
+      }
+      continue;
+    }
+
+    if (!processedGridParents.has(parent.name)) {
+      try {
+        const grid = await generateScene({
+          novelId: input.novelId,
+          sceneName: parent.name,
+          mode: "grid",
+          model: input.model,
+        });
+        results.push(sceneSuccessResult(parent.name, "grid", grid));
+      } catch (error: unknown) {
+        results.push(sceneErrorResult(parent.name, "grid", error));
+        processedGridParents.add(parent.name);
+        continue;
+      }
+      processedGridParents.add(parent.name);
+    }
+
+    const hdSceneNames = requestedSubName
+      ? [requestedSubName]
+      : parent.realSubs.map((sub) => sub.name);
+
+    for (const subName of hdSceneNames) {
+      if (processedHdScenes.has(subName)) continue;
+      try {
+        const hd = await generateScene({
+          novelId: input.novelId,
+          sceneName: subName,
+          mode: "hd",
+          model: input.model,
+        });
+        results.push(sceneSuccessResult(subName, "hd", hd));
+      } catch (error: unknown) {
+        results.push(sceneErrorResult(subName, "hd", error));
+      }
+      processedHdScenes.add(subName);
+    }
+  }
+
+  return { results };
+}
+
 export async function batchGenerateScenes(
   input: BatchGenerateScenesInput,
 ): Promise<BatchGenerateScenesResult> {
+  if (input.mode === "grid") {
+    return batchGenerateGridSceneWorkflow(input);
+  }
+
+  const sceneNames = uniqueNonEmptyNames(input.sceneNames);
   const results = await Promise.allSettled(
-    input.sceneNames.map((sceneName) =>
+    sceneNames.map((sceneName) =>
       generateScene({
         novelId: input.novelId,
         sceneName,
@@ -862,24 +999,11 @@ export async function batchGenerateScenes(
 
   return {
     results: results.map((result, index) => {
-      const sceneName = input.sceneNames[index]!;
+      const sceneName = sceneNames[index]!;
       if (result.status === "fulfilled") {
-        const data = result.value;
-        return {
-          sceneName,
-          status: data.status,
-          key: data.key,
-          keyResourceId: data.keyResourceId,
-          imageUrl: data.imageUrl,
-          version: data.version,
-          error: data.error,
-        };
+        return sceneSuccessResult(sceneName, input.mode, result.value);
       } else {
-        return {
-          sceneName,
-          status: "error" as const,
-          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-        };
+        return sceneErrorResult(sceneName, input.mode, result.reason);
       }
     }),
   };
