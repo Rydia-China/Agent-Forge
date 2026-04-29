@@ -33,6 +33,9 @@ const PROMPT_REVIEWER_MODEL = "anthropic/claude-opus-4.7";
 const PromptSchema = z.object({
   key: z.string().min(1),
   title: z.string().min(1),
+  shot_function: z.string().min(1),
+  prev_shot_recap: z.string().min(1),
+  next_shot_setup: z.string().min(1),
   prompt: z.string().min(1),
   definition: z.string().min(1),
   duration: z.number().min(1).max(60),
@@ -42,6 +45,9 @@ const PromptSchema = z.object({
 const RawPromptSchema = z.object({
   key: z.string(),
   title: z.string(),
+  shot_function: z.string(),
+  prev_shot_recap: z.string(),
+  next_shot_setup: z.string(),
   prompt: z.string(),
   definition: z.string(),
   duration: z.number(),
@@ -90,12 +96,25 @@ const writerOutputSchemaForSubAgent = {
         properties: {
           key: { type: "string" },
           title: { type: "string" },
+          shot_function: { type: "string" },
+          prev_shot_recap: { type: "string" },
+          next_shot_setup: { type: "string" },
           prompt: { type: "string" },
           definition: { type: "string" },
           duration: { type: "number" },
           refUrls: { type: "array", items: { type: "string" } },
         },
-        required: ["key", "title", "prompt", "definition", "duration", "refUrls"],
+        required: [
+          "key",
+          "title",
+          "shot_function",
+          "prev_shot_recap",
+          "next_shot_setup",
+          "prompt",
+          "definition",
+          "duration",
+          "refUrls",
+        ],
       },
     },
     summary: { type: "string" },
@@ -254,6 +273,9 @@ type OptimizerOutput = z.infer<typeof OptimizerOutputSchema>;
 interface PromptBrief {
   key: string;
   title: string;
+  shot_function: string;
+  prev_shot_recap: string;
+  next_shot_setup: string;
   definition: string;
   duration: number;
   refUrlCount: number;
@@ -310,6 +332,9 @@ function summarizePrompts(prompts: Prompt[]): PromptBrief[] {
   return prompts.map((prompt) => ({
     key: prompt.key,
     title: prompt.title,
+    shot_function: prompt.shot_function,
+    prev_shot_recap: prompt.prev_shot_recap,
+    next_shot_setup: prompt.next_shot_setup,
     definition: prompt.definition,
     duration: prompt.duration,
     refUrlCount: prompt.refUrls.length,
@@ -406,6 +431,9 @@ function validateWriterRefUrls(
   const prompts = output.prompts.map((prompt, promptIndex) => {
     const key = prompt.key.trim() || `invalid_prompt_${promptIndex + 1}`;
     const title = prompt.title.trim() || key;
+    const shotFunction = prompt.shot_function.trim() || "INVALID: missing shot_function";
+    const prevShotRecap = prompt.prev_shot_recap.trim() || "INVALID: missing prev_shot_recap";
+    const nextShotSetup = prompt.next_shot_setup.trim() || "INVALID: missing next_shot_setup";
     const promptText = prompt.prompt.trim() || "INVALID: missing prompt";
     const definition = prompt.definition.trim() || "INVALID: missing definition";
     const duration = Number.isFinite(prompt.duration) && prompt.duration >= 1 && prompt.duration <= 60
@@ -518,6 +546,9 @@ function validateWriterRefUrls(
       ...prompt,
       key,
       title,
+      shot_function: shotFunction,
+      prev_shot_recap: prevShotRecap,
+      next_shot_setup: nextShotSetup,
       prompt: promptText,
       definition,
       duration,
@@ -562,6 +593,7 @@ function buildWriterInstruction(input: {
     "- 服务端会持久化完整 latestPromptJson、latestReviewJson、iterationHistory 和 doNotRegress；你本轮只会收到必要的增量修订包。",
     "- 如果这是第 2-5 轮，必须基于 Revision Packet 做增量修订，不得回退已解决内容。",
     "- 只返回纯 JSON 对象，字段必须是 prompts 和 summary。",
+    "- prompts 每一项必须包含顶层字段：key, title, shot_function, prev_shot_recap, next_shot_setup, prompt, definition, duration, refUrls。",
     "",
     `## Iteration ${input.iteration}`,
     "",
@@ -947,6 +979,9 @@ export async function optimizeVideoPrompts(
           prompt: prompt.prompt,
           refUrls: prompt.refUrls,
           data: {
+            shot_function: prompt.shot_function,
+            prev_shot_recap: prompt.prev_shot_recap,
+            next_shot_setup: prompt.next_shot_setup,
             definition: prompt.definition,
             duration: prompt.duration,
             reviewResult: optimizerOutput.finalReview as Prisma.InputJsonValue,
