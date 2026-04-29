@@ -36,6 +36,10 @@ const PromptSchema = z.object({
   refUrls: z.array(z.string().url()),
 });
 
+const RawPromptSchema = PromptSchema.extend({
+  refUrls: z.array(z.string()),
+});
+
 const ReviewSchema = z.object({
   passed: z.boolean(),
   allowVideoGeneration: z.boolean(),
@@ -47,6 +51,10 @@ const ReviewSchema = z.object({
 const WriterOutputSchema = z.object({
   prompts: z.array(PromptSchema),
   summary: z.string(),
+});
+
+const RawWriterOutputSchema = WriterOutputSchema.extend({
+  prompts: z.array(RawPromptSchema),
 });
 
 const OptimizerOutputSchema = z.object({
@@ -229,8 +237,10 @@ function toPromptData(
 }
 
 type Prompt = z.infer<typeof PromptSchema>;
+type RawPrompt = z.infer<typeof RawPromptSchema>;
 type Review = z.infer<typeof ReviewSchema>;
 type WriterOutput = z.infer<typeof WriterOutputSchema>;
+type RawWriterOutput = z.infer<typeof RawWriterOutputSchema>;
 type OptimizerOutput = z.infer<typeof OptimizerOutputSchema>;
 
 interface PromptBrief {
@@ -262,6 +272,12 @@ interface IterationBrief {
   writerSummary: string;
   reviewerSummary: string;
   issueIds: string[];
+}
+
+interface PromptRefUrlValidation {
+  prompts: Prompt[];
+  issues: unknown[];
+  suggestions: string[];
 }
 
 function throwIfAborted(signal?: AbortSignal): void {
@@ -354,6 +370,93 @@ function mergeDoNotRegress(existing: string[], suggestions: string[]): string[] 
   return Array.from(new Set(normalized)).slice(-20);
 }
 
+function allowedImageUrls(status: GetStatusResult): Set<string> {
+  const urls = new Set<string>();
+  for (const resource of status.resources) {
+    if (resource.mediaType !== "image") continue;
+    if (resource.url) urls.add(resource.url);
+    for (const refUrl of resource.refUrls) urls.add(refUrl);
+  }
+  return urls;
+}
+
+function isValidAbsoluteUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validateWriterRefUrls(
+  output: RawWriterOutput,
+  allowedUrls: Set<string>,
+): PromptRefUrlValidation {
+  const issues: unknown[] = [];
+  const suggestions: string[] = [];
+  const prompts = output.prompts.map((prompt) => {
+    const validRefUrls: string[] = [];
+
+    for (const [index, refUrl] of prompt.refUrls.entries()) {
+      if (!isValidAbsoluteUrl(refUrl)) {
+        issues.push({
+          issueId: `REF_URL_INVALID_FORMAT_${prompt.key}_${index}`,
+          rule: "refUrls.must_be_canonical_resource_url",
+          key: prompt.key,
+          blocking: true,
+          severity: "p0",
+          description: `refUrls[${index}] is not an absolute URL: ${refUrl}`,
+          suggestion: "refUrls must contain only exact image URLs from Canonical Resource Status. Do not put previous-frame placeholders or local file paths in refUrls; the video generation service injects previous clip/frame references later.",
+        });
+        suggestions.push(
+          `For ${prompt.key}, replace refUrls[${index}] with an exact URL from Canonical Resource Status or remove it if it is a previous-frame placeholder.`,
+        );
+        continue;
+      }
+
+      if (!allowedUrls.has(refUrl)) {
+        issues.push({
+          issueId: `REF_URL_NOT_CANONICAL_${prompt.key}_${index}`,
+          rule: "refUrls.must_belong_to_current_script_resources",
+          key: prompt.key,
+          blocking: true,
+          severity: "p0",
+          description: `refUrls[${index}] is not present in Canonical Resource Status: ${refUrl}`,
+          suggestion: "Use only exact image URLs listed in Canonical Resource Status for the current EP. Do not invent URLs and do not reference generated previous-frame assets in prompt JSON.",
+        });
+        suggestions.push(
+          `For ${prompt.key}, use only Canonical Resource Status image URLs; do not invent or carry non-canonical refUrls.`,
+        );
+        continue;
+      }
+
+      validRefUrls.push(refUrl);
+    }
+
+    return PromptSchema.parse({
+      ...prompt,
+      refUrls: validRefUrls,
+    });
+  });
+
+  return {
+    prompts,
+    issues,
+    suggestions: Array.from(new Set(suggestions)),
+  };
+}
+
+function buildSyntheticRefUrlReview(validation: PromptRefUrlValidation): Review {
+  return ReviewSchema.parse({
+    passed: false,
+    allowVideoGeneration: false,
+    issues: validation.issues,
+    suggestions: validation.suggestions,
+    summary: "Writer output contained invalid refUrls. The next iteration must use only exact current-EP image URLs from Canonical Resource Status; previous clip/frame references are injected later by the video generation service, not by prompt JSON.",
+  });
+}
+
 function buildWriterInstruction(input: {
   canonicalContext: string;
   iteration: number;
@@ -369,6 +472,8 @@ function buildWriterInstruction(input: {
     "## 不可违反的边界",
     "- 只使用下方 canonical 原始数据块；不得凭记忆补全、替换或转述为其他 EP。",
     "- 不执行文件操作，不调用工具，不保存 prompt，不生成视频。",
+    "- `refUrls` 只能填写 Canonical Resource Status 中逐字列出的图片 URL；不得填写本地路径、占位符、上一段尾帧、压缩图文件名或你推测出来的 URL。",
+    "- 连续 clip 的前段视频/最后一帧参照由视频生成服务层自动注入，不属于 prompt JSON 的 `refUrls`。",
     "- 服务端会持久化完整 latestPromptJson、latestReviewJson、iterationHistory 和 doNotRegress；你本轮只会收到必要的增量修订包。",
     "- 如果这是第 2-5 轮，必须基于 Revision Packet 做增量修订，不得回退已解决内容。",
     "- 只返回纯 JSON 对象，字段必须是 prompts 和 summary。",
@@ -556,6 +661,7 @@ export async function optimizeVideoPrompts(
   let optimizerAgentId = "service:video-prompt-optimizer";
   let optimizerTaskId: string | undefined;
   let completedIterations = 0;
+  const allowedRefUrls = allowedImageUrls(status);
 
   for (let iteration = 1; iteration <= 5; iteration++) {
     throwIfAborted(context?.signal);
@@ -586,9 +692,64 @@ export async function optimizeVideoPrompts(
       finalStatus = "failed";
       break;
     }
-    const writerOutput = parseJsonOutput(WriterOutputSchema, writerResult.output);
+    const rawWriterOutput = parseJsonOutput(RawWriterOutputSchema, writerResult.output);
+    const refUrlValidation = validateWriterRefUrls(rawWriterOutput, allowedRefUrls);
+    const writerOutput = WriterOutputSchema.parse({
+      prompts: refUrlValidation.prompts,
+      summary: rawWriterOutput.summary,
+    });
     latestPrompts = writerOutput.prompts;
     finalPrompts = writerOutput.prompts;
+
+    if (refUrlValidation.issues.length > 0) {
+      const review = buildSyntheticRefUrlReview(refUrlValidation);
+      latestReview = review;
+      finalReview = review;
+      completedIterations = iteration;
+      remainingIssues = review.issues;
+      newIssues = review.issues;
+      doNotRegress = mergeDoNotRegress(doNotRegress, review.suggestions);
+
+      const historyItem: Prisma.InputJsonObject = {
+        iteration,
+        writerTaskId: writerResult.taskId ?? null,
+        writerAgentId: writerResult.agentId,
+        reviewerTaskId: null,
+        reviewerAgentId: null,
+        promptCount: writerOutput.prompts.length,
+        passed: review.passed,
+        allowVideoGeneration: review.allowVideoGeneration,
+        issueCount: review.issues.length,
+        writerSummary: writerOutput.summary,
+        reviewerSummary: review.summary,
+        issues: review.issues as Prisma.InputJsonArray,
+        suggestions: review.suggestions,
+      };
+      iterationHistory.push(historyItem);
+      iterationBriefs.push({
+        iteration,
+        promptCount: writerOutput.prompts.length,
+        passed: review.passed,
+        allowVideoGeneration: review.allowVideoGeneration,
+        issueCount: review.issues.length,
+        blockingIssueCount: review.issues.filter(isBlockingIssue).length,
+        writerSummary: writerOutput.summary,
+        reviewerSummary: review.summary,
+        issueIds: review.issues.map(issueIdentity).slice(0, 24),
+      });
+
+      if (issueCount(review) < bestIssueCount) {
+        bestIssueCount = issueCount(review);
+        bestVersion = {
+          iteration,
+          prompts: writerOutput.prompts,
+          review,
+          reason: `Fewest reviewer issues so far (${issueCount(review)}).`,
+        };
+      }
+
+      continue;
+    }
 
     throwIfAborted(context?.signal);
     const reviewerResult = await runSubAgentTask({

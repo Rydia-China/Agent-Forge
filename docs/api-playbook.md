@@ -235,6 +235,7 @@ pnpm --dir /path/to/Agent-Forge --silent run cli debug:mcp-call '{"provider":"su
 - 每轮必须有独立 Prompt Writer 和独立 Reviewer。
 - 最多 5 轮，且每轮更新 `iterationHistory`。
 - 服务端必须完整持久化 `latestPromptJson`、`latestReviewJson`、`iterationHistory`、`doNotRegress`；下一轮 Writer 输入使用 canonical 原文 + 上轮 prompt 摘要、阻塞 issue 摘要、历史轮次摘要和 `doNotRegress`，避免让 LLM 在整段历史里自行拼接。
+- Writer 输出后，服务端先确定性校验 `refUrls`：只能是当前 EP `Canonical Resource Status` 中的图片 URL；上一段尾帧、15s 视频参照、压缩图路径等承接资源由视频生成服务层注入，不允许写进 prompt JSON。校验失败时作为 blocking review 进入下一轮，而不是让 Optimizer 工具直接失败。
 - Reviewer issue 应有稳定 `issueId` / `rule` / `blocking`，便于区分 `resolvedIssues`、`remainingIssues`、`newIssues`。
 - `status="passed"` 时 `optimize_video_prompts` 才会保存 reviewed prompt；`max_iterations` / `conflict` / `failed` 均不得保存 reviewed prompt，不得产视。
 7. 停止与恢复规则：
