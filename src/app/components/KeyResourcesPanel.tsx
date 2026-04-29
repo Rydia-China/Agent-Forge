@@ -101,6 +101,8 @@ export function KeyResourcesPanel({
         <div className="flex-1 space-y-3 overflow-y-auto p-3">
           {keyResources.map((kr) => {
             const prompt = promptFor(kr);
+            const imageUrl = kr.mediaType === "image" && typeof kr.url === "string" ? kr.url : null;
+            const videoUrl = kr.mediaType === "video" && typeof kr.url === "string" ? kr.url : null;
             return (
               <Card
                 key={kr.id}
@@ -150,21 +152,21 @@ export function KeyResourcesPanel({
                     )}
                   </div>
                 </div>
-                {kr.mediaType === "image" && kr.url && (
+                {imageUrl && (
                   <Image
-                    src={kr.url}
+                    src={imageUrl}
                     alt={kr.title ?? "Image"}
                     style={{ width: "100%", objectFit: "cover", borderRadius: 4, cursor: "pointer" }}
                     preview={false}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onImageClick(kr.url);
+                      onImageClick(imageUrl);
                     }}
                   />
                 )}
-                {kr.mediaType === "video" && kr.url && (
+                {videoUrl && (
                   <video
-                    src={kr.url}
+                    src={videoUrl}
                     controls
                     className="w-full rounded"
                     onClick={(e) => e.stopPropagation()}
