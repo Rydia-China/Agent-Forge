@@ -87,7 +87,8 @@ const TOOLS: Tool[] = [
     name: "get_episode",
     description:
       "Get full episode data (characters, outfits, scene_locations, pre_choice_script, " +
-      "choice_node, post_choice_outcomes). Returns the complete init_result JSON.",
+      "choice_node, post_choice_outcomes). Returns the complete init_result JSON plus " +
+      "episodeWindow with previous/current/next episode original scriptContent and initResult.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -308,11 +309,16 @@ export const videoWorkflowMcp: McpProvider = {
         case "get_episode": {
           const { scriptId } = ScriptIdParam.parse(args);
           const episode = await episodeService.getEpisode(scriptId);
+          const episodeWindow = await episodeService.getEpisodeWindow(scriptId);
 
           if (!episode) return text(`Episode not found: ${scriptId}`);
           if (!episode.initResult) return text(`Episode ${scriptId} has no init_result data`);
 
-          return json({ scriptKey: episode.scriptKey, ...episode.initResult as Record<string, unknown> });
+          return json({
+            scriptKey: episode.scriptKey,
+            ...episode.initResult as Record<string, unknown>,
+            episodeWindow,
+          });
         }
 
         case "get_status": {
