@@ -31,6 +31,10 @@ export interface ResourcePanelProps {
 
 const ASIDE_CLASS = "flex h-full w-56 min-w-[200px] shrink-0 flex-col border-l border-slate-800 bg-slate-950/80";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovelLevel, onRefresh }: ResourcePanelProps) {
   const { message } = App.useApp();
 
@@ -86,12 +90,32 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
   const jsonDataForDisplay = (r: DomainResource): unknown => {
     const hasPrompt = typeof r.prompt === "string";
     const hasRefUrls = Array.isArray(r.refUrls);
+    if (r.category === "视频Prompt") {
+      const data = isRecord(r.data) ? r.data : {};
+      return {
+        shot_function: data.shot_function,
+        prev_shot_recap: data.prev_shot_recap,
+        next_shot_setup: data.next_shot_setup,
+        definition: data.definition,
+        duration: data.duration,
+        prompt: r.prompt ?? data.prompt,
+        refUrls: r.refUrls ?? data.refUrls,
+        review: isRecord(data.reviewResult)
+          ? {
+              passed: data.reviewResult.passed,
+              allowVideoGeneration: data.reviewResult.allowVideoGeneration,
+              suggestions: data.reviewResult.suggestions,
+              summary: data.reviewResult.summary,
+            }
+          : undefined,
+      };
+    }
     if (!hasPrompt && !hasRefUrls) return r.data;
-    if (typeof r.data !== "object" || r.data === null || Array.isArray(r.data)) {
+    if (!isRecord(r.data)) {
       return r.data;
     }
     return {
-      ...(r.data as Record<string, unknown>),
+      ...r.data,
       ...(hasPrompt ? { prompt: r.prompt } : {}),
       ...(hasRefUrls ? { refUrls: r.refUrls } : {}),
     };
