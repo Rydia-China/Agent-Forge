@@ -4,6 +4,8 @@ const OSS = require('ali-oss')
 const SERVICE = 'cv'
 const REGION = 'cn-north-1'
 const HOST = 'visual.volcengineapi.com'
+const BYTEPLUS_ARK_SERVICE = 'ark'
+const BYTEPLUS_ARK_VERSION = '2024-01-01'
 const ALGORITHM = 'HMAC-SHA256'
 
 function sha256(data) {
@@ -16,6 +18,14 @@ function hmacSha256(key, data) {
 
 function getSignatureKey(secretKey, dateStamp, region, service) {
   const kDate = hmacSha256(secretKey, dateStamp)
+  const kRegion = hmacSha256(kDate, region)
+  const kService = hmacSha256(kRegion, service)
+  const kSigning = hmacSha256(kService, 'request')
+  return kSigning
+}
+
+function getBytePlusSignatureKey(secretKey, dateStamp, region, service) {
+  const kDate = hmacSha256(`VOLC${secretKey}`, dateStamp)
   const kRegion = hmacSha256(kDate, region)
   const kService = hmacSha256(kRegion, service)
   const kSigning = hmacSha256(kService, 'request')
@@ -43,6 +53,25 @@ function getAuthorizationHeader(accessKeyId, secretAccessKey, method, path, quer
   const stringToSign = `${ALGORITHM}\n${amzDate}\n${credentialScope}\n${sha256(canonicalRequest)}`
 
   const signingKey = getSignatureKey(secretAccessKey, dateStamp, REGION, SERVICE)
+  const signature = hmacSha256(signingKey, stringToSign).toString('hex')
+
+  return `${ALGORITHM} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
+}
+
+function getBytePlusAuthorizationHeader(accessKeyId, secretAccessKey, method, path, query, headers, payload, amzDate, region, service) {
+  const dateStamp = amzDate.substring(0, 8)
+  const canonicalHeaders = Object.keys(headers)
+    .sort()
+    .map(key => `${key.toLowerCase()}:${headers[key].trim()}\n`)
+    .join('')
+  const signedHeaders = Object.keys(headers)
+    .sort()
+    .map(key => key.toLowerCase())
+    .join(';')
+  const canonicalRequest = `${method}\n${path}\n${query}\n${canonicalHeaders}\n${signedHeaders}\n${sha256(payload)}`
+  const credentialScope = `${dateStamp}/${region}/${service}/request`
+  const stringToSign = `${ALGORITHM}\n${amzDate}\n${credentialScope}\n${sha256(canonicalRequest)}`
+  const signingKey = getBytePlusSignatureKey(secretAccessKey, dateStamp, region, service)
   const signature = hmacSha256(signingKey, stringToSign).toString('hex')
 
   return `${ALGORITHM} Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
@@ -87,6 +116,133 @@ async function callJimengAPI(accessKeyId, secretAccessKey, action, payload) {
   return await response.json()
 }
 
+function getBytePlusArkConfig() {
+  const accessKeyId = process.env.BYTEPLUS_ACCESS_KEY_ID
+  const secretAccessKey = process.env.BYTEPLUS_SECRET_ACCESS_KEY
+  const region = process.env.BYTEPLUS_REGION || 'ap-southeast-1'
+  const projectName = process.env.BYTEPLUS_PROJECT_NAME || 'default'
+  const host = process.env.BYTEPLUS_ARK_HOST || `ark.${region}.byteplusapi.com`
+
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error('请配置 BytePlus Asset API 环境变量 BYTEPLUS_ACCESS_KEY_ID 和 BYTEPLUS_SECRET_ACCESS_KEY')
+  }
+
+  return { accessKeyId, secretAccessKey, region, projectName, host }
+}
+
+async function callBytePlusArkOpenAPI(action, payload) {
+  const config = getBytePlusArkConfig()
+  const method = 'POST'
+  const path = '/'
+  const query = `Action=${encodeURIComponent(action)}&Version=${encodeURIComponent(BYTEPLUS_ARK_VERSION)}`
+  const payloadStr = JSON.stringify(payload)
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '')
+  const payloadHash = sha256(payloadStr)
+  const headers = {
+    Host: config.host,
+    'X-Content-Sha256': payloadHash,
+    'X-Date': amzDate
+  }
+  const authorization = getBytePlusAuthorizationHeader(
+    config.accessKeyId,
+    config.secretAccessKey,
+    method,
+    path,
+    query,
+    headers,
+    payloadStr,
+    amzDate,
+    config.region,
+    BYTEPLUS_ARK_SERVICE
+  )
+
+  const response = await fetch(`https://${config.host}?${query}`, {
+    method,
+    headers: {
+      ...headers,
+      'Authorization': authorization,
+      'Content-Type': 'application/json'
+    },
+    body: payloadStr
+  })
+  const result = await response.json()
+
+  if (!response.ok || result.ResponseMetadata?.Error) {
+    const error = result.ResponseMetadata?.Error
+    throw new Error(error?.Message || result.message || result.Message || `${action} failed`)
+  }
+
+  return result.Result || result
+}
+
+function buildAssetGroupName() {
+  const prefix = process.env.BYTEPLUS_ASSET_GROUP_NAME_PREFIX || 'agent-forge-video'
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+}
+
+function extractId(result, action) {
+  if (typeof result?.Id === 'string' && result.Id.length > 0) return result.Id
+  if (typeof result?.id === 'string' && result.id.length > 0) return result.id
+  throw new Error(`${action} returned no Id`)
+}
+
+function getAssetName(url, index) {
+  try {
+    const parsed = new URL(url)
+    const pathname = parsed.pathname.split('/').filter(Boolean).pop()
+    return pathname || `image-${index + 1}`
+  } catch {
+    return `image-${index + 1}`
+  }
+}
+
+async function createAssetGroup() {
+  const config = getBytePlusArkConfig()
+  const result = await callBytePlusArkOpenAPI('CreateAssetGroup', {
+    Name: buildAssetGroupName(),
+    Description: 'Agent Forge video generation assets',
+    GroupType: 'AIGC',
+    ProjectName: config.projectName
+  })
+
+  return extractId(result, 'CreateAssetGroup')
+}
+
+async function createImageAsset(groupId, url, index) {
+  const config = getBytePlusArkConfig()
+  const result = await callBytePlusArkOpenAPI('CreateAsset', {
+    GroupId: groupId,
+    URL: url,
+    AssetType: 'Image',
+    Name: getAssetName(url, index),
+    ProjectName: config.projectName
+  })
+
+  return extractId(result, 'CreateAsset')
+}
+
+function isExternalImageUrl(value) {
+  return typeof value === 'string' && /^https?:\/\//i.test(value)
+}
+
+async function convertImageUrlsToAssetUris(imageUrls) {
+  const normalizedImageUrls = uniqueStrings(imageUrls)
+  const urlsToUpload = normalizedImageUrls.filter(isExternalImageUrl)
+
+  if (urlsToUpload.length === 0) return normalizedImageUrls
+
+  const groupId = await createAssetGroup()
+  const urlToAssetUri = new Map()
+
+  for (let i = 0; i < urlsToUpload.length; i++) {
+    const url = urlsToUpload[i]
+    const assetId = await createImageAsset(groupId, url, i)
+    urlToAssetUri.set(url, `asset://${assetId}`)
+  }
+
+  return normalizedImageUrls.map(url => urlToAssetUri.get(url) || url)
+}
+
 const uploadToOSS = async (buffer, filename, folder = 'video') => {
   const client = new OSS({
     region: process.env.OSS_REGION,
@@ -113,7 +269,7 @@ function uniqueStrings(values) {
 }
 
 async function submitTask(accessKeyId, secretAccessKey, imageUrls, prompt, options = {}) {
-  const normalizedImageUrls = uniqueStrings(imageUrls)
+  const normalizedImageUrls = await convertImageUrlsToAssetUris(imageUrls)
   if (normalizedImageUrls.length === 1) normalizedImageUrls.push(normalizedImageUrls[0])
 
   const payload = {
@@ -293,10 +449,13 @@ exports.handler = async (event, context) => {
     } else if (action === 'CVSync2AsyncSubmitTask') {
       // 仅提交任务
       const { image_urls, prompt, seed, frames, req_key, sourceVideoUrls, video_urls } = body
+      const assetImageUrls = Array.isArray(image_urls)
+        ? await convertImageUrlsToAssetUris(image_urls)
+        : image_urls
 
       const payload = {
         req_key: req_key || 'jimeng_i2v_first_tail_v30',
-        image_urls,
+        image_urls: assetImageUrls,
         prompt,
         seed: seed ?? -1,
         frames: frames ?? 121

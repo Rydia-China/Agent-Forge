@@ -34,6 +34,11 @@ resources:
         JIMENG_ACCESS_KEY_ID: YOUR_JIMENG_ACCESS_KEY_ID
         JIMENG_SECRET_ACCESS_KEY: YOUR_JIMENG_SECRET_ACCESS_KEY
         OSS_ENDPOINT: https://oss-cn-shanghai.aliyuncs.com
+        BYTEPLUS_ACCESS_KEY_ID: YOUR_BYTEPLUS_ACCESS_KEY_ID
+        BYTEPLUS_SECRET_ACCESS_KEY: YOUR_BYTEPLUS_SECRET_ACCESS_KEY
+        BYTEPLUS_REGION: ap-southeast-1
+        BYTEPLUS_PROJECT_NAME: default
+        BYTEPLUS_ASSET_GROUP_NAME_PREFIX: agent-forge-video
       code: ./generate-video
       triggers:
         - triggerConfig:
