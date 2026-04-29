@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runAgent } from "@/lib/agent/agent";
 import { writeChatLog } from "@/lib/agent/chat-log";
+import { authenticateAgentForgeApiKey } from "@/lib/services/billing-service";
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = authenticateAgentForgeApiKey(req.headers);
+    if (auth.status === "unauthorized") {
+      return NextResponse.json({ error: auth.message }, { status: 401 });
+    }
+
     const body = await req.json();
     const message = body.message ?? body.messages?.[0]?.content;
     if (!message || typeof message !== "string") {
@@ -16,7 +22,13 @@ export async function POST(req: NextRequest) {
     const logs = body.logs === true;
     const user: string | undefined = body.user;
 
-    const result = await runAgent(message, body.session_id, user);
+    const result = await runAgent(
+      message,
+      body.session_id,
+      user,
+      undefined,
+      { apiKeyName: auth.apiKeyName },
+    );
 
     if (logs) {
       await writeChatLog(result.sessionId, result.messages);

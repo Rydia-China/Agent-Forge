@@ -5,6 +5,7 @@ import {
   qualifyToolName,
   parseToolName,
 } from "./types";
+import { withBillingContext } from "@/lib/services/billing-service";
 
 /**
  * MCP Registry — global singleton.
@@ -104,7 +105,10 @@ class McpRegistry {
       };
     }
     try {
-      return await provider.callTool(toolName, args, context);
+      return await withBillingContext(
+        context?.apiKeyName,
+        () => provider.callTool(toolName, args, context),
+      );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       return {

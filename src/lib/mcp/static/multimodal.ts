@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
+import { trackBillableFcCall } from "@/lib/services/billing-service";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -63,13 +64,14 @@ const FcResultSchema = z.object({
 async function callFcEndpoint(
   url: string,
   token: string,
+  product: string,
   body: Record<string, unknown>,
   timeoutMs = 120000, // Default 2 minutes
 ): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  try {
+  return trackBillableFcCall(product, async () => {
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -91,9 +93,7 @@ async function callFcEndpoint(
     }
 
     return parsed.result;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  }).finally(() => clearTimeout(timeoutId));
 }
 
 export const multimodalMcp: McpProvider = {
@@ -253,6 +253,7 @@ export const multimodalMcp: McpProvider = {
               const imageUrl = await callFcEndpoint(
                 url,
                 token,
+                isGpt ? "image.gpt" : "image.gemini",
                 {
                   prompt: item.prompt,
                   referenceImageUrls: item.referenceImageUrls,
@@ -291,6 +292,7 @@ export const multimodalMcp: McpProvider = {
               const videoUrl = await callFcEndpoint(
                 url,
                 token,
+                "video.generate",
                 {
                   action: "generate",
                   prompt: item.prompt,
@@ -331,7 +333,7 @@ export const multimodalMcp: McpProvider = {
         const results = await Promise.allSettled(
           items.map(async (item, i) => {
             try {
-              const videoUrl = await callFcEndpoint(url, token, {
+              const videoUrl = await callFcEndpoint(url, token, "video.crop", {
                 videoUrl: item.videoUrl,
                 startTime: item.startTime,
                 endTime: item.endTime,
@@ -369,6 +371,7 @@ export const multimodalMcp: McpProvider = {
               const videoUrl = await callFcEndpoint(
                 url,
                 token,
+                "video.concat",
                 {
                   clipUrls: item.clipUrls,
                 },
