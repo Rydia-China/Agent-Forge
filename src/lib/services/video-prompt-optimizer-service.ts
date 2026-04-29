@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Prisma } from "@/generated/prisma";
+import { prisma } from "@/lib/db";
 import type { ToolContext } from "@/lib/mcp/types";
 import type { GetStatusResult } from "@/lib/video/workflow-types";
 import * as episodeService from "./episode-service";
@@ -261,6 +262,21 @@ function toPromptData(
     doNotRegress: optimizerOutput.doNotRegress,
     optimizerSummary: optimizerOutput.summary,
   };
+}
+
+async function deleteStaleReviewedPromptResources(
+  scriptId: string,
+  currentPromptKeys: string[],
+): Promise<void> {
+  await prisma.keyResource.deleteMany({
+    where: {
+      scopeType: "script",
+      scopeId: scriptId,
+      mediaType: "json",
+      category: "视频Prompt",
+      key: { notIn: currentPromptKeys },
+    },
+  });
 }
 
 type Prompt = z.infer<typeof PromptSchema>;
@@ -972,6 +988,10 @@ export async function optimizeVideoPrompts(
 
   if (input.savePrompts && optimizerOutput.status === "passed" && optimizerOutput.finalReview.passed) {
     const promptData = toPromptData(optimizerOutput);
+    await deleteStaleReviewedPromptResources(
+      input.scriptId,
+      optimizerOutput.finalPrompts.map((prompt) => prompt.key),
+    );
     for (const prompt of optimizerOutput.finalPrompts) {
       await assertReferenceUrlsBelongToScript(input.scriptId, prompt.refUrls);
       const resource = await keyResourceService.upsertResource(
