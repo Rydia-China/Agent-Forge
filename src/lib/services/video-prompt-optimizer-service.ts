@@ -646,6 +646,8 @@ function buildReviewerInstruction(input: {
     "## 不可违反的边界",
     "- 只审查下方 canonical 原始数据块和 promptJson；不得自行改写 prompt。",
     "- 不执行文件操作，不调用工具，不保存 prompt，不生成视频。",
+    "- `refUrls` 只能包含 Canonical Resource Status 中逐字列出的图片 URL；上一段尾帧、15s 视频参照、压缩图和 _end.png/_spatial.png 等生成期承接资源由视频生成服务层注入，不属于 prompt JSON。",
+    "- 不得因为 prompt JSON 缺少生成期承接资源而判 blocking；只能审查 prompt 文本是否明确写出连续镜头的站位/姿态/构图承接关系。",
     "- 必须使用稳定 issueId / rule / blocking 描述问题，便于下一轮 Writer 精确修复。",
     "- 只有全部阻塞问题解决时，passed 和 allowVideoGeneration 才能同时为 true。",
     "- 只返回纯 JSON 对象，字段必须是 passed, allowVideoGeneration, issues, suggestions, summary。",
