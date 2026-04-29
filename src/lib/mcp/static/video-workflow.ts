@@ -254,7 +254,7 @@ const TOOLS: Tool[] = [
       type: "object" as const,
       properties: {
         scriptId: { type: "string", description: "Episode script DB ID" },
-        key: { type: "string", description: "生成后保存的视频资源 key" },
+        key: { type: "string", description: "已通过 review 的视频 prompt key，例如 clip_1；生成后的视频资源会保存为独立 video_<key>，避免覆盖 视频Prompt。" },
         prompt: { type: "string", description: "Reviewer 放行的视频 prompt" },
         definition: { type: "string", description: "素材定义，例如 '@图1 是 [场景X]，@图2 是 [人物A换装图]'" },
         duration: { type: "number", description: "Duration in seconds (4-15)" },
