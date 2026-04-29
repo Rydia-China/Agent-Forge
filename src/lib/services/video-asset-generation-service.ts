@@ -22,6 +22,7 @@ import * as keyResourceService from "./key-resource-service";
 import {
   callFcGenerateVideo,
   callFcCropVideo,
+  callFcExtractLastFrame,
 } from "./fc-video-client";
 import {
   callFcHappyHorseGenerate,
@@ -528,6 +529,19 @@ async function resolveVideoReferenceImages(
   };
 }
 
+async function resolveLastFrameUrl(
+  videoUrl: string,
+  generatedLastFrameUrl: string | undefined,
+): Promise<string> {
+  if (generatedLastFrameUrl) return generatedLastFrameUrl;
+  if (process.env.FC_EXTRACT_LAST_FRAME_URL && process.env.FC_EXTRACT_LAST_FRAME_TOKEN) {
+    return callFcExtractLastFrame({ videoUrl });
+  }
+  throw new Error(
+    "Video generation returned no lastFrameUrl. Configure FC_EXTRACT_LAST_FRAME_URL/TOKEN or return { videoUrl, lastFrameUrl } from FC_GENERATE_VIDEO_URL.",
+  );
+}
+
 export async function executeVideoPrompt(
   input: ExecuteVideoPromptInput,
 ): Promise<ExecuteVideoPromptResult> {
@@ -603,16 +617,23 @@ export async function executeVideoPrompt(
     : videoRefImageUrls[0];
 
   let sourceVideoUrls: string[] | undefined;
+  let continuationVideoMode: "cropped-tail" | "full-previous-video" | undefined;
   if (input.previousVideoUrl) {
-    try {
-      const tailUrl = await callFcCropVideo({
-        videoUrl: input.previousVideoUrl,
-        tailSeconds: input.continuationTailSeconds,
-      });
-      sourceVideoUrls = [tailUrl];
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new Error(`Failed to prepare previous clip continuation video: ${message}`);
+    if (process.env.FC_CROP_VIDEO_URL && process.env.FC_CROP_VIDEO_TOKEN) {
+      try {
+        const tailUrl = await callFcCropVideo({
+          videoUrl: input.previousVideoUrl,
+          tailSeconds: input.continuationTailSeconds,
+        });
+        sourceVideoUrls = [tailUrl];
+        continuationVideoMode = "cropped-tail";
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`Failed to prepare previous clip continuation video: ${message}`);
+      }
+    } else {
+      sourceVideoUrls = [input.previousVideoUrl];
+      continuationVideoMode = "full-previous-video";
     }
   }
 
@@ -621,8 +642,8 @@ export async function executeVideoPrompt(
     prompt: input.prompt,
   });
 
-  const videoUrl = input.provider === "happyhorse"
-    ? await generateHappyHorseVideo({
+  const generatedVideo = input.provider === "happyhorse"
+    ? { videoUrl: await generateHappyHorseVideo({
       prompt: compiledPrompt,
       referenceImageUrls: videoRefImageUrls,
       sourceVideoUrls: sourceVideoUrls ?? [],
@@ -630,7 +651,7 @@ export async function executeVideoPrompt(
       resolution: input.resolution,
       ratio: input.ratio,
       model: input.model,
-    })
+    }) }
     : await callFcGenerateVideo({
       prompt: compiledPrompt,
       sourceImageUrl,
@@ -638,11 +659,17 @@ export async function executeVideoPrompt(
       sourceVideoUrls,
       duration: input.duration,
     });
+  const videoUrl = generatedVideo.videoUrl;
+  const lastFrameUrl = await resolveLastFrameUrl(videoUrl, generatedVideo.lastFrameUrl);
 
   const videoData: Prisma.InputJsonObject = {
     duration: input.duration,
     provider: input.provider,
+    lastFrameUrl,
     continuationTailSeconds: input.continuationTailSeconds,
+    ...(input.previousVideoUrl ? { previousVideoUrl: input.previousVideoUrl } : {}),
+    ...(input.previousFrameUrl ? { previousFrameUrl: input.previousFrameUrl } : {}),
+    ...(sourceVideoUrls ? { sourceVideoUrls, continuationVideoMode } : {}),
     referenceImageCompression: resolvedReferenceImages.compression.map(imageCompressionResultToJson),
     originalReferenceImageUrls: refImageUrls,
     compressedReferenceImageUrls: videoRefImageUrls,
@@ -669,6 +696,10 @@ export async function executeVideoPrompt(
     keyResourceId: kr.id,
     version: kr.version,
     videoUrl,
+    lastFrameUrl,
+    sourceVideoUrls,
+    previousVideoUrl: input.previousVideoUrl,
+    previousFrameUrl: input.previousFrameUrl,
     referenceImageCount: refImageUrls.length,
     prompt: compiledPrompt,
   };

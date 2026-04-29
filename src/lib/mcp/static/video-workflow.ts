@@ -249,7 +249,7 @@ const TOOLS: Tool[] = [
   {
     name: "execute_video_prompt",
     description:
-      "执行一个已通过 review 的视频 prompt。只有用户明确要求生成视频时才调用；Seedance 为主路径，连续 clip 必须同时传 previousVideoUrl 和 previousFrameUrl，工具会裁上一 clip 尾段并与末帧图一起作为参照。",
+      "执行一个已通过 review 的视频 prompt。只有用户明确要求生成视频时才调用；Seedance 为主路径。工具返回 videoUrl 和 lastFrameUrl；连续 clip 必须把上一轮返回的 videoUrl 作为 previousVideoUrl、lastFrameUrl 作为 previousFrameUrl，严禁自行拼接、推断或省略 previousFrameUrl。",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -276,11 +276,11 @@ const TOOLS: Tool[] = [
         model: { type: "string", description: "HappyHorse 可选模型名" },
         previousVideoUrl: {
           type: "string",
-          description: "连续 clip 必填：上一 clip 的视频 URL。工具默认裁最后 15 秒作为 Seedance sourceVideoUrls 参照。",
+          description: "连续 clip 必填：上一轮 execute_video_prompt 返回的 videoUrl。工具默认裁最后 15 秒作为 Seedance sourceVideoUrls 参照。",
         },
         previousFrameUrl: {
           type: "string",
-          description: "连续 clip 必填：上一 clip 最后一帧图片 URL。工具会作为 Seedance 首帧/参考图参照传递。",
+          description: "连续 clip 必填：上一轮 execute_video_prompt 返回的 lastFrameUrl。严禁自行拼接或猜测 URL；工具会作为 Seedance 首帧/参考图参照传递。",
         },
         continuationTailSeconds: {
           type: "number",

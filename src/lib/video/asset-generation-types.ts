@@ -49,6 +49,10 @@ export interface ExecuteVideoPromptResult {
   keyResourceId: string;
   version: number;
   videoUrl: string;
+  lastFrameUrl: string;
   referenceImageCount: number;
+  sourceVideoUrls?: string[];
+  previousVideoUrl?: string;
+  previousFrameUrl?: string;
   prompt: string;
 }

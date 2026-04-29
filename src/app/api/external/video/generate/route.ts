@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const videoUrl = await trackExternalVideoApiCall(
+    const result = await trackExternalVideoApiCall(
       auth.apiKeyName,
       "video.generate",
       () => callFcGenerateVideo(parsed.data),
@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       status: "ok",
       product: "video.generate",
-      videoUrl,
+      videoUrl: result.videoUrl,
+      lastFrameUrl: result.lastFrameUrl,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
