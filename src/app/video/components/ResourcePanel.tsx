@@ -2,7 +2,16 @@
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Button, Collapse, Drawer, Empty, Input, Spin, Typography, Image, Tag, App } from "antd";
-import { DeleteOutlined, EditOutlined, EyeOutlined, FormatPainterOutlined, SkinOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EnvironmentOutlined,
+  EyeOutlined,
+  FormatPainterOutlined,
+  PictureOutlined,
+  SkinOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
 import type { DomainResources, DomainResource, VideoResourceData } from "../types";
 import { fetchJson } from "@/app/components/client-utils";
 import { ImageDetailDrawer } from "./ImageDetailDrawer";
@@ -63,7 +72,7 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
   const knownKeysRef = useRef<Set<string>>(new Set());
 
   /* ---- Smart image rendering ---- */
-  const renderSmartImage = (url: string, alt: string, keyResourceId?: string | null) => {
+  const renderSmartImage = (url: string, alt: string, keyResourceId: string | null | undefined) => {
     if (keyResourceId) {
       return (
         // eslint-disable-next-line @next/next/no-img-element
@@ -72,7 +81,6 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
           alt={alt}
           className="w-full cursor-pointer"
           style={{ display: "block" }}
-          onClick={() => setSelectedImageGenId(keyResourceId)}
         />
       );
     }
@@ -82,9 +90,29 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
         alt={alt}
         width="100%"
         style={{ display: "block" }}
-      placeholder={<div className="aspect-square w-full bg-slate-800" />}
+        placeholder={<div className="aspect-square w-full bg-slate-800" />}
         preview={true}
       />
+    );
+  };
+
+  const renderImagePlaceholder = (category: string, title: string | null, canOpenDetail: boolean) => {
+    const iconClass = "text-2xl text-slate-500";
+    const icon = category === "角色立绘"
+      ? <UserOutlined className={iconClass} />
+      : category.includes("场景")
+        ? <EnvironmentOutlined className={iconClass} />
+        : <PictureOutlined className={iconClass} />;
+
+    return (
+      <div className="flex aspect-square flex-col items-center justify-center gap-2 bg-slate-900 px-2 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-md border border-slate-700 bg-slate-800/80">
+          {icon}
+        </div>
+        <span className="line-clamp-2 text-[10px] leading-tight text-slate-500">
+          {canOpenDetail ? "待生成" : title ?? "暂无图片"}
+        </span>
+      </div>
     );
   };
   const jsonDataForDisplay = (r: DomainResource): unknown => {
@@ -194,23 +222,41 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
     />
   );
 
-  const renderImageItem = (r: DomainResource) => (
-    <div key={r.id} className="group/card relative overflow-hidden rounded-lg">
-      {renderDeleteBtn(r.id)}
-      {r.url ? (
-        renderSmartImage(r.url, r.title ?? "Image", r.keyResourceId ?? r.id)
-      ) : (
-        <div className="flex aspect-square items-center justify-center bg-slate-800">
-          <span className="text-xs text-slate-600">No image</span>
-        </div>
-      )}
-      {r.title && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-5">
-          <div className="truncate text-center text-[11px] font-medium text-white">{r.title}</div>
-        </div>
-      )}
-    </div>
-  );
+  const renderImageItem = (r: DomainResource) => {
+    const canOpenDetail = r.keyResourceId != null;
+    const openDetail = () => {
+      if (r.keyResourceId) setSelectedImageGenId(r.keyResourceId);
+    };
+
+    return (
+      <div
+        key={r.id}
+        className={`group/card relative overflow-hidden rounded-lg ${canOpenDetail ? "cursor-pointer" : ""}`}
+        onClick={openDetail}
+        onKeyDown={(e) => {
+          if (!canOpenDetail) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openDetail();
+          }
+        }}
+        role={canOpenDetail ? "button" : undefined}
+        tabIndex={canOpenDetail ? 0 : undefined}
+      >
+        {renderDeleteBtn(r.id)}
+        {r.url ? (
+          renderSmartImage(r.url, r.title ?? "Image", r.keyResourceId)
+        ) : (
+          renderImagePlaceholder(r.category, r.title, canOpenDetail)
+        )}
+        {r.title && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-5">
+            <div className="truncate text-center text-[11px] font-medium text-white">{r.title}</div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderVideoItem = (r: DomainResource) => {
     const vData = r.data as VideoResourceData | null;
