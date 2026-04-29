@@ -36,7 +36,12 @@ const PromptSchema = z.object({
   refUrls: z.array(z.string().url()),
 });
 
-const RawPromptSchema = PromptSchema.extend({
+const RawPromptSchema = z.object({
+  key: z.string(),
+  title: z.string(),
+  prompt: z.string(),
+  definition: z.string(),
+  duration: z.number(),
   refUrls: z.array(z.string()),
 });
 
@@ -395,38 +400,110 @@ function validateWriterRefUrls(
 ): PromptRefUrlValidation {
   const issues: unknown[] = [];
   const suggestions: string[] = [];
-  const prompts = output.prompts.map((prompt) => {
+  const prompts = output.prompts.map((prompt, promptIndex) => {
+    const key = prompt.key.trim() || `invalid_prompt_${promptIndex + 1}`;
+    const title = prompt.title.trim() || key;
+    const promptText = prompt.prompt.trim() || "INVALID: missing prompt";
+    const definition = prompt.definition.trim() || "INVALID: missing definition";
+    const duration = Number.isFinite(prompt.duration) && prompt.duration >= 1 && prompt.duration <= 60
+      ? prompt.duration
+      : 5;
     const validRefUrls: string[] = [];
+
+    if (prompt.key.trim().length === 0) {
+      issues.push({
+        issueId: `PROMPT_KEY_EMPTY_${promptIndex}`,
+        rule: "prompt.key.required",
+        key,
+        blocking: true,
+        severity: "p0",
+        description: `prompts[${promptIndex}].key is empty.`,
+        suggestion: "Every prompt item must have a stable non-empty key.",
+      });
+      suggestions.push(`Set a stable non-empty key for prompts[${promptIndex}].`);
+    }
+
+    if (prompt.title.trim().length === 0) {
+      issues.push({
+        issueId: `PROMPT_TITLE_EMPTY_${key}`,
+        rule: "prompt.title.required",
+        key,
+        blocking: true,
+        severity: "p0",
+        description: `${key}.title is empty.`,
+        suggestion: "Every prompt item must have a non-empty human-readable title.",
+      });
+      suggestions.push(`Set a non-empty title for ${key}.`);
+    }
+
+    if (prompt.prompt.trim().length === 0) {
+      issues.push({
+        issueId: `PROMPT_BODY_EMPTY_${key}`,
+        rule: "prompt.prompt.required",
+        key,
+        blocking: true,
+        severity: "p0",
+        description: `${key}.prompt is empty.`,
+        suggestion: "Every prompt item must include the full video prompt text.",
+      });
+      suggestions.push(`Write the full video prompt text for ${key}.`);
+    }
+
+    if (prompt.definition.trim().length === 0) {
+      issues.push({
+        issueId: `PROMPT_DEFINITION_EMPTY_${key}`,
+        rule: "prompt.definition.required",
+        key,
+        blocking: true,
+        severity: "p0",
+        description: `${key}.definition is empty.`,
+        suggestion: "Every prompt item must include a definition mapping @图 references to exact Canonical Resource Status URLs.",
+      });
+      suggestions.push(`Fill ${key}.definition with exact @图 reference mappings and URLs.`);
+    }
+
+    if (duration !== prompt.duration) {
+      issues.push({
+        issueId: `PROMPT_DURATION_INVALID_${key}`,
+        rule: "prompt.duration.range",
+        key,
+        blocking: true,
+        severity: "p0",
+        description: `${key}.duration must be a number from 1 to 60; got ${prompt.duration}.`,
+        suggestion: "Set duration to the actual clip duration in seconds, within 1-60.",
+      });
+      suggestions.push(`Set ${key}.duration to a valid number from 1 to 60.`);
+    }
 
     for (const [index, refUrl] of prompt.refUrls.entries()) {
       if (!isValidAbsoluteUrl(refUrl)) {
         issues.push({
-          issueId: `REF_URL_INVALID_FORMAT_${prompt.key}_${index}`,
+          issueId: `REF_URL_INVALID_FORMAT_${key}_${index}`,
           rule: "refUrls.must_be_canonical_resource_url",
-          key: prompt.key,
+          key,
           blocking: true,
           severity: "p0",
           description: `refUrls[${index}] is not an absolute URL: ${refUrl}`,
           suggestion: "refUrls must contain only exact image URLs from Canonical Resource Status. Do not put previous-frame placeholders or local file paths in refUrls; the video generation service injects previous clip/frame references later.",
         });
         suggestions.push(
-          `For ${prompt.key}, replace refUrls[${index}] with an exact URL from Canonical Resource Status or remove it if it is a previous-frame placeholder.`,
+          `For ${key}, replace refUrls[${index}] with an exact URL from Canonical Resource Status or remove it if it is a previous-frame placeholder.`,
         );
         continue;
       }
 
       if (!allowedUrls.has(refUrl)) {
         issues.push({
-          issueId: `REF_URL_NOT_CANONICAL_${prompt.key}_${index}`,
+          issueId: `REF_URL_NOT_CANONICAL_${key}_${index}`,
           rule: "refUrls.must_belong_to_current_script_resources",
-          key: prompt.key,
+          key,
           blocking: true,
           severity: "p0",
           description: `refUrls[${index}] is not present in Canonical Resource Status: ${refUrl}`,
           suggestion: "Use only exact image URLs listed in Canonical Resource Status for the current EP. Do not invent URLs and do not reference generated previous-frame assets in prompt JSON.",
         });
         suggestions.push(
-          `For ${prompt.key}, use only Canonical Resource Status image URLs; do not invent or carry non-canonical refUrls.`,
+          `For ${key}, use only Canonical Resource Status image URLs; do not invent or carry non-canonical refUrls.`,
         );
         continue;
       }
@@ -436,6 +513,11 @@ function validateWriterRefUrls(
 
     return PromptSchema.parse({
       ...prompt,
+      key,
+      title,
+      prompt: promptText,
+      definition,
+      duration,
       refUrls: validRefUrls,
     });
   });
