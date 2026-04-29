@@ -1,6 +1,13 @@
 const crypto = require('crypto')
+const { execFile } = require('child_process')
+const { promisify } = require('util')
+const { writeFile, readFile, unlink, mkdir } = require('fs/promises')
+const { existsSync } = require('fs')
+const path = require('path')
 const OSS = require('ali-oss')
 
+const execFileAsync = promisify(execFile)
+const TEMP_DIR = '/tmp/video-generation'
 const SERVICE = 'cv'
 const REGION = 'cn-north-1'
 const HOST = 'visual.volcengineapi.com'
@@ -15,6 +22,20 @@ const DEFAULT_ASSET_READY_INTERVAL_MS = 3000
 const DEFAULT_VIDEO_POLL_MAX_RETRIES = 120
 const DEFAULT_VIDEO_POLL_INTERVAL_MS = 5000
 let cachedModelArkApiKey
+
+async function ensureTempDir() {
+  if (!existsSync(TEMP_DIR)) {
+    await mkdir(TEMP_DIR, { recursive: true })
+  }
+}
+
+function generateTempPath(ext) {
+  return path.join(TEMP_DIR, `${crypto.randomUUID()}.${ext}`)
+}
+
+async function cleanupFiles(files) {
+  await Promise.allSettled(files.map((file) => unlink(file)))
+}
 
 function sha256(data) {
   return crypto.createHash('sha256').update(data).digest('hex')
@@ -480,6 +501,33 @@ const uploadToOSS = async (buffer, filename, folder = 'video') => {
   return url
 }
 
+async function extractLastFrameToOSS(videoBuffer) {
+  await ensureTempDir()
+
+  const inputPath = generateTempPath('mp4')
+  const outputPath = generateTempPath('png')
+
+  try {
+    await writeFile(inputPath, videoBuffer)
+    await execFileAsync('ffmpeg', [
+      '-y',
+      '-sseof',
+      '-0.1',
+      '-i',
+      inputPath,
+      '-frames:v',
+      '1',
+      outputPath,
+    ])
+
+    const frameBuffer = await readFile(outputPath)
+    const filename = `last-frame-${Date.now()}-${Math.random().toString(36).substring(2, 8)}.png`
+    return uploadToOSS(frameBuffer, filename, 'video-frames')
+  } finally {
+    await cleanupFiles([inputPath, outputPath])
+  }
+}
+
 function uniqueStrings(values) {
   return [...new Set(values.filter(value => typeof value === 'string' && value.length > 0))]
 }
@@ -524,7 +572,11 @@ async function generateVideo(accessKeyId, secretAccessKey, imageUrls, prompt, op
       const ossUrl = await uploadToOSS(videoBuffer, filename)
       console.log('Video uploaded to OSS:', ossUrl)
 
-      return ossUrl
+      console.log('Extracting last frame...')
+      const lastFrameUrl = await extractLastFrameToOSS(videoBuffer)
+      console.log('Last frame uploaded to OSS:', lastFrameUrl)
+
+      return { videoUrl: ossUrl, lastFrameUrl }
     } else if (['expired', 'not_found', 'failed'].includes(result.status)) {
       throw new Error(`任务失败: ${result.status}`)
     }
@@ -679,8 +731,10 @@ exports.handler = async (event, context) => {
         const videoBuffer = Buffer.from(await videoResponse.arrayBuffer())
         const filename = `${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`
         const ossUrl = await uploadToOSS(videoBuffer, filename)
+        const lastFrameUrl = await extractLastFrameToOSS(videoBuffer)
 
         result.data.video_url = ossUrl
+        result.data.last_frame_url = lastFrameUrl
       }
 
       return {
