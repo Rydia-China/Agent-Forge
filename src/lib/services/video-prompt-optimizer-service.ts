@@ -9,11 +9,22 @@ import { setKeyResourceMetadata } from "./video-asset-generation-service";
 import { runSubAgentTask } from "./subagent-task-service";
 
 const VIDEO_STANDARD_SKILLS = [
-  "video-prompt-optimizer",
   "video-director-playbook",
   "video-seedance-lessons",
   "video-shot-id-policy",
   "video-character-dna",
+] as const;
+
+const WRITER_SKILLS = [
+  "video-prompt-writer",
+  "video-skill-reviewer",
+  ...VIDEO_STANDARD_SKILLS,
+] as const;
+
+const REVIEWER_SKILLS = [
+  "video-skill-reviewer",
+  "video-prompt-writer",
+  ...VIDEO_STANDARD_SKILLS,
 ] as const;
 
 const PromptSchema = z.object({
@@ -33,6 +44,11 @@ const ReviewSchema = z.object({
   summary: z.string(),
 });
 
+const WriterOutputSchema = z.object({
+  prompts: z.array(PromptSchema),
+  summary: z.string(),
+});
+
 const OptimizerOutputSchema = z.object({
   status: z.enum(["passed", "max_iterations", "conflict", "failed"]),
   iterationCount: z.number(),
@@ -48,12 +64,10 @@ const OptimizerOutputSchema = z.object({
   summary: z.string(),
 });
 
-const optimizerOutputSchemaForSubAgent = {
+const writerOutputSchemaForSubAgent = {
   type: "object",
   properties: {
-    status: { type: "string", enum: ["passed", "max_iterations", "conflict", "failed"] },
-    iterationCount: { type: "number" },
-    finalPrompts: {
+    prompts: {
       type: "array",
       items: {
         type: "object",
@@ -68,40 +82,21 @@ const optimizerOutputSchemaForSubAgent = {
         required: ["key", "title", "prompt", "definition", "duration", "refUrls"],
       },
     },
-    finalReview: {
-      type: "object",
-      properties: {
-        passed: { type: "boolean" },
-        allowVideoGeneration: { type: "boolean" },
-        issues: { type: "array" },
-        suggestions: { type: "array", items: { type: "string" } },
-        summary: { type: "string" },
-      },
-      required: ["passed", "allowVideoGeneration", "issues", "suggestions", "summary"],
-    },
-    iterationHistory: { type: "array" },
-    resolvedIssues: { type: "array" },
-    remainingIssues: { type: "array" },
-    newIssues: { type: "array" },
-    doNotRegress: { type: "array", items: { type: "string" } },
-    bestVersion: { type: "object" },
-    conflict: { type: ["object", "null"] },
     summary: { type: "string" },
   },
-  required: [
-    "status",
-    "iterationCount",
-    "finalPrompts",
-    "finalReview",
-    "iterationHistory",
-    "resolvedIssues",
-    "remainingIssues",
-    "newIssues",
-    "doNotRegress",
-    "bestVersion",
-    "conflict",
-    "summary",
-  ],
+  required: ["prompts", "summary"],
+};
+
+const reviewOutputSchemaForSubAgent = {
+  type: "object",
+  properties: {
+    passed: { type: "boolean" },
+    allowVideoGeneration: { type: "boolean" },
+    issues: { type: "array" },
+    suggestions: { type: "array", items: { type: "string" } },
+    summary: { type: "string" },
+  },
+  required: ["passed", "allowVideoGeneration", "issues", "suggestions", "summary"],
 };
 
 export const OptimizeVideoPromptsParams = z.object({
@@ -215,13 +210,13 @@ function buildOptimizerInstruction(input: {
   return lines.join("\n");
 }
 
-function parseOptimizerOutput(output: string): z.infer<typeof OptimizerOutputSchema> {
+function parseJsonOutput<T>(schema: z.ZodType<T>, output: string): T {
   const trimmed = output.trim();
   const withoutFence = trimmed
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
     .replace(/\s*```$/i, "");
-  return OptimizerOutputSchema.parse(JSON.parse(withoutFence));
+  return schema.parse(JSON.parse(withoutFence));
 }
 
 function toPromptData(
@@ -237,6 +232,141 @@ function toPromptData(
     doNotRegress: optimizerOutput.doNotRegress,
     optimizerSummary: optimizerOutput.summary,
   };
+}
+
+type Prompt = z.infer<typeof PromptSchema>;
+type Review = z.infer<typeof ReviewSchema>;
+type WriterOutput = z.infer<typeof WriterOutputSchema>;
+type OptimizerOutput = z.infer<typeof OptimizerOutputSchema>;
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new Error("Video prompt optimization cancelled");
+}
+
+function buildWriterInstruction(input: {
+  baseInstruction: string;
+  iteration: number;
+  latestPrompts: Prompt[] | null;
+  latestReview: Review | null;
+  iterationHistory: unknown[];
+  doNotRegress: string[];
+}): string {
+  const lines: string[] = [
+    "你是 Prompt Writer。只负责为当前 EP 生成或修订视频提示词。",
+    "",
+    "## 不可违反的边界",
+    "- 只使用下方 canonical 原始数据块；不得凭记忆补全、替换或转述为其他 EP。",
+    "- 不执行文件操作，不调用工具，不保存 prompt，不生成视频。",
+    "- 如果这是第 2-5 轮，必须基于 latestPromptJson 和 latestReviewJson 做增量修订，不得回退已解决内容。",
+    "- 只返回纯 JSON 对象，字段必须是 prompts 和 summary。",
+    "",
+    `## Iteration ${input.iteration}`,
+    "",
+    "## Canonical Context",
+    input.baseInstruction,
+  ];
+
+  if (input.latestPrompts) {
+    lines.push("");
+    lines.push("## latestPromptJson");
+    lines.push(jsonBlock(input.latestPrompts));
+  }
+  if (input.latestReview) {
+    lines.push("");
+    lines.push("## latestReviewJson");
+    lines.push(jsonBlock(input.latestReview));
+  }
+  if (input.iterationHistory.length > 0) {
+    lines.push("");
+    lines.push("## iterationHistory");
+    lines.push(jsonBlock(input.iterationHistory));
+  }
+  if (input.doNotRegress.length > 0) {
+    lines.push("");
+    lines.push("## doNotRegress");
+    lines.push(jsonBlock(input.doNotRegress));
+  }
+
+  return lines.join("\n");
+}
+
+function buildReviewerInstruction(input: {
+  baseInstruction: string;
+  iteration: number;
+  prompts: Prompt[];
+  latestReview: Review | null;
+  iterationHistory: unknown[];
+  doNotRegress: string[];
+}): string {
+  const lines: string[] = [
+    "你是 Prompt Reviewer。只负责审查当前 EP 的 Writer 输出是否满足全部视频 prompt 标准。",
+    "",
+    "## 不可违反的边界",
+    "- 只审查下方 canonical 原始数据块和 promptJson；不得自行改写 prompt。",
+    "- 不执行文件操作，不调用工具，不保存 prompt，不生成视频。",
+    "- 必须使用稳定 issueId / rule / blocking 描述问题，便于下一轮 Writer 精确修复。",
+    "- 只有全部阻塞问题解决时，passed 和 allowVideoGeneration 才能同时为 true。",
+    "- 只返回纯 JSON 对象，字段必须是 passed, allowVideoGeneration, issues, suggestions, summary。",
+    "",
+    `## Iteration ${input.iteration}`,
+    "",
+    "## Canonical Context",
+    input.baseInstruction,
+    "",
+    "## promptJson",
+    jsonBlock(input.prompts),
+  ];
+
+  if (input.latestReview) {
+    lines.push("");
+    lines.push("## previousReviewJson");
+    lines.push(jsonBlock(input.latestReview));
+  }
+  if (input.iterationHistory.length > 0) {
+    lines.push("");
+    lines.push("## iterationHistory");
+    lines.push(jsonBlock(input.iterationHistory));
+  }
+  if (input.doNotRegress.length > 0) {
+    lines.push("");
+    lines.push("## doNotRegress");
+    lines.push(jsonBlock(input.doNotRegress));
+  }
+
+  return lines.join("\n");
+}
+
+function issueCount(review: Review): number {
+  return review.issues.length;
+}
+
+function buildOptimizerOutput(input: {
+  status: OptimizerOutput["status"];
+  iterationCount: number;
+  finalPrompts: Prompt[];
+  finalReview: Review;
+  iterationHistory: unknown[];
+  resolvedIssues: unknown[];
+  remainingIssues: unknown[];
+  newIssues: unknown[];
+  doNotRegress: string[];
+  bestVersion: unknown;
+  summary: string;
+}): OptimizerOutput {
+  return OptimizerOutputSchema.parse({
+    status: input.status,
+    iterationCount: input.iterationCount,
+    finalPrompts: input.finalPrompts,
+    finalReview: input.finalReview,
+    iterationHistory: input.iterationHistory,
+    resolvedIssues: input.resolvedIssues,
+    remainingIssues: input.remainingIssues,
+    newIssues: input.newIssues,
+    doNotRegress: input.doNotRegress,
+    bestVersion: input.bestVersion,
+    conflict: null,
+    summary: input.summary,
+  });
 }
 
 export async function assertReferenceUrlsBelongToScript(
@@ -278,7 +408,7 @@ export async function optimizeVideoPrompts(
     );
   }
 
-  const instruction = buildOptimizerInstruction({
+  const baseInstruction = buildOptimizerInstruction({
     scriptId: input.scriptId,
     scriptKey: episode.scriptKey,
     episode,
@@ -287,22 +417,150 @@ export async function optimizeVideoPrompts(
     stopBeforeVideoGeneration: input.stopBeforeVideoGeneration,
   });
 
-  const result = await runSubAgentTask({
-    instruction,
-    mcpScope: ["subagent"],
-    skills: [...VIDEO_STANDARD_SKILLS],
-    outputSchema: optimizerOutputSchemaForSubAgent,
-    maxIterations: 50,
-    maxRetries: 2,
-    includeTrace: true,
-    ...(input.model ? { model: input.model } : {}),
-  }, context);
+  const iterationHistory: unknown[] = [];
+  const resolvedIssues: unknown[] = [];
+  let remainingIssues: unknown[] = [];
+  let newIssues: unknown[] = [];
+  let doNotRegress: string[] = [];
+  let latestPrompts: Prompt[] | null = null;
+  let latestReview: Review | null = null;
+  let finalPrompts: Prompt[] = [];
+  let finalReview: Review = {
+    passed: false,
+    allowVideoGeneration: false,
+    issues: [],
+    suggestions: [],
+    summary: "Reviewer has not run.",
+  };
+  let bestVersion: unknown = {
+    iteration: 0,
+    prompts: [],
+    reason: "No prompts generated yet.",
+  };
+  let bestIssueCount = Number.POSITIVE_INFINITY;
+  let finalStatus: OptimizerOutput["status"] = "max_iterations";
+  let finalSummary = "Maximum iterations reached without reviewer pass.";
+  let optimizerAgentId = "service:video-prompt-optimizer";
+  let optimizerTaskId: string | undefined;
+  let completedIterations = 0;
 
-  if (context?.signal?.aborted || result.status === "cancelled") {
-    throw new Error("Video prompt optimization cancelled");
+  for (let iteration = 1; iteration <= 5; iteration++) {
+    throwIfAborted(context?.signal);
+    const writerResult = await runSubAgentTask({
+      instruction: buildWriterInstruction({
+        baseInstruction,
+        iteration,
+        latestPrompts,
+        latestReview,
+        iterationHistory,
+        doNotRegress,
+      }),
+      skills: [...WRITER_SKILLS],
+      outputSchema: writerOutputSchemaForSubAgent,
+      maxRetries: 2,
+      includeTrace: true,
+      keyJsonTitle: `EP${episode.scriptKey.replace(/^EP/i, "")} Prompt Writer Iteration ${iteration}`,
+      ...(input.model ? { model: input.model } : {}),
+    }, context);
+    if (writerResult.taskId && !optimizerTaskId) optimizerTaskId = writerResult.taskId;
+    optimizerAgentId = writerResult.agentId;
+    if (context?.signal?.aborted || writerResult.status === "cancelled") {
+      throw new Error("Video prompt optimization cancelled");
+    }
+    if (writerResult.status !== "completed") {
+      finalSummary = `Prompt Writer failed at iteration ${iteration}: ${writerResult.error ?? writerResult.status}`;
+      finalStatus = "failed";
+      break;
+    }
+    const writerOutput = parseJsonOutput(WriterOutputSchema, writerResult.output);
+    latestPrompts = writerOutput.prompts;
+    finalPrompts = writerOutput.prompts;
+
+    throwIfAborted(context?.signal);
+    const reviewerResult = await runSubAgentTask({
+      instruction: buildReviewerInstruction({
+        baseInstruction,
+        iteration,
+        prompts: writerOutput.prompts,
+        latestReview,
+        iterationHistory,
+        doNotRegress,
+      }),
+      skills: [...REVIEWER_SKILLS],
+      outputSchema: reviewOutputSchemaForSubAgent,
+      maxRetries: 2,
+      includeTrace: true,
+      keyJsonTitle: `EP${episode.scriptKey.replace(/^EP/i, "")} Prompt Reviewer Iteration ${iteration}`,
+      ...(input.model ? { model: input.model } : {}),
+    }, context);
+    optimizerAgentId = reviewerResult.agentId;
+    if (context?.signal?.aborted || reviewerResult.status === "cancelled") {
+      throw new Error("Video prompt optimization cancelled");
+    }
+    if (reviewerResult.status !== "completed") {
+      finalSummary = `Prompt Reviewer failed at iteration ${iteration}: ${reviewerResult.error ?? reviewerResult.status}`;
+      finalStatus = "failed";
+      break;
+    }
+
+    const review = parseJsonOutput(ReviewSchema, reviewerResult.output);
+    latestReview = review;
+    finalReview = review;
+    completedIterations = iteration;
+    remainingIssues = review.issues;
+    newIssues = review.issues;
+    doNotRegress = Array.from(new Set([...doNotRegress, ...review.suggestions]));
+
+    const historyItem: Prisma.InputJsonObject = {
+      iteration,
+      writerTaskId: writerResult.taskId ?? null,
+      writerAgentId: writerResult.agentId,
+      reviewerTaskId: reviewerResult.taskId ?? null,
+      reviewerAgentId: reviewerResult.agentId,
+      promptCount: writerOutput.prompts.length,
+      passed: review.passed,
+      allowVideoGeneration: review.allowVideoGeneration,
+      issueCount: review.issues.length,
+      writerSummary: writerOutput.summary,
+      reviewerSummary: review.summary,
+      issues: review.issues as Prisma.InputJsonArray,
+      suggestions: review.suggestions,
+    };
+    iterationHistory.push(historyItem);
+
+    if (issueCount(review) < bestIssueCount) {
+      bestIssueCount = issueCount(review);
+      bestVersion = {
+        iteration,
+        prompts: writerOutput.prompts,
+        review,
+        reason: `Fewest reviewer issues so far (${issueCount(review)}).`,
+      };
+    }
+
+    if (review.passed && review.allowVideoGeneration) {
+      finalStatus = "passed";
+      finalSummary = `Reviewer passed at iteration ${iteration}.`;
+      resolvedIssues.push(...review.issues);
+      remainingIssues = [];
+      newIssues = [];
+      break;
+    }
   }
 
-  const optimizerOutput = parseOptimizerOutput(result.output);
+  const optimizerOutput = buildOptimizerOutput({
+    status: finalStatus,
+    iterationCount: completedIterations,
+    finalPrompts,
+    finalReview,
+    iterationHistory,
+    resolvedIssues,
+    remainingIssues,
+    newIssues,
+    doNotRegress,
+    bestVersion,
+    summary: finalSummary,
+  });
   const savedPrompts: SavedPrompt[] = [];
 
   if (input.savePrompts && optimizerOutput.status === "passed" && optimizerOutput.finalReview.passed) {
@@ -339,8 +597,8 @@ export async function optimizeVideoPrompts(
     status: optimizerOutput.status,
     scriptId: input.scriptId,
     scriptKey: episode.scriptKey,
-    optimizerTaskId: result.taskId,
-    optimizerAgentId: result.agentId,
+    optimizerTaskId,
+    optimizerAgentId,
     iterationCount: optimizerOutput.iterationCount,
     promptCount: optimizerOutput.finalPrompts.length,
     savedPrompts,
