@@ -158,7 +158,7 @@ const TOOLS: Tool[] = [
         mode: {
           type: "string",
           enum: ["single", "grid", "hd"],
-          description: "生成模式（可选，默认 single）。grid 是父地点工作流，hd 是使用已生成父 grid 参照图生成子地点实际图；grid 父地点下的子地点即使误传 single 也会服务端自动转 grid/hd。",
+          description: "生成模式（可选，默认 single）。grid 是父地点工作流，hd 是使用已生成父 grid 参照图生成子地点实际图；grid 父地点及其子地点即使误传 single 也会服务端自动转 grid/hd。",
         },
         model: { type: "string", description: "图片生成模型（可选）：'gemini'/'google/gemini-*' 走 Gemini FC；'gpt'/'gpt-*' 走 GPT Image FC" },
       },
