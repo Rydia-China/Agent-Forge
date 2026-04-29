@@ -87,6 +87,9 @@ scp_from_remote_dir() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --)
+      shift
+      ;;
     --tag)
       TAG="${2:-}"
       shift 2
