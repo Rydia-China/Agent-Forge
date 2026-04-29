@@ -10,6 +10,7 @@
  */
 
 import type { ContextProvider } from "@/lib/agent/context-provider";
+import { getEpisodeWindow } from "@/lib/services/episode-service";
 import { getInitResult } from "@/lib/services/video-workflow-orchestration-service";
 import type { InitWorkflowResult } from "@/lib/video/workflow-types";
 
@@ -35,6 +36,7 @@ export class VideoContextProvider implements ContextProvider {
 
     const initResult: InitWorkflowResult | null =
       await getInitResult(novelId, scriptKey);
+    const episodeWindow = await getEpisodeWindow(scriptId);
 
     const lines: string[] = [
       "# Video Workflow Context",
@@ -58,6 +60,28 @@ export class VideoContextProvider implements ContextProvider {
     lines.push(`next_step: ${initResult.nextStep}`);
     if (initResult.missingCharacters?.length) {
       lines.push(`missing_characters: ${initResult.missingCharacters.join(", ")}`);
+    }
+
+    if (episodeWindow.length) {
+      lines.push("");
+      lines.push("## Episode Source Window");
+      lines.push("以下为当前 EP 及前后一集原文窗口。处理 EP2 时必须同时使用 EP1 / EP2 / EP3 原文理解情绪承接。");
+      for (const episode of episodeWindow) {
+        lines.push("");
+        lines.push(`### ${episode.relation.toUpperCase()} ${episode.scriptKey}`);
+        if (episode.scriptName) lines.push(`script_name: ${episode.scriptName}`);
+        lines.push(`script_id: ${episode.scriptId}`);
+        lines.push("script_content:");
+        lines.push("```text");
+        lines.push(episode.scriptContent ?? "");
+        lines.push("```");
+        if (episode.initResult !== null) {
+          lines.push("init_result_json:");
+          lines.push("```json");
+          lines.push(JSON.stringify(episode.initResult, null, 2));
+          lines.push("```");
+        }
+      }
     }
 
     return lines.join("\n");
