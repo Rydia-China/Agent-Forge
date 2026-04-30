@@ -43,7 +43,7 @@ for (let i = 0; i < 256; i += 1) {
 function crc32(data: Uint8Array): number {
   let crc = 0xffffffff;
   for (const byte of data) {
-    crc = (crc >>> 8) ^ crcTable[(crc ^ byte) & 0xff];
+    crc = (crc >>> 8) ^ (crcTable[(crc ^ byte) & 0xff] ?? 0);
   }
   return (crc ^ 0xffffffff) >>> 0;
 }

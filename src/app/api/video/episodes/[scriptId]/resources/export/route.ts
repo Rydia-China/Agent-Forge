@@ -29,7 +29,9 @@ export async function GET(
 
   try {
     const result = await exportEpisodeResources(parsedQuery.data.novelId, parsedParams.data.scriptId);
-    return new Response(result.body, { headers: resourceExportHeaders(result.filename) });
+    const body = new ArrayBuffer(result.body.byteLength);
+    new Uint8Array(body).set(result.body);
+    return new Response(body, { headers: resourceExportHeaders(result.filename) });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.includes("No generated resources") ? 404 : 500;
