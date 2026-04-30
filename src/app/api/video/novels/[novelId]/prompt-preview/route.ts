@@ -115,9 +115,11 @@ export async function GET(
       const description = null; // Not available in analyzed structure
       const mode = loc.mode;
 
-      if (mode === "grid") {
-        let compiledPrompt: string | null = null;
-        if (visualPrompt && locationGridStyle) {
+      // Compile prompt based on mode
+      let compiledPrompt: string | null = null;
+      if (visualPrompt) {
+        if (mode === "grid" && locationGridStyle) {
+          // For grid mode, build gridSlots from realSubs
           const slots: string[] = [`【格 1】${loc.name}：${loc.visualPrompt}`];
           loc.realSubs.forEach((sub, i) => {
             slots.push(`【格 ${i + 2}】${sub.name}：${sub.visualPrompt}`);
@@ -127,47 +129,33 @@ export async function GET(
             gridSize: String(loc.gridSize),
             gridSlots: slots.join("\n"),
           });
+        } else if (locationStyle) {
+          compiledPrompt = compileTemplate(locationStyle.prompt, {
+            scenePrompt: visualPrompt,
+          });
         }
-
-        scenes.push({
-          name,
-          visualPrompt,
-          description,
-          compiledPrompt,
-          mode,
-          imageUrl: sceneUrlByTitle.get(`${name} (grid)`) ?? null,
-          parentName: null,
-        });
-      } else if (loc.realSubs.length === 0) {
-        const compiledPrompt = visualPrompt && locationStyle
-          ? compileTemplate(locationStyle.prompt, { scenePrompt: visualPrompt })
-          : null;
-
-        scenes.push({
-          name,
-          visualPrompt,
-          description,
-          compiledPrompt,
-          mode,
-          imageUrl: sceneUrlByTitle.get(name) ?? null,
-          parentName: null,
-        });
       }
+
+      scenes.push({
+        name,
+        visualPrompt,
+        description,
+        compiledPrompt,
+        mode,
+        imageUrl: sceneUrlByTitle.get(name) ?? null,
+        parentName: null,
+      });
 
       // Add sub-locations
       for (const sub of loc.realSubs) {
         const subName = sub.name;
         const subVisualPrompt = sub.visualPrompt || null;
 
-        const subMode = mode === "grid" ? "hd" : "single";
+        // Compile sub-location prompt
         let subCompiledPrompt: string | null = null;
-        if (subMode === "hd" && subLocationStyle && subVisualPrompt) {
+        if (subLocationStyle && subVisualPrompt) {
           subCompiledPrompt = compileTemplate(subLocationStyle.prompt, {
             sceneName: subName,
-          });
-        } else if (subMode === "single" && locationStyle && subVisualPrompt) {
-          subCompiledPrompt = compileTemplate(locationStyle.prompt, {
-            scenePrompt: subVisualPrompt,
           });
         }
 
@@ -176,7 +164,7 @@ export async function GET(
           visualPrompt: subVisualPrompt,
           description: null,
           compiledPrompt: subCompiledPrompt,
-          mode: subMode,
+          mode: "single",
           imageUrl: sceneUrlByTitle.get(subName) ?? null,
           parentName: name,
         });
