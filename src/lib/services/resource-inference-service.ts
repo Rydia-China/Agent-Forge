@@ -189,11 +189,10 @@ function computeExpectedKeys(
     const realSubLocations = (location.sub_locations ?? []).filter(
       (subLocation) => subLocation.id !== location.id,
     );
-    if (realSubLocations.length >= 2) {
-      gridParents.push(location.name);
-    } else if (realSubLocations.length === 0 && location.visual_prompt?.trim()) {
+    if (realSubLocations.length !== 1 && location.visual_prompt?.trim()) {
       allSceneNames.add(location.name);
     }
+    if (realSubLocations.length >= 2) gridParents.push(location.name);
     for (const subLocation of location.sub_locations ?? []) {
       if (subLocation.visual_prompt?.trim()) allSceneNames.add(subLocation.name);
     }
@@ -250,18 +249,23 @@ async function computeStoredExpectedKeys(
   for (const location of parseArray(novel?.locationBible)) {
     if (!isRecord(location)) continue;
     const name = location.name;
+    const visualPrompt = location.visual_prompt;
+
     const subLocations = parseArray(location.sub_locations);
     const realSubLocations = subLocations.filter((subLocation) => {
       if (!isRecord(subLocation)) return false;
       return subLocation.id !== location.id;
     });
+    if (
+      realSubLocations.length !== 1
+      && typeof name === "string"
+      && typeof visualPrompt === "string"
+      && visualPrompt.trim()
+    ) {
+      addNovelSceneResource(items, seen, novelId, name);
+    }
     if (typeof name === "string" && realSubLocations.length >= 2) {
       addNovelSceneGridResource(items, seen, novelId, name);
-    } else if (realSubLocations.length === 0) {
-      const visualPrompt = location.visual_prompt;
-      if (typeof name === "string" && typeof visualPrompt === "string" && visualPrompt.trim()) {
-        addNovelSceneResource(items, seen, novelId, name);
-      }
     }
 
     for (const subLocation of subLocations) {
@@ -287,20 +291,18 @@ async function computeStoredExpectedKeys(
   return items;
 }
 
-function containerParentSceneKeysFromUpload(upload: NovelScriptUpload): string[] {
+function singleChildParentSceneKeysFromUpload(upload: NovelScriptUpload): string[] {
   const keys = new Set<string>();
   for (const location of upload.location_bible ?? []) {
     const realSubLocations = (location.sub_locations ?? []).filter(
       (subLocation) => subLocation.id !== location.id,
     );
-    if (realSubLocations.length > 0) {
-      keys.add(sceneKey(location.name));
-    }
+    if (realSubLocations.length === 1) keys.add(sceneKey(location.name));
   }
   return Array.from(keys);
 }
 
-function containerParentSceneKeysFromStoredLocationBible(locationBible: unknown): string[] {
+function singleChildParentSceneKeysFromStoredLocationBible(locationBible: unknown): string[] {
   const keys = new Set<string>();
   for (const location of parseArray(locationBible)) {
     if (!isRecord(location) || typeof location.name !== "string") continue;
@@ -308,22 +310,12 @@ function containerParentSceneKeysFromStoredLocationBible(locationBible: unknown)
     const realSubLocations = subLocations.filter((subLocation) => (
       isRecord(subLocation) && subLocation.id !== location.id
     ));
-    if (realSubLocations.length > 0) {
-      keys.add(sceneKey(location.name));
-    }
+    if (realSubLocations.length === 1) keys.add(sceneKey(location.name));
   }
   return Array.from(keys);
 }
 
-async function listContainerParentSingleSceneKeys(novelId: string): Promise<Set<string>> {
-  const novel = await prisma.novel.findUnique({
-    where: { id: novelId },
-    select: { locationBible: true },
-  });
-  return new Set(containerParentSceneKeysFromStoredLocationBible(novel?.locationBible));
-}
-
-async function deleteEmptyContainerParentScenePlaceholders(
+async function deleteEmptySingleChildParentScenePlaceholders(
   novelId: string,
   keys: string[],
 ): Promise<void> {
@@ -383,11 +375,10 @@ async function createEmptyKeyResources(
   upload: NovelScriptUpload,
   createdEpisodes: EpisodeSummary[],
 ): Promise<void> {
-  const expectedResources = computeExpectedKeys(novelId, upload, createdEpisodes);
-  await upsertExpectedResources(expectedResources);
-  await deleteEmptyContainerParentScenePlaceholders(
+  await upsertExpectedResources(computeExpectedKeys(novelId, upload, createdEpisodes));
+  await deleteEmptySingleChildParentScenePlaceholders(
     novelId,
-    containerParentSceneKeysFromUpload(upload),
+    singleChildParentSceneKeysFromUpload(upload),
   );
 }
 
@@ -469,11 +460,14 @@ export async function createEmptyKeyResourcesWithDiff(
 /* ------------------------------------------------------------------ */
 
 export async function ensureExpectedNovelResources(novelId: string): Promise<void> {
-  const expectedResources = await computeStoredExpectedKeys(novelId, new Set<string>());
-  await upsertExpectedResources(expectedResources);
-  await deleteEmptyContainerParentScenePlaceholders(
+  const novel = await prisma.novel.findUnique({
+    where: { id: novelId },
+    select: { locationBible: true },
+  });
+  await upsertExpectedResources(await computeStoredExpectedKeys(novelId, new Set<string>()));
+  await deleteEmptySingleChildParentScenePlaceholders(
     novelId,
-    Array.from(await listContainerParentSingleSceneKeys(novelId)),
+    singleChildParentSceneKeysFromStoredLocationBible(novel?.locationBible),
   );
 }
 
@@ -481,10 +475,13 @@ export async function ensureExpectedEpisodeResources(
   novelId: string,
   scriptId: string,
 ): Promise<void> {
-  const expectedResources = await computeStoredExpectedKeys(novelId, new Set([scriptId]));
-  await upsertExpectedResources(expectedResources);
-  await deleteEmptyContainerParentScenePlaceholders(
+  const novel = await prisma.novel.findUnique({
+    where: { id: novelId },
+    select: { locationBible: true },
+  });
+  await upsertExpectedResources(await computeStoredExpectedKeys(novelId, new Set([scriptId])));
+  await deleteEmptySingleChildParentScenePlaceholders(
     novelId,
-    Array.from(await listContainerParentSingleSceneKeys(novelId)),
+    singleChildParentSceneKeysFromStoredLocationBible(novel?.locationBible),
   );
 }

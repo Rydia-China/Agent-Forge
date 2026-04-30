@@ -12,10 +12,6 @@ import type { Prisma } from "@/generated/prisma";
 import type { InitWorkflowResult, GetStatusResult } from "@/lib/video/workflow-types";
 import { costumeKey, parseRecord } from "@/lib/video/resource-key-utils";
 import { registry } from "@/lib/mcp/registry";
-import {
-  ensureExpectedEpisodeResources,
-  ensureExpectedNovelResources,
-} from "@/lib/services/resource-inference-service";
 
 /* ------------------------------------------------------------------ */
 /*  init_workflow integration                                          */
@@ -126,12 +122,6 @@ export async function getStatus(input: GetStatusInput): Promise<GetStatusResult>
   }
 
   if (!novelId) throw new Error("At least one of scriptId or novelId is required");
-
-  if (input.scriptId) {
-    await ensureExpectedEpisodeResources(novelId, input.scriptId);
-  } else {
-    await ensureExpectedNovelResources(novelId);
-  }
 
   const mediaFilter = input.mediaType ? { mediaType: input.mediaType } : {};
   const includeOpts = {
