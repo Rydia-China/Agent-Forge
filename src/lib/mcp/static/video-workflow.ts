@@ -233,7 +233,7 @@ const TOOLS: Tool[] = [
         key: { type: "string", description: "Prompt key，例如 reviewed_prompt_main 或 clip_1_prompt" },
         prompt: { type: "string", description: "Reviewer 放行的视频生成 prompt" },
         title: { type: "string", description: "可选：UI 展示标题" },
-        definition: { type: "string", description: "可选：@图N / @视频N 素材定义" },
+        definition: { type: "string", description: "可选：素材定义；视频执行时只会使用这里逐字出现的 URL，不做标题映射" },
         duration: { type: "number", description: "可选：目标视频时长" },
         refUrls: { type: "array", items: { type: "string" }, description: "可选：prompt 使用的资源 URL 列表" },
         reviewResult: { type: "object", description: "可选：Reviewer JSON 结果" },
@@ -252,7 +252,7 @@ const TOOLS: Tool[] = [
         scriptId: { type: "string", description: "Episode script DB ID" },
         key: { type: "string", description: "已通过 review 的视频 prompt key，例如 clip_1；生成后的视频资源会保存为独立 video_<key>，避免覆盖 视频Prompt。" },
         prompt: { type: "string", description: "Reviewer 放行的视频 prompt" },
-        definition: { type: "string", description: "素材定义，例如 '@图1 是 [场景X]，@图2 是 [人物A换装图]'" },
+        definition: { type: "string", description: "素材定义。只有这里逐字出现的 URL 会作为视频参考图；不要使用 @图 标题映射。" },
         duration: { type: "number", description: "Duration in seconds (4-15)" },
         provider: {
           type: "string",

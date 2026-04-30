@@ -672,45 +672,13 @@ export async function executeVideoPrompt(
 ): Promise<ExecuteVideoPromptResult> {
   const script = await prisma.novelScript.findUnique({
     where: { id: input.scriptId },
-    select: { novelId: true },
+    select: { id: true },
   });
   if (!script) throw new Error(`Episode not found: ${input.scriptId}`);
-
-  const allResources = await prisma.keyResource.findMany({
-    where: {
-      OR: [
-        { scopeType: "novel", scopeId: script.novelId },
-        { scopeType: "script", scopeId: input.scriptId },
-      ],
-      currentVersion: { gt: 0 },
-    },
-    include: { versions: { orderBy: { version: "desc" }, take: 1 } },
-  });
 
   const refImageUrls: string[] = [];
   for (const url of extractUrls(input.definition)) {
     refImageUrls.push(url);
-  }
-
-  const imgRefs = input.definition.match(/@图\d+\s*是\s*\[([^\]]+)\]/g) ?? [];
-  for (const ref of imgRefs) {
-    const nameMatch = ref.match(/\[([^\]]+)\]/);
-    if (!nameMatch) continue;
-    const refName = nameMatch[1]!;
-
-    let matched: string | null = null;
-    for (const r of allResources) {
-      const url = r.versions[0]?.url;
-      if (!url) continue;
-      const title = r.title ?? "";
-      if (!title) continue;
-      if (refName.includes(title) || title.includes(refName)) {
-        if (matched && r.category === "角色立绘") continue;
-        matched = url;
-        if (r.category === "换装") break;
-      }
-    }
-    if (matched && !refImageUrls.includes(matched)) refImageUrls.push(matched);
   }
 
   const videoStyle = await resolveStyle("video_style");
