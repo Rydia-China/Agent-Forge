@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { generateFilename, uploadBuffer } from "@/lib/services/oss-service";
+import { generateFilename, uploadBufferToTarget } from "@/lib/services/oss-service";
 import {
   authenticateExternalVideoApiKey,
   trackExternalVideoApiCall,
 } from "@/lib/services/external-video-api-service";
+
+const EXTERNAL_VIDEO_OSS_TARGET = {
+  region: "ap-southeast-1",
+  bucket: "mob-ai",
+  endpoint: "https://oss-ap-southeast-1.aliyuncs.com",
+};
 
 const UploadToOssFormSchema = z.object({
   folder: z.string().trim().min(1).optional().default("file"),
@@ -54,7 +60,7 @@ export async function POST(req: NextRequest) {
     const url = await trackExternalVideoApiCall(
       auth.apiKeyName,
       "oss.upload",
-      () => uploadBuffer(buffer, filename, parsed.data.folder),
+      () => uploadBufferToTarget(buffer, filename, parsed.data.folder, EXTERNAL_VIDEO_OSS_TARGET),
     );
     return NextResponse.json({
       status: "ok",
