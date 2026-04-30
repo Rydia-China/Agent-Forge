@@ -181,7 +181,7 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 1. 前端读取用户上传的 JSON 剧本文件
 2. `POST /api/video/novels` 校验 `{ name, script }`
 3. service 写入 `novels`，再批量写入 `novel_scripts`
-4. service 按 JSON 内容初始化 versioned `KeyResource` 占位；导入脚本中父地点如果恰好只有 1 个真实子地点，父地点不作为独立场景任务占位，已有版本/URL 的父地点图不受影响
+4. service 按 JSON 内容初始化 versioned `KeyResource` 占位；导入脚本中父地点只要有真实子地点，父地点就不作为独立 single 场景任务占位；已有版本/URL 的父地点图不受影响；真实子地点 >= 2 时仍额外创建 `scene_<父地点名>_grid`
 5. `GET /api/video/novels` 从本地 biz-db 返回小说列表
 6. `GET /api/video/novels/{novelId}/episodes` 从本地 `novel_scripts` 返回 episode 列表
 7. episode 资源读取合并 novel scope 与 script scope 的 `KeyResource`
