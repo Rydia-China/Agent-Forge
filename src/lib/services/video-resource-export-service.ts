@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { listResourcesByScope, type ResourceCategoryGroup, type ResourceItem } from "@/lib/services/key-resource-listing";
+import { listResourcesByScope, type ResourceCategoryGroup } from "@/lib/services/key-resource-listing";
 
 interface ExportAsset {
   basePath: string;
