@@ -364,8 +364,8 @@ export async function generateScene(
   if (input.mode === "single") {
     const { locationBible } = await getNovelLevelData(input.novelId);
     const analyzed = analyzeLocations(locationBible);
-    const gridParent = analyzed.find((loc) => loc.mode === "grid" && loc.name === sceneName);
-    if (gridParent) {
+    const requestedParent = analyzed.find((loc) => loc.name === sceneName && loc.realSubs.length > 0);
+    if (requestedParent?.mode === "grid") {
       return generateScene({
         novelId: input.novelId,
         sceneName,
@@ -373,6 +373,9 @@ export async function generateScene(
         model: input.model,
         mode: "grid",
       });
+    }
+    if (requestedParent) {
+      throw new Error(`Parent location "${sceneName}" is a container; request its sub-location instead`);
     }
 
     const subLocationGridParent = analyzed.find(
@@ -1117,7 +1120,7 @@ async function batchGenerateGridSceneWorkflow(
 
     const { parent, requestedSubName } = match;
     if (parent.mode !== "grid") {
-      singleNames.push(requested.sceneName);
+      if (requestedSubName) singleNames.push(requestedSubName);
       continue;
     }
 
@@ -1188,6 +1191,13 @@ export async function batchGenerateScenes(
     );
     if (input.mode === "single" && requestedGridParent) {
       gridRequests.push(requested.sceneName);
+      processedScenes.add(dedupeKey);
+      continue;
+    }
+    const requestedContainerParent = analyzed.find(
+      (loc) => loc.name === requested.sceneName && loc.realSubs.length > 0,
+    );
+    if (input.mode === "single" && requestedContainerParent) {
       processedScenes.add(dedupeKey);
       continue;
     }
