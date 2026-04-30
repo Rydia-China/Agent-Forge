@@ -315,7 +315,7 @@ function containerParentSceneKeysFromStoredLocationBible(locationBible: unknown)
   return Array.from(keys);
 }
 
-export async function listContainerParentSingleSceneKeys(novelId: string): Promise<Set<string>> {
+async function listContainerParentSingleSceneKeys(novelId: string): Promise<Set<string>> {
   const novel = await prisma.novel.findUnique({
     where: { id: novelId },
     select: { locationBible: true },

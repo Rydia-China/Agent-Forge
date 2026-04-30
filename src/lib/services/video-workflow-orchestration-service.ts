@@ -15,7 +15,6 @@ import { registry } from "@/lib/mcp/registry";
 import {
   ensureExpectedEpisodeResources,
   ensureExpectedNovelResources,
-  listContainerParentSingleSceneKeys,
 } from "@/lib/services/resource-inference-service";
 
 /* ------------------------------------------------------------------ */
@@ -133,7 +132,6 @@ export async function getStatus(input: GetStatusInput): Promise<GetStatusResult>
   } else {
     await ensureExpectedNovelResources(novelId);
   }
-  const containerParentSingleSceneKeys = await listContainerParentSingleSceneKeys(novelId);
 
   const mediaFilter = input.mediaType ? { mediaType: input.mediaType } : {};
   const includeOpts = {
@@ -177,10 +175,7 @@ export async function getStatus(input: GetStatusInput): Promise<GetStatusResult>
     }
   }
 
-  const activeNovelResources = novelResources.filter((resource) => !(
-    resource.category === "场景" && containerParentSingleSceneKeys.has(resource.key)
-  ));
-  const allResources = [...activeNovelResources, ...scriptResources];
+  const allResources = [...novelResources, ...scriptResources];
   const currentVersionRow = (resource: (typeof allResources)[number]) =>
     resource.versions.find((v: { version: number }) => v.version === resource.currentVersion) ?? null;
 
