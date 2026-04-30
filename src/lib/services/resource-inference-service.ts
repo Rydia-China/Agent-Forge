@@ -189,7 +189,7 @@ function computeExpectedKeys(
     const realSubLocations = (location.sub_locations ?? []).filter(
       (subLocation) => subLocation.id !== location.id,
     );
-    if (realSubLocations.length !== 1 && location.visual_prompt?.trim()) {
+    if (realSubLocations.length === 0 && location.visual_prompt?.trim()) {
       allSceneNames.add(location.name);
     }
     if (realSubLocations.length >= 2) gridParents.push(location.name);
@@ -257,7 +257,7 @@ async function computeStoredExpectedKeys(
       return subLocation.id !== location.id;
     });
     if (
-      realSubLocations.length !== 1
+      realSubLocations.length === 0
       && typeof name === "string"
       && typeof visualPrompt === "string"
       && visualPrompt.trim()
@@ -291,18 +291,18 @@ async function computeStoredExpectedKeys(
   return items;
 }
 
-function singleChildParentSceneKeysFromUpload(upload: NovelScriptUpload): string[] {
+function containerParentSceneKeysFromUpload(upload: NovelScriptUpload): string[] {
   const keys = new Set<string>();
   for (const location of upload.location_bible ?? []) {
     const realSubLocations = (location.sub_locations ?? []).filter(
       (subLocation) => subLocation.id !== location.id,
     );
-    if (realSubLocations.length === 1) keys.add(sceneKey(location.name));
+    if (realSubLocations.length > 0) keys.add(sceneKey(location.name));
   }
   return Array.from(keys);
 }
 
-function singleChildParentSceneKeysFromStoredLocationBible(locationBible: unknown): string[] {
+function containerParentSceneKeysFromStoredLocationBible(locationBible: unknown): string[] {
   const keys = new Set<string>();
   for (const location of parseArray(locationBible)) {
     if (!isRecord(location) || typeof location.name !== "string") continue;
@@ -310,12 +310,12 @@ function singleChildParentSceneKeysFromStoredLocationBible(locationBible: unknow
     const realSubLocations = subLocations.filter((subLocation) => (
       isRecord(subLocation) && subLocation.id !== location.id
     ));
-    if (realSubLocations.length === 1) keys.add(sceneKey(location.name));
+    if (realSubLocations.length > 0) keys.add(sceneKey(location.name));
   }
   return Array.from(keys);
 }
 
-async function deleteEmptySingleChildParentScenePlaceholders(
+async function deleteEmptyContainerParentScenePlaceholders(
   novelId: string,
   keys: string[],
 ): Promise<void> {
@@ -376,9 +376,9 @@ async function createEmptyKeyResources(
   createdEpisodes: EpisodeSummary[],
 ): Promise<void> {
   await upsertExpectedResources(computeExpectedKeys(novelId, upload, createdEpisodes));
-  await deleteEmptySingleChildParentScenePlaceholders(
+  await deleteEmptyContainerParentScenePlaceholders(
     novelId,
-    singleChildParentSceneKeysFromUpload(upload),
+    containerParentSceneKeysFromUpload(upload),
   );
 }
 
@@ -465,9 +465,9 @@ export async function ensureExpectedNovelResources(novelId: string): Promise<voi
     select: { locationBible: true },
   });
   await upsertExpectedResources(await computeStoredExpectedKeys(novelId, new Set<string>()));
-  await deleteEmptySingleChildParentScenePlaceholders(
+  await deleteEmptyContainerParentScenePlaceholders(
     novelId,
-    singleChildParentSceneKeysFromStoredLocationBible(novel?.locationBible),
+    containerParentSceneKeysFromStoredLocationBible(novel?.locationBible),
   );
 }
 
@@ -480,8 +480,8 @@ export async function ensureExpectedEpisodeResources(
     select: { locationBible: true },
   });
   await upsertExpectedResources(await computeStoredExpectedKeys(novelId, new Set([scriptId])));
-  await deleteEmptySingleChildParentScenePlaceholders(
+  await deleteEmptyContainerParentScenePlaceholders(
     novelId,
-    singleChildParentSceneKeysFromStoredLocationBible(novel?.locationBible),
+    containerParentSceneKeysFromStoredLocationBible(novel?.locationBible),
   );
 }
