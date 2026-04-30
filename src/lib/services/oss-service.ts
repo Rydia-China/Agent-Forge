@@ -59,10 +59,32 @@ function createClient(): OSS {
   });
 }
 
+interface OssUploadTarget {
+  region: string;
+  bucket: string;
+  endpoint: string;
+}
+
+function createClientForTarget(target: OssUploadTarget): OSS {
+  return new OSS({
+    region: target.region,
+    accessKeyId: process.env.OSS_ACCESS_KEY_ID!,
+    accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET!,
+    bucket: target.bucket,
+    endpoint: target.endpoint,
+    secure: true,
+    timeout: 300000,
+  });
+}
+
 function buildPublicUrl(objectName: string): string {
   const bucket = process.env.OSS_BUCKET!;
   const region = process.env.OSS_REGION!;
   return `https://${bucket}.oss-${region}.aliyuncs.com/${objectName}`;
+}
+
+function buildPublicUrlForTarget(objectName: string, target: OssUploadTarget): string {
+  return `https://${target.bucket}.oss-${target.region}.aliyuncs.com/${objectName}`;
 }
 
 /**
@@ -127,6 +149,18 @@ export async function uploadBuffer(
   const objectName = `public/${folder}/${filename}`;
   await client.put(objectName, buffer);
   return buildPublicUrl(objectName);
+}
+
+export async function uploadBufferToTarget(
+  buffer: Buffer,
+  filename: string,
+  folder: string,
+  target: OssUploadTarget,
+): Promise<string> {
+  const client = createClientForTarget(target);
+  const objectName = `public/${folder}/${filename}`;
+  await client.put(objectName, buffer);
+  return buildPublicUrlForTarget(objectName, target);
 }
 
 export async function uploadFromUrl(
