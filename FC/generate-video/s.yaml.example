@@ -15,12 +15,7 @@ resources:
       internetAccess: true
       resourceGroupId: rg-acfmwcye2ca5jca
       instanceIsolationMode: SHARE
-      logConfig:
-        enableRequestMetrics: true
-        enableInstanceMetrics: true
-        logBeginRule: DefaultRegex
-        project: serverless-cn-hangzhou-be4c408d-7f9d-59bc-9f0e-3de9dd268c6d
-        logstore: default-logs
+      logConfig: auto
       functionName: generate-video
       sessionAffinity: NONE
       runtime: nodejs18
@@ -52,7 +47,6 @@ resources:
         SEEDANCE_RATIO: "9:16"
         SEEDANCE_RESOLUTION: 720p
         SEEDANCE_WATERMARK: 'false'
-        SEEDANCE_GENERATE_AUDIO: 'false'
         SEEDANCE_POLL_MAX_RETRIES: '120'
         SEEDANCE_POLL_INTERVAL_MS: '5000'
       code: ./generate-video
