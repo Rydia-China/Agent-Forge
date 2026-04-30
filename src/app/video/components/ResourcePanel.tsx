@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Button, Collapse, Drawer, Empty, Input, Spin, Typography, Image, Tag, App } from "antd";
 import {
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
   EnvironmentOutlined,
   EyeOutlined,
@@ -44,6 +45,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function getDownloadFilename(contentDisposition: string | null): string | null {
+  if (!contentDisposition) return null;
+
+  const encodedMatch = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);
+  if (encodedMatch?.[1]) {
+    try {
+      return decodeURIComponent(encodedMatch[1]);
+    } catch {
+      return encodedMatch[1];
+    }
+  }
+
+  const quotedMatch = /filename="([^"]+)"/i.exec(contentDisposition);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+
+  const plainMatch = /filename=([^;]+)/i.exec(contentDisposition);
+  return plainMatch?.[1]?.trim() ?? null;
+}
+
 export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovelLevel, onRefresh }: ResourcePanelProps) {
   const { message } = App.useApp();
 
@@ -67,9 +87,13 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
   /* ---- Costume preview drawer state ---- */
   const [costumePreviewOpen, setCostumePreviewOpen] = useState(false);
 
+  /* ---- Export state ---- */
+  const [isExporting, setIsExporting] = useState(false);
+
   /* ---- Collapse expand state (controlled) ---- */
   const [activeKeys, setActiveKeys] = useState<string[]>([]);
   const knownKeysRef = useRef<Set<string>>(new Set());
+  const categories = useMemo(() => resources?.categories ?? [], [resources?.categories]);
 
   /* ---- Smart image rendering ---- */
   const renderSmartImage = (url: string, alt: string, keyResourceId: string | null | undefined) => {
@@ -206,6 +230,59 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
     }
   }, [editingItem, editText, scriptId, onRefresh, message]);
 
+  const hasGeneratedResources = useMemo(() => {
+    return categories.some((group) =>
+      group.items.some((item) =>
+        item.url != null && (item.mediaType === "image" || item.mediaType === "video"),
+      ),
+    );
+  }, [categories]);
+
+  const handleExport = useCallback(async () => {
+    const endpoint = isNovelLevel
+      ? `/api/video/novel/${encodeURIComponent(novelId)}/resources/export`
+      : scriptId
+        ? `/api/video/episodes/${encodeURIComponent(scriptId)}/resources/export?novelId=${encodeURIComponent(novelId)}`
+        : null;
+
+    if (!endpoint) return;
+
+    setIsExporting(true);
+    try {
+      const response = await fetch(endpoint);
+      if (!response.ok) {
+        let errorMessage = "Export failed";
+        try {
+          const parsed: unknown = await response.json();
+          if (isRecord(parsed) && typeof parsed.error === "string") {
+            errorMessage = parsed.error;
+          }
+        } catch {
+          // Keep the generic export failure message.
+        }
+        throw new Error(errorMessage);
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition");
+      const filename = getDownloadFilename(disposition) ?? "resources.zip";
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      void message.success("Export started");
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Export failed";
+      void message.error(errorMessage);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [isNovelLevel, novelId, scriptId, message]);
+
   /* ---- Per media_type renderers ---- */
 
   /* ---- Delete overlay button (shared across media types) ---- */
@@ -330,7 +407,6 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
   };
 
   /* ---- Auto-expand newly appeared categories, preserve existing expand state ---- */
-  const categories = useMemo(() => resources?.categories ?? [], [resources?.categories]);
   const categoryKeys = useMemo(() => categories.map((g) => `cat-${g.category}`), [categories]);
   useEffect(() => {
     const newKeys = categoryKeys.filter((k) => !knownKeysRef.current.has(k));
@@ -424,6 +500,17 @@ export function ResourcePanel({ resources, isLoading, novelId, scriptId, isNovel
                   style={{ width: 28, height: 28, minWidth: 28 }}
                 />
               )}
+              <Button
+                type="text"
+                size="small"
+                icon={<DownloadOutlined />}
+                onClick={() => void handleExport()}
+                loading={isExporting}
+                disabled={!hasGeneratedResources}
+                className="!text-slate-400 hover:!text-slate-200"
+                title="Export Generated Resources"
+                style={{ width: 28, height: 28, minWidth: 28 }}
+              />
               <Button
                 type="text"
                 size="small"
