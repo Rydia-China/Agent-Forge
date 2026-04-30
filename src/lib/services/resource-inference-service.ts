@@ -186,11 +186,15 @@ function computeExpectedKeys(
   const allSceneNames = new Set<string>();
   const gridParents: string[] = [];
   for (const location of locations) {
-    if (location.visual_prompt?.trim()) allSceneNames.add(location.name);
     const realSubLocations = (location.sub_locations ?? []).filter(
       (subLocation) => subLocation.id !== location.id,
     );
-    if (realSubLocations.length >= 2) gridParents.push(location.name);
+    const isGridParent = realSubLocations.length >= 2;
+    if (isGridParent) {
+      gridParents.push(location.name);
+    } else if (location.visual_prompt?.trim()) {
+      allSceneNames.add(location.name);
+    }
     for (const subLocation of location.sub_locations ?? []) {
       if (subLocation.visual_prompt?.trim()) allSceneNames.add(subLocation.name);
     }
@@ -247,18 +251,19 @@ async function computeStoredExpectedKeys(
   for (const location of parseArray(novel?.locationBible)) {
     if (!isRecord(location)) continue;
     const name = location.name;
-    const visualPrompt = location.visual_prompt;
-    if (typeof name === "string" && typeof visualPrompt === "string" && visualPrompt.trim()) {
-      addNovelSceneResource(items, seen, novelId, name);
-    }
-
     const subLocations = parseArray(location.sub_locations);
     const realSubLocations = subLocations.filter((subLocation) => {
       if (!isRecord(subLocation)) return false;
       return subLocation.id !== location.id;
     });
-    if (typeof name === "string" && realSubLocations.length >= 2) {
+    const isGridParent = typeof name === "string" && realSubLocations.length >= 2;
+    if (isGridParent) {
       addNovelSceneGridResource(items, seen, novelId, name);
+    } else {
+      const visualPrompt = location.visual_prompt;
+      if (typeof name === "string" && typeof visualPrompt === "string" && visualPrompt.trim()) {
+        addNovelSceneResource(items, seen, novelId, name);
+      }
     }
 
     for (const subLocation of subLocations) {
@@ -282,6 +287,41 @@ async function computeStoredExpectedKeys(
   }
 
   return items;
+}
+
+function emptyGridParentSceneKeys(expectedResources: ExpectedResourceMeta[]): string[] {
+  const keys = new Set<string>();
+  for (const resource of expectedResources) {
+    if (
+      resource.scopeType !== "novel"
+      || resource.category !== "场景"
+      || !resource.key.endsWith("_grid")
+    ) {
+      continue;
+    }
+    const parentTitle = resource.title.endsWith(" (grid)")
+      ? resource.title.slice(0, -" (grid)".length)
+      : resource.title;
+    if (parentTitle.trim()) keys.add(sceneKey(parentTitle));
+  }
+  return Array.from(keys);
+}
+
+async function deleteEmptyGridParentScenePlaceholders(
+  novelId: string,
+  expectedResources: ExpectedResourceMeta[],
+): Promise<void> {
+  const keys = emptyGridParentSceneKeys(expectedResources);
+  if (keys.length === 0) return;
+  await prisma.keyResource.deleteMany({
+    where: {
+      scopeType: "novel",
+      scopeId: novelId,
+      category: "场景",
+      key: { in: keys },
+      currentVersion: 0,
+    },
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -328,7 +368,9 @@ async function createEmptyKeyResources(
   upload: NovelScriptUpload,
   createdEpisodes: EpisodeSummary[],
 ): Promise<void> {
-  await upsertExpectedResources(computeExpectedKeys(novelId, upload, createdEpisodes));
+  const expectedResources = computeExpectedKeys(novelId, upload, createdEpisodes);
+  await upsertExpectedResources(expectedResources);
+  await deleteEmptyGridParentScenePlaceholders(novelId, expectedResources);
 }
 
 /* ------------------------------------------------------------------ */
@@ -409,12 +451,16 @@ export async function createEmptyKeyResourcesWithDiff(
 /* ------------------------------------------------------------------ */
 
 export async function ensureExpectedNovelResources(novelId: string): Promise<void> {
-  await upsertExpectedResources(await computeStoredExpectedKeys(novelId, new Set<string>()));
+  const expectedResources = await computeStoredExpectedKeys(novelId, new Set<string>());
+  await upsertExpectedResources(expectedResources);
+  await deleteEmptyGridParentScenePlaceholders(novelId, expectedResources);
 }
 
 export async function ensureExpectedEpisodeResources(
   novelId: string,
   scriptId: string,
 ): Promise<void> {
-  await upsertExpectedResources(await computeStoredExpectedKeys(novelId, new Set([scriptId])));
+  const expectedResources = await computeStoredExpectedKeys(novelId, new Set([scriptId]));
+  await upsertExpectedResources(expectedResources);
+  await deleteEmptyGridParentScenePlaceholders(novelId, expectedResources);
 }
