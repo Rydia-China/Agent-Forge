@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "@/lib/db";
+import { listContainerParentSingleSceneKeys } from "@/lib/services/resource-inference-service";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -85,6 +86,9 @@ export async function listResourcesByScope(
   scopeType: string,
   scopeId: string,
 ): Promise<ResourceCategoryGroup[]> {
+  const containerParentSingleSceneKeys = scopeType === "novel"
+    ? await listContainerParentSingleSceneKeys(scopeId)
+    : new Set<string>();
   const resources = await prisma.$queryRaw<ResourceListRow[]>`
     SELECT
       kr.id,
@@ -114,6 +118,12 @@ export async function listResourcesByScope(
 
   for (const resource of resources) {
     if (!resource.category) continue;
+    if (
+      resource.category === "场景"
+      && containerParentSingleSceneKeys.has(resource.key)
+    ) {
+      continue;
+    }
 
     const item: ResourceItem = {
       id: resource.id,
