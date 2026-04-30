@@ -49,7 +49,7 @@ Seedance 视频生成：
 curl -X POST http://localhost:8001/api/external/video/generate \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer <key>' \
-  -d '{"prompt":"a cinematic shot of a city at sunset","duration":5}'
+  -d '{"prompt":"a cinematic shot of a city at sunset","duration":5,"ratio":"9:16","resolution":"720P"}'
 ```
 
 HappyHorse 视频生成：

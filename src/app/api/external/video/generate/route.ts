@@ -13,6 +13,8 @@ const GenerateVideoRequestSchema = z.object({
   referenceImageUrls: z.array(z.string().url()).optional(),
   sourceVideoUrls: z.array(z.string().url()).optional(),
   duration: z.number().min(1).max(15).optional(),
+  ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional(),
+  resolution: z.enum(["1080P", "720P"]).optional(),
 });
 
 export async function POST(req: NextRequest) {
