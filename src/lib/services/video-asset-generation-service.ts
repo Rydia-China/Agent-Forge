@@ -29,7 +29,6 @@ import {
   type MediaItem,
 } from "./fc-happyhorse-client";
 import {
-  compressedUrlFromResourceData,
   compressImageUrlLosslessBestEffort,
   type ImageCompressionResult,
 } from "./image-compression-service";
@@ -635,7 +634,6 @@ function dedupeStrings(values: string[]): string[] {
 
 async function resolveVideoReferenceImages(
   urls: string[],
-  compressedUrlByOriginal: Map<string, string>,
   key: string,
 ): Promise<{ urls: string[]; compression: ImageCompressionResult[] }> {
   const cache = new Map<string, ImageCompressionResult>();
@@ -643,22 +641,6 @@ async function resolveVideoReferenceImages(
   const resolvedUrls: string[] = [];
 
   for (const url of dedupeStrings(urls)) {
-    const knownCompressedUrl = compressedUrlByOriginal.get(url);
-    if (knownCompressedUrl) {
-      const result: ImageCompressionResult = {
-        originalUrl: url,
-        compressedUrl: knownCompressedUrl,
-        originalBytes: 0,
-        compressedBytes: 0,
-        format: "known-resource",
-        uploaded: knownCompressedUrl !== url,
-        note: "reused compressed URL from image resource metadata",
-      };
-      compression.push(result);
-      resolvedUrls.push(result.compressedUrl);
-      continue;
-    }
-
     const cached = cache.get(url);
     const result = cached ?? await compressImageUrlLosslessBestEffort(url, key);
     cache.set(url, result);
@@ -705,17 +687,6 @@ export async function executeVideoPrompt(
     include: { versions: { orderBy: { version: "desc" }, take: 1 } },
   });
 
-  const compressedUrlByOriginal = new Map<string, string>();
-  for (const resource of allResources) {
-    const version = resource.versions[0];
-    const originalUrl = version?.url;
-    const compressedUrl = compressedUrlFromResourceData(version?.data);
-    if (originalUrl && compressedUrl) {
-      compressedUrlByOriginal.set(originalUrl, compressedUrl);
-      compressedUrlByOriginal.set(compressedUrl, compressedUrl);
-    }
-  }
-
   const refImageUrls: string[] = [];
   for (const url of extractUrls(input.definition)) {
     refImageUrls.push(url);
@@ -746,11 +717,9 @@ export async function executeVideoPrompt(
   if (input.previousFrameUrl && !refImageUrls.includes(input.previousFrameUrl)) {
     refImageUrls.unshift(input.previousFrameUrl);
   }
-  if (videoStyle.styleRefUrl) refImageUrls.unshift(videoStyle.styleRefUrl);
 
   const resolvedReferenceImages = await resolveVideoReferenceImages(
     refImageUrls,
-    compressedUrlByOriginal,
     input.key,
   );
   const videoRefImageUrls = resolvedReferenceImages.urls;
