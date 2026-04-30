@@ -212,6 +212,14 @@ EP 级资源 agent：
 4. 服务端注入 `VideoContextProvider`，提供 `novel_id`、`script_id`、`script_key` 与 `init_result`
 5. 默认 skill 为 `video-workflow`，默认 MCP scope 为 `video_workflow` + `subagent`，用于无文件系统环境下的 EP 级资源门禁、Prompt Optimizer 调度、review 门禁和产视编排
 
+资源导出：
+1. 小说级资源面板导出调用 `GET /api/video/novel/{novelId}/resources/export`
+2. EP 级资源面板导出调用 `GET /api/video/episodes/{scriptId}/resources/export?novelId={novelId}`
+3. 服务端只打包当前版本中已有 URL 的 image/video 资源；JSON prompt、占位资源和下载失败的远程文件不会写入 zip
+4. EP 级导出与面板展示一致，会合并 novel scope 与 script scope 资源
+
+验证重点：响应应为 `Content-Type: application/zip`，`Content-Disposition` 文件名包含小说名；无已生成资源时返回 404。
+
 **视频生成工作流**：
 1. 先提交 EP 级异步批量换装任务，等待 `completed`，并将换装图作为服装权威源
 2. 主控只调用 `video_workflow__optimize_video_prompts`，不自行拼接或转述 Optimizer instruction，不直接调用 `subagent__run`
