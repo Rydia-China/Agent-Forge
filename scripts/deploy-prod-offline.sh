@@ -30,18 +30,18 @@ Usage:
   SSHPASS=... pnpm deploy:prod -- --tag 0.0.4 [options]
 
 Required for modes deploy/build:
-  --tag <tag>                 Release tag to deploy. Must exist on origin for server-side fetch.
+  --tag <tag>                 Release tag to deploy. Must point to current HEAD.
 
 Modes:
-  --mode deploy               Full release flow. Default.
+  --mode deploy               Full offline package release flow. Default.
   --mode backup               Backup local and remote state only.
-  --mode build                Server fetches code and builds image only; does not restart app.
+  --mode build                Build local linux/amd64 image package only; does not upload or restart app.
   --mode sync-env             Backup and overwrite remote .env, then recreate app.
   --mode sync-tables          Export and sync configured DB tables only.
   --mode verify               Verify public health, OSS auth path, container image, and table counts.
 
 Options:
-  --retag                     Force-update local tag to current HEAD before validation. You must push the tag before server deploy can fetch it.
+  --retag                     Force-update local tag to current HEAD before validation.
   --server <user@host>        SSH target. Default: root@agent.mob-ai.cn
   --project-dir <path>        Remote runtime directory. Default: /var/www/agent-forge
   --code-dir <path>           Remote Git source directory. Default: /var/www/agent-forge/source
@@ -183,8 +183,6 @@ if [[ "$MODE" == "deploy" || "$MODE" == "build" ]]; then
   fi
   TAG_SHA="$(git rev-parse "${TAG}^{}")"
   [[ "$TAG_SHA" == "$HEAD_SHA" ]] || die "Tag $TAG points to $TAG_SHA, but HEAD is $HEAD_SHA. Use --retag to update it."
-  git ls-remote --exit-code --tags "$REPO_URL" "refs/tags/$TAG" >/dev/null \
-    || die "Tag $TAG is not available from $REPO_URL. Push the tag before deploying."
 fi
 
 if [[ "$MODE" == "deploy" || "$MODE" == "build" ]]; then
@@ -196,6 +194,7 @@ BACKUP_DIR="${BACKUP_ROOT}/deploy-${STAMP_NAME}"
 LOCAL_BACKUP_DIR="${BACKUP_DIR}/local"
 SERVER_BACKUP_DIR="${BACKUP_DIR}/server"
 SYNC_DIR="${BACKUP_DIR}/sync"
+IMAGE_ARCHIVE="${SYNC_DIR}/agent-forge-${TAG:-manual}.tar.gz"
 
 local_backup() {
   log "Local backup -> $LOCAL_BACKUP_DIR"
@@ -274,31 +273,39 @@ REMOTE_ENV
   ssh_remote "chmod 600 '${PROJECT_DIR}/.env'"
 }
 
-server_checkout_and_build() {
-  [[ -n "$TAG" ]] || die "--tag is required to build image"
-  log "Server fetching $TAG and building image"
-  ssh_remote "bash -s" <<REMOTE_BUILD
+package_image() {
+  [[ -n "$TAG" ]] || die "--tag is required to build image package"
+  log "Building local linux/amd64 image package for $TAG"
+  mkdir -p "$SYNC_DIR"
+  docker buildx build --platform linux/amd64 -t agent-forge:latest -t "agent-forge:$TAG" -f Dockerfile . --load
+  docker save agent-forge:latest "agent-forge:$TAG" | gzip > "$IMAGE_ARCHIVE"
+  ls -lh "$IMAGE_ARCHIVE"
+}
+
+server_load_image_package() {
+  [[ -f "$IMAGE_ARCHIVE" ]] || die "Image archive not found: $IMAGE_ARCHIVE"
+  log "Uploading image package and runtime config"
+  ssh_remote "mkdir -p '${PROJECT_DIR}/releases'"
+  scp_to_remote "$IMAGE_ARCHIVE" "${PROJECT_DIR}/releases/$(basename "$IMAGE_ARCHIVE")"
+  scp_to_remote docker-compose.prod.yml "${PROJECT_DIR}/docker-compose.prod.yml"
+  scp_to_remote nginx.conf "${PROJECT_DIR}/nginx.conf"
+
+  log "Loading image package on server"
+  ssh_remote "bash -s" <<REMOTE_LOAD
 set -euo pipefail
-mkdir -p "$PROJECT_DIR"
-if [ -d "$CODE_DIR/.git" ]; then
-  git -C "$CODE_DIR" remote set-url origin "$REPO_URL"
-  git -C "$CODE_DIR" fetch --tags --prune origin
-else
-  rm -rf "$CODE_DIR"
-  mkdir -p "\$(dirname "$CODE_DIR")"
-  git clone "$REPO_URL" "$CODE_DIR"
-  git -C "$CODE_DIR" fetch --tags --prune origin
-fi
-git -C "$CODE_DIR" checkout --force "refs/tags/$TAG"
-git -C "$CODE_DIR" clean -fdx
-cp "$CODE_DIR/docker-compose.prod.yml" "$PROJECT_DIR/docker-compose.prod.yml"
-cp "$CODE_DIR/nginx.conf" "$PROJECT_DIR/nginx.conf"
-docker buildx build --platform linux/amd64 -t agent-forge:latest -t "agent-forge:$TAG" -f "$CODE_DIR/Dockerfile" "$CODE_DIR" --load
-REMOTE_BUILD
+cd "$PROJECT_DIR"
+gzip -dc "releases/$(basename "$IMAGE_ARCHIVE")" | docker load
+cat > release.txt <<RELEASE
+tag=$TAG
+commit=$HEAD_SHA
+image=agent-forge:$TAG
+deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+RELEASE
+REMOTE_LOAD
 }
 
 recreate_app() {
-  log "Recreating app from server-built image"
+  log "Recreating app from loaded image"
   ssh_remote "bash -s" <<REMOTE_DEPLOY
 set -euo pipefail
 cd "$PROJECT_DIR"
@@ -368,7 +375,7 @@ verify_deploy() {
   ssh_remote "bash -s" <<REMOTE_VERIFY
 set -euo pipefail
 echo "source_commit"
-if [ -d "$CODE_DIR/.git" ]; then git -C "$CODE_DIR" rev-parse HEAD; else echo "no-source"; fi
+if [ -f "$PROJECT_DIR/release.txt" ]; then cat "$PROJECT_DIR/release.txt"; elif [ -d "$CODE_DIR/.git" ]; then git -C "$CODE_DIR" rev-parse HEAD; else echo "no-source"; fi
 echo "container_image"
 docker inspect -f "{{.Image}}" agent-forge-app-1
 docker image inspect agent-forge:latest --format "{{.Id}} {{.Created}}"
@@ -397,7 +404,7 @@ case "$MODE" in
     backup_all
     ;;
   build)
-    server_checkout_and_build
+    package_image
     ;;
   sync-env)
     sync_env
@@ -418,7 +425,8 @@ case "$MODE" in
     if [[ "$SKIP_ENV" != "true" ]]; then
       sync_env
     fi
-    server_checkout_and_build
+    package_image
+    server_load_image_package
     recreate_app
     wait_for_app_health
     if [[ "$SKIP_TABLE_SYNC" != "true" ]]; then
