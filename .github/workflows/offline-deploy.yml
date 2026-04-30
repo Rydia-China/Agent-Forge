@@ -1,0 +1,107 @@
+name: Offline Deploy
+
+on:
+  push:
+    branches:
+      - deploy/prod
+      - deploy/test
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        required: true
+        type: choice
+        options:
+          - testing
+          - production
+      image_tag:
+        description: Optional Docker image tag. Defaults to <target>-<short-sha>.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: offline-deploy-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build package and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target || (github.ref_name == 'deploy/prod' && 'production' || 'testing') }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        run: corepack enable pnpm
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure SSH
+        env:
+          SSH_HOST: ${{ vars.SSH_HOST }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_HOST"
+          test -n "$SSH_PRIVATE_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Compute deploy metadata
+        id: meta
+        env:
+          INPUT_TAG: ${{ github.event.inputs.image_tag }}
+          INPUT_TARGET: ${{ github.event.inputs.target }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            target="$INPUT_TARGET"
+          elif [[ "${GITHUB_REF_NAME}" == "deploy/prod" ]]; then
+            target="production"
+          else
+            target="testing"
+          fi
+
+          if [[ -n "${INPUT_TAG:-}" ]]; then
+            image_tag="$INPUT_TAG"
+          else
+            short_sha="$(git rev-parse --short=12 HEAD)"
+            image_tag="${target}-${short_sha}"
+          fi
+
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy offline image package
+        env:
+          SSH_USER: ${{ vars.SSH_USER }}
+          SSH_HOST: ${{ vars.SSH_HOST }}
+          PROJECT_DIR: ${{ vars.PROJECT_DIR }}
+          PUBLIC_HOST: ${{ vars.PUBLIC_HOST }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_USER"
+          test -n "$SSH_HOST"
+          test -n "$PROJECT_DIR"
+          test -n "$PUBLIC_HOST"
+
+          pnpm deploy:prod -- \
+            --mode image-deploy \
+            --tag "$IMAGE_TAG" \
+            --skip-git-tag-check \
+            --skip-table-sync \
+            --skip-remote-pullback \
+            --server "${SSH_USER}@${SSH_HOST}" \
+            --project-dir "$PROJECT_DIR" \
+            --public-host "$PUBLIC_HOST"
