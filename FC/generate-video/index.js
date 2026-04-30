@@ -327,7 +327,6 @@ function getModelArkRuntimeConfig() {
   const ratio = process.env.SEEDANCE_RATIO || '9:16'
   const resolution = process.env.SEEDANCE_RESOLUTION || '720p'
   const watermark = process.env.SEEDANCE_WATERMARK === 'true'
-  const generateAudio = process.env.SEEDANCE_GENERATE_AUDIO === 'true'
 
   return {
     ...controlPlaneConfig,
@@ -339,7 +338,6 @@ function getModelArkRuntimeConfig() {
     ratio,
     resolution,
     watermark,
-    generateAudio
   }
 }
 
@@ -467,7 +465,7 @@ async function submitModelArkVideoTask(imageUrls, prompt, options = {}) {
     resolution: normalizeResolution(options.resolution, config.resolution),
     duration: getDurationFromOptions(options),
     watermark: config.watermark,
-    generate_audio: config.generateAudio
+    generate_audio: true
   }
 
   const result = await callModelArkRuntime(config.tasksPath, 'POST', payload)
