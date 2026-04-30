@@ -2,12 +2,14 @@
 set -euo pipefail
 
 SERVER="root@agent.mob-ai.cn"
+PUBLIC_HOST=""
 PROJECT_DIR="/var/www/agent-forge"
 CODE_DIR="/var/www/agent-forge/source"
 REPO_URL="$(git config --get remote.origin.url || true)"
 TAG=""
 MODE="deploy"
 RETAG="false"
+SKIP_GIT_TAG_CHECK="false"
 BACKUP_STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_ROOT="backups"
 LOCAL_DB_CONTAINER="agent-forge-db-dev"
@@ -34,6 +36,7 @@ Required for modes deploy/build:
 
 Modes:
   --mode deploy               Full offline package release flow. Default.
+  --mode image-deploy         CI-safe image package deploy. Does not sync .env or DB tables.
   --mode backup               Backup local and remote state only.
   --mode build                Build local linux/amd64 image package only; does not upload or restart app.
   --mode sync-env             Backup and overwrite remote .env, then recreate app.
@@ -42,7 +45,9 @@ Modes:
 
 Options:
   --retag                     Force-update local tag to current HEAD before validation.
+  --skip-git-tag-check        Allow --tag to be an image tag that is not a Git tag. Intended for CI deploy branches.
   --server <user@host>        SSH target. Default: root@agent.mob-ai.cn
+  --public-host <host>        Public HTTP host for verification. Default: SSH host without user.
   --project-dir <path>        Remote runtime directory. Default: /var/www/agent-forge
   --code-dir <path>           Remote Git source directory. Default: /var/www/agent-forge/source
   --repo-url <url>            Git URL server pulls from. Default: local origin URL
@@ -54,7 +59,7 @@ Options:
   --skip-remote-pullback      Do not pull remote backups back to local backup dir.
 
 Authentication:
-  SSHPASS must be set in the environment. This script always uses sshpass -e for server access.
+  Set SSHPASS for password SSH, or configure normal ssh/scp key authentication.
 USAGE
 }
 
@@ -78,15 +83,27 @@ join_by_comma() {
 }
 
 ssh_remote() {
-  sshpass -e ssh "${SSH_OPTS[@]}" "$SERVER" "$@"
+  if [[ -n "${SSHPASS:-}" ]]; then
+    sshpass -e ssh "${SSH_OPTS[@]}" "$SERVER" "$@"
+  else
+    ssh "${SSH_OPTS[@]}" "$SERVER" "$@"
+  fi
 }
 
 scp_to_remote() {
-  sshpass -e scp "${SSH_OPTS[@]}" "$1" "$SERVER:$2"
+  if [[ -n "${SSHPASS:-}" ]]; then
+    sshpass -e scp "${SSH_OPTS[@]}" "$1" "$SERVER:$2"
+  else
+    scp "${SSH_OPTS[@]}" "$1" "$SERVER:$2"
+  fi
 }
 
 scp_from_remote_dir() {
-  sshpass -e scp "${SSH_OPTS[@]}" -r "$SERVER:$1/." "$2/"
+  if [[ -n "${SSHPASS:-}" ]]; then
+    sshpass -e scp "${SSH_OPTS[@]}" -r "$SERVER:$1/." "$2/"
+  else
+    scp "${SSH_OPTS[@]}" -r "$SERVER:$1/." "$2/"
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -106,8 +123,16 @@ while [[ $# -gt 0 ]]; do
       RETAG="true"
       shift
       ;;
+    --skip-git-tag-check)
+      SKIP_GIT_TAG_CHECK="true"
+      shift
+      ;;
     --server)
       SERVER="${2:-}"
+      shift 2
+      ;;
+    --public-host)
+      PUBLIC_HOST="${2:-}"
       shift 2
       ;;
     --project-dir)
@@ -157,12 +182,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$MODE" in
-  deploy|backup|build|sync-env|sync-tables|verify) ;;
+  deploy|image-deploy|backup|build|sync-env|sync-tables|verify) ;;
   *) die "Unknown mode: $MODE" ;;
 esac
 
-[[ -n "${SSHPASS:-}" ]] || die "SSHPASS must be set in the environment"
 [[ -n "$REPO_URL" ]] || die "No repo URL configured. Pass --repo-url."
+[[ -n "$SERVER" ]] || die "--server is required"
 [[ "$PROJECT_DIR" == /* && "$PROJECT_DIR" != "/" ]] || die "--project-dir must be an absolute non-root path"
 [[ "$CODE_DIR" == /* && "$CODE_DIR" != "/" ]] || die "--code-dir must be an absolute non-root path"
 [[ "$CODE_DIR" != "$PROJECT_DIR" ]] || die "--code-dir must not equal --project-dir"
@@ -170,22 +195,29 @@ esac
 
 require_cmd git
 require_cmd docker
-require_cmd sshpass
+if [[ -n "${SSHPASS:-}" ]]; then
+  require_cmd sshpass
+fi
+require_cmd ssh
+require_cmd scp
 require_cmd curl
 
 HEAD_SHA="$(git rev-parse HEAD)"
+VERIFY_HOST="${PUBLIC_HOST:-${SERVER#*@}}"
 
-if [[ "$MODE" == "deploy" || "$MODE" == "build" ]]; then
+if [[ "$MODE" == "deploy" || "$MODE" == "image-deploy" || "$MODE" == "build" ]]; then
   [[ -n "$TAG" ]] || { usage; die "--tag is required for mode $MODE"; }
   if [[ "$RETAG" == "true" ]]; then
     log "Updating local tag $TAG to current HEAD $HEAD_SHA"
     git tag -fa "$TAG" -m "release: $TAG"
   fi
-  TAG_SHA="$(git rev-parse "${TAG}^{}")"
-  [[ "$TAG_SHA" == "$HEAD_SHA" ]] || die "Tag $TAG points to $TAG_SHA, but HEAD is $HEAD_SHA. Use --retag to update it."
+  if [[ "$SKIP_GIT_TAG_CHECK" != "true" ]]; then
+    TAG_SHA="$(git rev-parse "${TAG}^{}")"
+    [[ "$TAG_SHA" == "$HEAD_SHA" ]] || die "Tag $TAG points to $TAG_SHA, but HEAD is $HEAD_SHA. Use --retag to update it."
+  fi
 fi
 
-if [[ "$MODE" == "deploy" || "$MODE" == "build" ]]; then
+if [[ "$MODE" == "deploy" || "$MODE" == "image-deploy" || "$MODE" == "build" ]]; then
   [[ -z "$(git status --short)" ]] || die "Working tree is not clean"
 fi
 
@@ -355,19 +387,25 @@ DB=\$(docker ps --filter "name=agent-forge-db" --format "{{.Names}}" | head -n1)
 test -n "\$DB"
 docker exec -i "\$DB" psql -U postgres -d "$REMOTE_DB_NAME" -v ON_ERROR_STOP=1 -c 'TRUNCATE ${table_list} RESTART IDENTITY;'
 REMOTE_SYNC
-  sshpass -e ssh "${SSH_OPTS[@]}" "$SERVER" \
-    "DB=\$(docker ps --filter \"name=agent-forge-db\" --format \"{{.Names}}\" | head -n1); test -n \"\$DB\"; docker exec -i \"\$DB\" psql -U postgres -d \"$REMOTE_DB_NAME\" -v ON_ERROR_STOP=1" \
-    < "$SYNC_DIR/core-tables.sql"
+  if [[ -n "${SSHPASS:-}" ]]; then
+    sshpass -e ssh "${SSH_OPTS[@]}" "$SERVER" \
+      "DB=\$(docker ps --filter \"name=agent-forge-db\" --format \"{{.Names}}\" | head -n1); test -n \"\$DB\"; docker exec -i \"\$DB\" psql -U postgres -d \"$REMOTE_DB_NAME\" -v ON_ERROR_STOP=1" \
+      < "$SYNC_DIR/core-tables.sql"
+  else
+    ssh "${SSH_OPTS[@]}" "$SERVER" \
+      "DB=\$(docker ps --filter \"name=agent-forge-db\" --format \"{{.Names}}\" | head -n1); test -n \"\$DB\"; docker exec -i \"\$DB\" psql -U postgres -d \"$REMOTE_DB_NAME\" -v ON_ERROR_STOP=1" \
+      < "$SYNC_DIR/core-tables.sql"
+  fi
 }
 
 verify_deploy() {
   log "Final verification"
-  curl -fsS "https://${SERVER#*@}/api/health" >/tmp/agent-forge-health.json
+  curl -fsS "https://${VERIFY_HOST}/api/health" >/tmp/agent-forge-health.json
   cat /tmp/agent-forge-health.json
   echo
 
   local oss_status
-  oss_status="$(curl -sS -o /tmp/agent-forge-oss-auth.json -w '%{http_code}' -X POST "https://${SERVER#*@}/api/external/video/oss/upload")"
+  oss_status="$(curl -sS -o /tmp/agent-forge-oss-auth.json -w '%{http_code}' -X POST "https://${VERIFY_HOST}/api/external/video/oss/upload")"
   cat /tmp/agent-forge-oss-auth.json
   echo
   [[ "$oss_status" == "401" || "$oss_status" == "400" ]] || die "Unexpected OSS auth-check status: $oss_status"
@@ -405,6 +443,16 @@ case "$MODE" in
     ;;
   build)
     package_image
+    ;;
+  image-deploy)
+    remote_backup
+    package_image
+    server_load_image_package
+    recreate_app
+    wait_for_app_health
+    SKIP_TABLE_SYNC="true"
+    verify_deploy
+    cleanup_tmp
     ;;
   sync-env)
     sync_env
