@@ -142,7 +142,7 @@ export async function GET(
         description,
         compiledPrompt,
         mode,
-        imageUrl: sceneUrlByTitle.get(name) ?? null,
+        imageUrl: sceneUrlByTitle.get(name) ?? sceneUrlByTitle.get(`${name} (grid)`) ?? null,
         parentName: null,
       });
 

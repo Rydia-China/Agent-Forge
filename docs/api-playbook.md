@@ -181,7 +181,7 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 1. 前端读取用户上传的 JSON 剧本文件
 2. `POST /api/video/novels` 校验 `{ name, script }`
 3. service 写入 `novels`，再批量写入 `novel_scripts`
-4. service 按 JSON 内容初始化 versioned `KeyResource` 占位
+4. service 按 JSON 内容初始化 versioned `KeyResource` 占位；带 2 个及以上真实子地点的父地点只创建 `scene_<父地点名>_grid`，不创建同名父地点单图 `scene_<父地点名>`
 5. `GET /api/video/novels` 从本地 biz-db 返回小说列表
 6. `GET /api/video/novels/{novelId}/episodes` 从本地 `novel_scripts` 返回 episode 列表
 7. episode 资源读取合并 novel scope 与 script scope 的 `KeyResource`
@@ -201,9 +201,10 @@ curl -X POST http://localhost:8001/api/subagents/{subagent_id}/cancel
 小说级场景生成：
 1. 调用方只传 `sceneNames`，不能传 `mode`；生成类型由服务端根据 `location_bible` 与资源占位自动裁决
 2. 普通地点输出 `scene_<地点名>`
-3. 带 2 个及以上真实子地点的父地点一律走 grid 工作流：先用 `location_grid_style` 输出 `scene_<父地点名>_grid`，再把该参照图传给 `sub_location_style`，逐个生成子地点实际图 `scene_<子地点名>`
-4. `sceneNames` 可以传占位资源的 `key` 或 `title`；服务端会把 `scene_...` key 解析回 `location_bible` 的真实标题，并把 `_grid` key 识别为 grid 工作流
-5. grid 父地点永远不能单独用 `location_style` 裸生成，子地点实际图也不能裸生成
+3. 带 2 个及以上真实子地点的父地点不是实际场景单图，占位和生成都只使用 `scene_<父地点名>_grid`；不得再创建同名 `scene_<父地点名>`
+4. grid 工作流先用 `location_grid_style` 输出 `scene_<父地点名>_grid`，再把该参照图传给 `sub_location_style`，逐个生成子地点实际图 `scene_<子地点名>`
+5. `sceneNames` 可以传占位资源的 `key` 或 `title`；服务端会把 `scene_...` key 解析回 `location_bible` 的真实标题，并把 `_grid` key 识别为 grid 工作流
+6. grid 父地点永远不能单独用 `location_style` 裸生成，子地点实际图也不能裸生成
 
 EP 级资源 agent：
 1. 前端选择具体 episode
