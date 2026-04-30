@@ -301,6 +301,8 @@ async function convertImageUrlsToAssetUris(imageUrls) {
   const normalizedImageUrls = uniqueStrings(imageUrls)
   const urlsToUpload = normalizedImageUrls.filter(isExternalImageUrl)
 
+  console.log('FC image URL input list:', JSON.stringify(normalizedImageUrls, null, 2))
+
   if (urlsToUpload.length === 0) return normalizedImageUrls
 
   const groupId = await createAssetGroup()
@@ -310,10 +312,14 @@ async function convertImageUrlsToAssetUris(imageUrls) {
     const url = urlsToUpload[i]
     const assetId = await createImageAsset(groupId, url, i)
     await waitForAssetReady(assetId)
-    urlToAssetUri.set(url, `asset://${assetId}`)
+    const assetUri = `asset://${assetId}`
+    urlToAssetUri.set(url, assetUri)
+    console.log('FC image URL converted to asset:', JSON.stringify({ url, assetUri }))
   }
 
-  return normalizedImageUrls.map(url => urlToAssetUri.get(url) || url)
+  const assetImageUrls = normalizedImageUrls.map(url => urlToAssetUri.get(url) || url)
+  console.log('FC image asset list:', JSON.stringify(assetImageUrls, null, 2))
+  return assetImageUrls
 }
 
 function getModelArkRuntimeConfig() {
@@ -458,15 +464,28 @@ async function callModelArkRuntime(path, method, payload) {
 async function submitModelArkVideoTask(imageUrls, prompt, options = {}) {
   const config = getModelArkRuntimeConfig()
   const assetImageUrls = await convertImageUrlsToAssetUris(imageUrls)
+  const sourceVideoUrls = uniqueStrings(options.sourceVideoUrls || [])
   const payload = {
     model: config.model,
-    content: buildModelArkContent(prompt, assetImageUrls, options),
+    content: buildModelArkContent(prompt, assetImageUrls, { ...options, sourceVideoUrls }),
     ratio: normalizeRatio(options.ratio, config.ratio),
     resolution: normalizeResolution(options.resolution, config.resolution),
     duration: getDurationFromOptions(options),
     watermark: config.watermark,
     generate_audio: true
   }
+
+  console.log('ModelArk media refs:', JSON.stringify({
+    imageRefs: assetImageUrls,
+    sourceVideoRefs: sourceVideoUrls,
+    contentMedia: payload.content
+      .filter(part => part.type !== 'text')
+      .map(part => ({
+        type: part.type,
+        role: part.role,
+        url: part.image_url?.url || part.video_url?.url
+      }))
+  }, null, 2))
 
   const result = await callModelArkRuntime(config.tasksPath, 'POST', payload)
   return extractId(result, 'CreateContentGenerationTask')
@@ -664,6 +683,7 @@ exports.handler = async (event, context) => {
       }
 
       const imageUrls = uniqueStrings([imageUrl, ...((Array.isArray(referenceImageUrls) ? referenceImageUrls : []))])
+      const normalizedSourceVideoUrls = Array.isArray(sourceVideoUrls) ? uniqueStrings(sourceVideoUrls) : []
       const frames = typeof duration === 'number' && Number.isFinite(duration)
         ? Math.max(1, Math.round(duration * 24))
         : undefined
@@ -676,9 +696,13 @@ exports.handler = async (event, context) => {
         resolution,
         promptLength: prompt.length
       })
+      console.log('Video generation input refs:', JSON.stringify({
+        imageUrls,
+        sourceVideoUrls: normalizedSourceVideoUrls
+      }, null, 2))
 
       const result = await generateVideo(accessKeyId, secretAccessKey, imageUrls, prompt, {
-        sourceVideoUrls: Array.isArray(sourceVideoUrls) ? sourceVideoUrls : [],
+        sourceVideoUrls: normalizedSourceVideoUrls,
         frames,
         duration,
         ratio,
