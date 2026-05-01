@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button, Drawer, Input, Spin, Typography, App, Tag, Tooltip } from "antd";
 import {
   ReloadOutlined,
   RollbackOutlined,
   SaveOutlined,
   CopyOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import { fetchJson } from "@/app/components/client-utils";
 
@@ -17,7 +18,7 @@ import { fetchJson } from "@/app/components/client-utils";
 interface VersionRow {
   id: string;
   version: number;
-  prompt: string;
+  prompt: string | null;
   url: string | null;
   refUrls: string[];
   createdAt: string;
@@ -25,7 +26,7 @@ interface VersionRow {
 
 interface ImageGenDetail {
   id: string;
-  sessionId: string;
+  mediaType: string;
   key: string;
   category: string | null;
   currentVersion: number;
@@ -35,6 +36,14 @@ interface ImageGenDetail {
   versions: VersionRow[];
   createdAt: string;
   updatedAt: string;
+}
+
+interface UploadImageVersionResult {
+  id: string;
+  key: string;
+  imageUrl: string;
+  compressedImageUrl: string;
+  version: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -55,11 +64,13 @@ export interface ImageDetailDrawerProps {
 
 export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetailDrawerProps) {
   const { message } = App.useApp();
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [detail, setDetail] = useState<ImageGenDetail | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [editPrompt, setEditPrompt] = useState("");
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [rollingBackVersion, setRollingBackVersion] = useState<number | null>(null);
   const [viewedVersion, setViewedVersion] = useState(0);
 
@@ -137,6 +148,36 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
       setIsRegenerating(false);
     }
   }, [detail, editPrompt, hasPromptInput, fetchDetail, message, onRefresh]);
+
+  /* ---- Upload local image ---- */
+  const handleUploadImage = useCallback(async (file: File | null) => {
+    if (!detail || !file) return;
+    if (!file.type.startsWith("image/")) {
+      void message.error("Please choose an image file");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setIsUploading(true);
+    try {
+      const result = await fetchJson<UploadImageVersionResult>(
+        `/api/key-resources/${detail.id}/upload`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+      void message.success(`Uploaded v${result.version}`);
+      void fetchDetail(detail.id, true);
+      onRefresh?.();
+    } catch (err: unknown) {
+      void message.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  }, [detail, fetchDetail, message, onRefresh]);
 
   /* ---- Rollback ---- */
   const handleRollback = useCallback(async (version: number) => {
@@ -219,7 +260,7 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
                         style={{ width: 56, height: 56 }}
                         onClick={() => {
                           setViewedVersion(ver.version);
-                          setEditPrompt(ver.prompt);
+                          setEditPrompt(ver.prompt ?? "");
                         }}
                       >
                         {ver.url ? (
@@ -278,6 +319,26 @@ export function ImageDetailDrawer({ imageGenId, onClose, onRefresh }: ImageDetai
 
             {/* Action buttons */}
             <div className="flex shrink-0 flex-wrap gap-2">
+              <input
+                ref={uploadInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.item(0) ?? null;
+                  void handleUploadImage(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <Button
+                size="small"
+                icon={<UploadOutlined />}
+                onClick={() => uploadInputRef.current?.click()}
+                loading={isUploading}
+                disabled={detail.mediaType !== "image"}
+              >
+                Upload Image
+              </Button>
               <Button
                 size="small"
                 icon={<SaveOutlined />}

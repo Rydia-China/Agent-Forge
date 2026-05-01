@@ -6,6 +6,7 @@ import {
   compressImageUrlLossless,
   type ImageCompressionResult,
 } from "./image-compression-service";
+import { generateFilename, uploadBuffer } from "./oss-service";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -506,6 +507,73 @@ export interface RegenerateResult {
   compressedImageUrl: string;
   version: number;
   prompt: string;
+}
+
+export interface UploadImageVersionInput {
+  id: string;
+  buffer: Buffer;
+  originalName: string;
+  filename?: string;
+}
+
+export interface UploadImageVersionResult {
+  id: string;
+  key: string;
+  imageUrl: string;
+  compressedImageUrl: string;
+  version: number;
+}
+
+export async function uploadImageVersion(
+  input: UploadImageVersionInput,
+): Promise<UploadImageVersionResult> {
+  const resource = await prisma.keyResource.findUniqueOrThrow({ where: { id: input.id } });
+  if (resource.mediaType !== "image") {
+    throw new Error("Only image key resources can accept image uploads");
+  }
+
+  const curVer = resource.currentVersion > 0
+    ? await prisma.keyResourceVersion.findUnique({
+        where: {
+          keyResourceId_version: { keyResourceId: resource.id, version: resource.currentVersion },
+        },
+      })
+    : null;
+  const derived = curVer ? null : await derivePromptData(resource);
+  const prompt = curVer?.prompt ?? derived?.prompt ?? null;
+  const refUrls = curVer?.refUrls ?? derived?.refUrls ?? [];
+  const title = curVer?.title ?? derived?.title ?? resource.title ?? null;
+
+  const filename = input.filename ?? generateFilename(input.originalName, resource.key);
+  const imageUrl = await uploadBuffer(input.buffer, filename, "key-resources");
+  const compression = await compressGeneratedImageData(imageUrl, resource.key);
+
+  const ver = await nextVersion(resource.id);
+  await prisma.$transaction([
+    prisma.keyResourceVersion.create({
+      data: {
+        keyResourceId: resource.id,
+        version: ver,
+        title,
+        prompt,
+        url: imageUrl,
+        data: compression.data,
+        refUrls,
+      },
+    }),
+    prisma.keyResource.update({
+      where: { id: resource.id },
+      data: { currentVersion: ver },
+    }),
+  ]);
+
+  return {
+    id: resource.id,
+    key: resource.key,
+    imageUrl,
+    compressedImageUrl: compression.compressedUrl,
+    version: ver,
+  };
 }
 
 export async function regenerate(

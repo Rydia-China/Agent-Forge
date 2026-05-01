@@ -220,6 +220,21 @@ EP 级资源 agent：
 
 验证重点：响应应为 `Content-Type: application/zip`，`Content-Disposition` 文件名包含小说名；无已生成资源时返回 404。
 
+图片资源外部回传：
+1. 前端资源面板点击 image KeyResource 后打开详情抽屉
+2. 用户上传本地 png/jpeg/webp/gif 图片
+3. 前端调用 `POST /api/key-resources/{id}/upload`，multipart 字段为 `file`
+4. API route 只负责 multipart 解析与 Zod 校验；业务逻辑进入 `key-resource-service.uploadImageVersion`
+5. service 上传原图到 OSS，创建新的 `KeyResourceVersion`，保留当前版本的 `prompt/refUrls/title`，并把 `KeyResource.currentVersion` 指向新版本
+6. 资源面板随后刷新，`GET /api/video/novel/{novelId}/resources` 或 `GET /api/video/episodes/{scriptId}/resources?novelId={novelId}` 应显示上传后的 URL
+
+验证命令：
+```
+curl -X POST http://localhost:8001/api/key-resources/<keyResourceId>/upload \
+  -F 'file=@/path/to/image.png'
+```
+验收：返回包含 `imageUrl` 和递增的 `version`；再次读取资源详情时 `currentVersion` 等于该版本；旧版本仍在 `versions[]` 中，可通过 rollback 恢复。
+
 **视频生成工作流**：
 1. 先提交 EP 级异步批量换装任务，等待 `completed`，并将换装图作为服装权威源
 2. 主控只调用 `video_workflow__optimize_video_prompts`，不自行拼接或转述 Optimizer instruction，不直接调用 `subagent__run`
