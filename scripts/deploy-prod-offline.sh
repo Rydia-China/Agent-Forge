@@ -20,8 +20,11 @@ SKIP_ENV="false"
 SKIP_TABLE_SYNC="false"
 SKIP_REMOTE_PULLBACK="false"
 
-SSH_OPTS=(
+BASE_SSH_OPTS=(
   -o StrictHostKeyChecking=accept-new
+)
+
+PASSWORD_SSH_OPTS=(
   -o PreferredAuthentications=password
   -o PubkeyAuthentication=no
 )
@@ -84,25 +87,25 @@ join_by_comma() {
 
 ssh_remote() {
   if [[ -n "${SSHPASS:-}" ]]; then
-    sshpass -e ssh "${SSH_OPTS[@]}" "$SERVER" "$@"
+    sshpass -e ssh "${BASE_SSH_OPTS[@]}" "${PASSWORD_SSH_OPTS[@]}" "$SERVER" "$@"
   else
-    ssh "${SSH_OPTS[@]}" "$SERVER" "$@"
+    ssh "${BASE_SSH_OPTS[@]}" "$SERVER" "$@"
   fi
 }
 
 scp_to_remote() {
   if [[ -n "${SSHPASS:-}" ]]; then
-    sshpass -e scp "${SSH_OPTS[@]}" "$1" "$SERVER:$2"
+    sshpass -e scp "${BASE_SSH_OPTS[@]}" "${PASSWORD_SSH_OPTS[@]}" "$1" "$SERVER:$2"
   else
-    scp "${SSH_OPTS[@]}" "$1" "$SERVER:$2"
+    scp "${BASE_SSH_OPTS[@]}" "$1" "$SERVER:$2"
   fi
 }
 
 scp_from_remote_dir() {
   if [[ -n "${SSHPASS:-}" ]]; then
-    sshpass -e scp "${SSH_OPTS[@]}" -r "$SERVER:$1/." "$2/"
+    sshpass -e scp "${BASE_SSH_OPTS[@]}" "${PASSWORD_SSH_OPTS[@]}" -r "$SERVER:$1/." "$2/"
   else
-    scp "${SSH_OPTS[@]}" -r "$SERVER:$1/." "$2/"
+    scp "${BASE_SSH_OPTS[@]}" -r "$SERVER:$1/." "$2/"
   fi
 }
 
@@ -388,11 +391,11 @@ test -n "\$DB"
 docker exec -i "\$DB" psql -U postgres -d "$REMOTE_DB_NAME" -v ON_ERROR_STOP=1 -c 'TRUNCATE ${table_list} RESTART IDENTITY;'
 REMOTE_SYNC
   if [[ -n "${SSHPASS:-}" ]]; then
-    sshpass -e ssh "${SSH_OPTS[@]}" "$SERVER" \
+    sshpass -e ssh "${BASE_SSH_OPTS[@]}" "${PASSWORD_SSH_OPTS[@]}" "$SERVER" \
       "DB=\$(docker ps --filter \"name=agent-forge-db\" --format \"{{.Names}}\" | head -n1); test -n \"\$DB\"; docker exec -i \"\$DB\" psql -U postgres -d \"$REMOTE_DB_NAME\" -v ON_ERROR_STOP=1" \
       < "$SYNC_DIR/core-tables.sql"
   else
-    ssh "${SSH_OPTS[@]}" "$SERVER" \
+    ssh "${BASE_SSH_OPTS[@]}" "$SERVER" \
       "DB=\$(docker ps --filter \"name=agent-forge-db\" --format \"{{.Names}}\" | head -n1); test -n \"\$DB\"; docker exec -i \"\$DB\" psql -U postgres -d \"$REMOTE_DB_NAME\" -v ON_ERROR_STOP=1" \
       < "$SYNC_DIR/core-tables.sql"
   fi
