@@ -9,6 +9,8 @@ REPO_URL="$(git config --get remote.origin.url || true)"
 TAG=""
 MODE="deploy"
 REGISTRY_IMAGE=""
+REGISTRY_PUSH_IMAGE=""
+REGISTRY_PULL_IMAGE=""
 RETAG="false"
 SKIP_GIT_TAG_CHECK="false"
 BACKUP_STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -58,7 +60,11 @@ Options:
   --project-dir <path>        Remote runtime directory. Default: /var/www/agent-forge
   --code-dir <path>           Remote Git source directory. Default: /var/www/agent-forge/source
   --repo-url <url>            Git URL server pulls from. Default: local origin URL
-  --registry-image <image>    Registry image path for registry-deploy, e.g. registry.example.com/agent-forge
+  --registry-image <image>    Registry image path for registry-deploy, used for both push and pull when split images are not set.
+  --registry-push-image <image>
+                              Image path used by CI/build runner for docker push, e.g. registry-origin.example.com/agent-forge
+  --registry-pull-image <image>
+                              Image path used by remote server for docker pull, e.g. registry.example.com/agent-forge
   --backup-stamp <stamp>      Backup folder suffix. Default: current timestamp
   --local-db-container <name> Local Postgres container. Default: agent-forge-db-dev
   --tables <a,b,c>            Comma-separated tables to sync. Default: Skill,StylePreset,ApiUsageCounter
@@ -160,6 +166,14 @@ while [[ $# -gt 0 ]]; do
       REGISTRY_IMAGE="${2:-}"
       shift 2
       ;;
+    --registry-push-image)
+      REGISTRY_PUSH_IMAGE="${2:-}"
+      shift 2
+      ;;
+    --registry-pull-image)
+      REGISTRY_PULL_IMAGE="${2:-}"
+      shift 2
+      ;;
     --backup-stamp)
       BACKUP_STAMP="${2:-}"
       shift 2
@@ -231,8 +245,12 @@ if [[ "$MODE" == "deploy" || "$MODE" == "image-deploy" || "$MODE" == "registry-d
 fi
 
 if [[ "$MODE" == "registry-deploy" ]]; then
-  [[ -n "$REGISTRY_IMAGE" ]] || die "--registry-image is required for registry-deploy"
-  [[ "$REGISTRY_IMAGE" == */* ]] || die "--registry-image must include a registry host"
+  REGISTRY_PUSH_IMAGE="${REGISTRY_PUSH_IMAGE:-$REGISTRY_IMAGE}"
+  REGISTRY_PULL_IMAGE="${REGISTRY_PULL_IMAGE:-$REGISTRY_IMAGE}"
+  [[ -n "$REGISTRY_PUSH_IMAGE" ]] || die "--registry-push-image or --registry-image is required for registry-deploy"
+  [[ -n "$REGISTRY_PULL_IMAGE" ]] || die "--registry-pull-image or --registry-image is required for registry-deploy"
+  [[ "$REGISTRY_PUSH_IMAGE" == */* ]] || die "--registry-push-image must include a registry host"
+  [[ "$REGISTRY_PULL_IMAGE" == */* ]] || die "--registry-pull-image must include a registry host"
   [[ -n "${REGISTRY_USERNAME:-}" ]] || die "REGISTRY_USERNAME is required for registry-deploy"
   [[ -n "${REGISTRY_PASSWORD:-}" ]] || die "REGISTRY_PASSWORD is required for registry-deploy"
 fi
@@ -336,16 +354,16 @@ package_image() {
 
 build_push_registry_image() {
   [[ -n "$TAG" ]] || die "--tag is required to build registry image"
-  [[ -n "$REGISTRY_IMAGE" ]] || die "--registry-image is required"
-  local registry_host="${REGISTRY_IMAGE%%/*}"
+  [[ -n "$REGISTRY_PUSH_IMAGE" ]] || die "--registry-push-image is required"
+  local registry_host="${REGISTRY_PUSH_IMAGE%%/*}"
   log "Logging in to registry $registry_host"
   printf '%s' "$REGISTRY_PASSWORD" | docker login "$registry_host" -u "$REGISTRY_USERNAME" --password-stdin >/dev/null
 
-  log "Building and pushing linux/amd64 image $REGISTRY_IMAGE:$TAG"
+  log "Building and pushing linux/amd64 image $REGISTRY_PUSH_IMAGE:$TAG"
   docker buildx build \
     --platform linux/amd64 \
-    -t "$REGISTRY_IMAGE:$TAG" \
-    -t "$REGISTRY_IMAGE:latest" \
+    -t "$REGISTRY_PUSH_IMAGE:$TAG" \
+    -t "$REGISTRY_PUSH_IMAGE:latest" \
     -f Dockerfile . \
     --push
 }
@@ -373,8 +391,8 @@ REMOTE_LOAD
 }
 
 server_pull_registry_image() {
-  [[ -n "$REGISTRY_IMAGE" ]] || die "--registry-image is required"
-  local registry_host="${REGISTRY_IMAGE%%/*}"
+  [[ -n "$REGISTRY_PULL_IMAGE" ]] || die "--registry-pull-image is required"
+  local registry_host="${REGISTRY_PULL_IMAGE%%/*}"
   log "Uploading runtime config"
   ssh_remote "mkdir -p '${PROJECT_DIR}'"
   scp_to_remote docker-compose.prod.yml "${PROJECT_DIR}/docker-compose.prod.yml"
@@ -387,20 +405,20 @@ server_pull_registry_image() {
   ssh_remote "bash -s" <<REMOTE_PULL
 set -euo pipefail
 cd "$PROJECT_DIR"
-docker pull "$REGISTRY_IMAGE:$TAG"
-docker tag "$REGISTRY_IMAGE:$TAG" agent-forge:latest
+docker pull "$REGISTRY_PULL_IMAGE:$TAG"
+docker tag "$REGISTRY_PULL_IMAGE:$TAG" agent-forge:latest
 cat > release.txt <<RELEASE
 tag=$TAG
 commit=$HEAD_SHA
-image=$REGISTRY_IMAGE:$TAG
+image=$REGISTRY_PULL_IMAGE:$TAG
 deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 RELEASE
 REMOTE_PULL
 }
 
 start_remote_registry_deploy() {
-  [[ -n "$REGISTRY_IMAGE" ]] || die "--registry-image is required"
-  local registry_host="${REGISTRY_IMAGE%%/*}"
+  [[ -n "$REGISTRY_PULL_IMAGE" ]] || die "--registry-pull-image is required"
+  local registry_host="${REGISTRY_PULL_IMAGE%%/*}"
   local run_dir="${PROJECT_DIR}/deploy-runs/${STAMP_NAME}"
 
   log "Uploading runtime config"
@@ -456,7 +474,7 @@ echo success > "\$RUN_DIR/status"
 REMOTE_SCRIPT
 chmod +x "\$RUN_DIR/deploy.sh"
 echo running > "\$RUN_DIR/status"
-nohup bash "\$RUN_DIR/deploy.sh" "$PROJECT_DIR" "\$RUN_DIR" "$TAG" "$HEAD_SHA" "$REGISTRY_IMAGE" >/dev/null 2>&1 < /dev/null &
+nohup bash "\$RUN_DIR/deploy.sh" "$PROJECT_DIR" "\$RUN_DIR" "$TAG" "$HEAD_SHA" "$REGISTRY_PULL_IMAGE" >/dev/null 2>&1 < /dev/null &
 echo \$! > "\$RUN_DIR/pid"
 echo "run_dir=\$RUN_DIR"
 echo "pid=\$(cat "\$RUN_DIR/pid")"

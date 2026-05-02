@@ -66,7 +66,8 @@ jobs:
           SSH_HOST: ${{ vars.SSH_HOST }}
           PROJECT_DIR: ${{ vars.PROJECT_DIR }}
           PUBLIC_HOST: ${{ vars.PUBLIC_HOST }}
-          REGISTRY_IMAGE: ${{ vars.REGISTRY_IMAGE }}
+          REGISTRY_PUSH_IMAGE: ${{ vars.REGISTRY_PUSH_IMAGE || vars.REGISTRY_IMAGE }}
+          REGISTRY_PULL_IMAGE: ${{ vars.REGISTRY_PULL_IMAGE || vars.REGISTRY_IMAGE }}
           REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME }}
           REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
@@ -76,7 +77,8 @@ jobs:
           test -n "$SSH_HOST"
           test -n "$PROJECT_DIR"
           test -n "$PUBLIC_HOST"
-          test -n "$REGISTRY_IMAGE"
+          test -n "$REGISTRY_PUSH_IMAGE"
+          test -n "$REGISTRY_PULL_IMAGE"
           test -n "$REGISTRY_USERNAME"
           test -n "$REGISTRY_PASSWORD"
 
@@ -88,5 +90,6 @@ jobs:
             --skip-remote-pullback \
             --server "${SSH_USER}@${SSH_HOST}" \
             --project-dir "$PROJECT_DIR" \
-            --registry-image "$REGISTRY_IMAGE" \
+            --registry-push-image "$REGISTRY_PUSH_IMAGE" \
+            --registry-pull-image "$REGISTRY_PULL_IMAGE" \
             --public-host "$PUBLIC_HOST"
