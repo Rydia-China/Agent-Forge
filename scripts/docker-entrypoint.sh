@@ -8,10 +8,26 @@ wait_for_db() {
   echo "⏳ 等待 ${label} 就绪..."
   local max=30 retry=0
   until node -e "
-    const { Client } = require('pg');
-    const c = new Client('${url}');
-    c.connect().then(() => { c.end(); process.exit(0); }).catch(() => process.exit(1));
-  " 2>/dev/null; do
+    const net = require('net');
+    const target = new URL(process.argv[1]);
+    const socket = net.createConnection({
+      host: target.hostname,
+      port: Number(target.port || 5432),
+    });
+    const timer = setTimeout(() => {
+      socket.destroy();
+      process.exit(1);
+    }, 2000);
+    socket.once('connect', () => {
+      clearTimeout(timer);
+      socket.end();
+      process.exit(0);
+    });
+    socket.once('error', () => {
+      clearTimeout(timer);
+      process.exit(1);
+    });
+  " "$url" 2>/dev/null; do
     retry=$((retry + 1))
     if [ "$retry" -ge "$max" ]; then
       echo "❌ ${label} 连接超时（${max} 次重试）"
@@ -25,7 +41,7 @@ wait_for_db() {
 wait_for_db "$DATABASE_URL" "数据库"
 
 echo "📦 应用数据库迁移..."
-npx prisma migrate deploy --schema=prisma/schema.prisma
+node node_modules/prisma/build/index.js migrate deploy --schema=prisma/schema.prisma
 
 echo "🚀 启动应用..."
-exec pnpm start
+exec node server.js
