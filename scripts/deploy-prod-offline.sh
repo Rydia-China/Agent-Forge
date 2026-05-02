@@ -633,7 +633,15 @@ echo "container_image"
 docker inspect -f "{{.Image}}" agent-forge-app-1
 docker image inspect agent-forge:latest --format "{{.Id}} {{.Created}}"
 echo "container_health"
-docker exec agent-forge-app-1 wget -qO- http://localhost:8001/api/health
+for attempt in \$(seq 1 10); do
+  if docker exec agent-forge-app-1 wget -qO- http://127.0.0.1:8001/api/health; then
+    break
+  fi
+  if [ "\$attempt" -eq 10 ]; then
+    exit 1
+  fi
+  sleep 2
+done
 echo
 REMOTE_VERIFY
 
