@@ -35,7 +35,9 @@ COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
 COPY --from=builder /app/prisma/migrations ./prisma/migrations
 COPY --from=builder /app/src/generated ./src/generated
 RUN --mount=type=bind,from=builder,source=/standalone-prisma/node_modules,target=/standalone-prisma-node_modules,ro \
-    cp -R /standalone-prisma-node_modules/. node_modules/
+    cp -R /standalone-prisma-node_modules/prisma node_modules/prisma && \
+    mkdir -p node_modules/@prisma && \
+    cp -R /standalone-prisma-node_modules/@prisma/. node_modules/@prisma/
 
 COPY scripts/docker-entrypoint.sh ./scripts/
 RUN chmod +x scripts/docker-entrypoint.sh
