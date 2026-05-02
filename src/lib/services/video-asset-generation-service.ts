@@ -564,10 +564,10 @@ export async function generateCostume(
 
   const portraitKey = `char_${input.characterName.toLowerCase().replace(/\s+/g, "_")}_portrait`;
   const portrait = await prisma.keyResource.findFirst({
-    where: { scopeType: "novel", scopeId: script.novelId, key: portraitKey },
-    include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+    where: { scopeType: "novel", scopeId: script.novelId, key: portraitKey, currentVersion: { gt: 0 } },
+    include: { versions: { orderBy: { version: "asc" } } },
   });
-  const portraitUrl = portrait?.versions[0]?.url ?? null;
+  const portraitUrl = portrait ? currentResourceVersion(portrait)?.url ?? null : null;
 
   const refParts: string[] = [];
   if (styleRefUrl) refParts.push(styleRefUrl);
@@ -631,6 +631,86 @@ export function videoResourceKeyFromPromptKey(promptKey: string): string {
 
 function dedupeStrings(values: string[]): string[] {
   return Array.from(new Set(values));
+}
+
+interface CurrentImageResource {
+  key: string;
+  scopeType: string;
+  category: string | null;
+  title: string | null;
+  url: string;
+  data: Prisma.JsonValue;
+}
+
+interface DefinitionImageRef {
+  label: string;
+  text: string;
+  start: number;
+  end: number;
+}
+
+function currentResourceVersion<
+  T extends {
+    currentVersion: number;
+    versions: Array<{ version: number; url: string | null; data: Prisma.JsonValue }>;
+  },
+>(resource: T): { version: number; url: string | null; data: Prisma.JsonValue } | null {
+  return resource.versions.find((version) => version.version === resource.currentVersion) ?? null;
+}
+
+function imageReferenceLabels(definition: string): DefinitionImageRef[] {
+  const refs: DefinitionImageRef[] = [];
+  const pattern = /@图\d+\s*是\s*\[([^\]]+)\][^\n\r]*/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(definition)) !== null) {
+    const label = match[1]?.trim();
+    if (!label) continue;
+    refs.push({
+      label,
+      text: match[0],
+      start: match.index,
+      end: match.index + match[0].length,
+    });
+  }
+  return refs;
+}
+
+function labelMatchesResource(label: string, resource: CurrentImageResource): boolean {
+  const title = resource.title?.trim();
+  return !!title && (label.includes(title) || title.includes(label));
+}
+
+function findImageResourceForLabel(
+  label: string,
+  imageResources: CurrentImageResource[],
+): CurrentImageResource | null {
+  const costume = imageResources.find((resource) => (
+    resource.scopeType === "script" &&
+    resource.category === "换装" &&
+    labelMatchesResource(label, resource)
+  ));
+  if (costume) return costume;
+
+  return imageResources.find((resource) => labelMatchesResource(label, resource)) ?? null;
+}
+
+function rangeContains(ranges: DefinitionImageRef[], index: number): boolean {
+  return ranges.some((range) => index >= range.start && index < range.end);
+}
+
+function extractStandaloneCurrentUrls(
+  definition: string,
+  consumedRanges: DefinitionImageRef[],
+  allowedUrls: Set<string>,
+): string[] {
+  const matches = definition.matchAll(/https?:\/\/[^\s，。；、)）\]}]+/g);
+  const urls: string[] = [];
+  for (const match of matches) {
+    const url = match[0];
+    if (match.index !== undefined && rangeContains(consumedRanges, match.index)) continue;
+    if (allowedUrls.has(url)) urls.push(url);
+  }
+  return dedupeStrings(urls);
 }
 
 async function resolveVideoReferenceImages(
@@ -702,44 +782,50 @@ export async function executeVideoPrompt(
       ],
       currentVersion: { gt: 0 },
     },
-    include: { versions: { orderBy: { version: "desc" }, take: 1 } },
+    include: { versions: { orderBy: { version: "asc" } } },
   });
+  const imageResources: CurrentImageResource[] = allResources
+    .filter((resource) => resource.mediaType === "image")
+    .map((resource): CurrentImageResource | null => {
+      const version = currentResourceVersion(resource);
+      if (!version?.url) return null;
+      return {
+        key: resource.key,
+        scopeType: resource.scopeType,
+        category: resource.category,
+        title: resource.title,
+        url: version.url,
+        data: version.data,
+      };
+    })
+    .filter((resource): resource is CurrentImageResource => resource !== null);
+  const currentImageUrls = new Set(imageResources.map((resource) => resource.url));
 
   const compressedUrlByOriginal = new Map<string, string>();
-  for (const resource of allResources) {
-    const version = resource.versions[0];
-    const originalUrl = version?.url;
-    const compressedUrl = compressedUrlFromResourceData(version?.data);
-    if (originalUrl && compressedUrl) {
-      compressedUrlByOriginal.set(originalUrl, compressedUrl);
+  for (const resource of imageResources) {
+    const compressedUrl = compressedUrlFromResourceData(resource.data);
+    if (compressedUrl) {
+      compressedUrlByOriginal.set(resource.url, compressedUrl);
       compressedUrlByOriginal.set(compressedUrl, compressedUrl);
     }
   }
 
   const refImageUrls: string[] = [];
-  for (const url of extractUrls(input.definition)) {
-    refImageUrls.push(url);
-  }
-
-  const imgRefs = input.definition.match(/@图\d+\s*是\s*\[([^\]]+)\]/g) ?? [];
-  for (const ref of imgRefs) {
-    const nameMatch = ref.match(/\[([^\]]+)\]/);
-    if (!nameMatch) continue;
-    const refName = nameMatch[1]!;
-
-    let matched: string | null = null;
-    for (const r of allResources) {
-      const url = r.versions[0]?.url;
-      if (!url) continue;
-      const title = r.title ?? "";
-      if (!title) continue;
-      if (refName.includes(title) || title.includes(refName)) {
-        if (matched && r.category === "角色立绘") continue;
-        matched = url;
-        if (r.category === "换装") break;
-      }
+  const namedImageRefs = imageReferenceLabels(input.definition);
+  for (const ref of namedImageRefs) {
+    const matched = findImageResourceForLabel(ref.label, imageResources);
+    if (matched && !refImageUrls.includes(matched.url)) {
+      refImageUrls.push(matched.url);
+      continue;
     }
-    if (matched && !refImageUrls.includes(matched)) refImageUrls.push(matched);
+    for (const url of extractUrls(ref.text).filter((candidate) => currentImageUrls.has(candidate))) {
+      if (!refImageUrls.includes(url)) refImageUrls.push(url);
+    }
+  }
+  for (const url of extractStandaloneCurrentUrls(input.definition, namedImageRefs, currentImageUrls)) {
+    if (!refImageUrls.includes(url)) {
+      refImageUrls.push(url);
+    }
   }
 
   const videoStyle = await resolveStyle("video_style");
