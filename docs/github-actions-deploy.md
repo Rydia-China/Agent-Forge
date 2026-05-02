@@ -2,8 +2,6 @@
 
 本仓库的 GitHub Actions 部署只负责应用镜像发布：在 GitHub runner 上构建 linux/amd64 Docker 镜像，推送到私有 Docker Registry 的 origin 入口，然后通过 SSH 通知服务器从 CDN pull 入口拉取并重建 app 容器。
 
-生产镜像使用 Next.js standalone 输出运行应用，只保留 traced runtime、静态资源、Prisma migrations 和 Prisma CLI/engine。容器启动命令是 `node server.js`，不是 `pnpm start`。
-
 它不会在 GitHub runner 或宿主机上直接修改生产数据库，也不会覆盖服务器 `.env`。
 生产数据库结构由镜像内的 `prisma/migrations` 管理，app 容器启动时会先执行 `prisma migrate deploy`，再启动服务。
 服务器 `.env` 仍使用本地手动命令同步：
