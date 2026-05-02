@@ -11,9 +11,9 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 RUN mkdir -p public && pnpm exec prisma generate && pnpm run build
-RUN prisma_modules="$(dirname "$(readlink node_modules/prisma)")" && \
-    mkdir -p /standalone-prisma && \
-    cp -R -L "node_modules/${prisma_modules}" /standalone-prisma/node_modules
+RUN mkdir -p /standalone-prisma/node_modules && \
+    cp -R -L node_modules/prisma /standalone-prisma/node_modules/prisma && \
+    cp -R -L node_modules/@prisma /standalone-prisma/node_modules/@prisma
 
 # Stage 2: 生产运行时
 FROM node:20-alpine AS runner
@@ -35,7 +35,9 @@ COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
 COPY --from=builder /app/prisma/migrations ./prisma/migrations
 COPY --from=builder /app/src/generated ./src/generated
 RUN --mount=type=bind,from=builder,source=/standalone-prisma/node_modules,target=/standalone-prisma-node_modules,ro \
-    cp -R /standalone-prisma-node_modules/. node_modules/
+    cp -R /standalone-prisma-node_modules/prisma node_modules/prisma && \
+    mkdir -p node_modules/@prisma && \
+    cp -R /standalone-prisma-node_modules/@prisma/. node_modules/@prisma/
 
 COPY scripts/docker-entrypoint.sh ./scripts/
 RUN chmod +x scripts/docker-entrypoint.sh
