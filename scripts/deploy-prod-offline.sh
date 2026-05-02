@@ -505,7 +505,7 @@ RELEASE
   echo healthchecking > "\$RUN_DIR/status"
   health_started_at=\$(date +%s)
   log_phase healthcheck start "container=agent-forge-app-1"
-  for i in \$(seq 1 40); do
+  for i in \$(seq 1 100); do
     status=\$(docker inspect -f "{{.State.Health.Status}}" agent-forge-app-1 2>/dev/null || echo missing)
     echo "health=\$status attempt=\$i"
     [ "\$status" = healthy ] && break
@@ -575,7 +575,7 @@ wait_for_app_health() {
   log "Waiting for app health"
   ssh_remote "bash -s" <<'REMOTE_HEALTH'
 set -euo pipefail
-for i in $(seq 1 40); do
+for i in $(seq 1 100); do
   status=$(docker inspect -f "{{.State.Health.Status}}" agent-forge-app-1 2>/dev/null || echo missing)
   echo "health=$status attempt=$i"
   [ "$status" = healthy ] && exit 0
