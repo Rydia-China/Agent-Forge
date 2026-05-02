@@ -25,7 +25,7 @@ wait_for_db() {
 wait_for_db "$DATABASE_URL" "数据库"
 
 echo "📦 应用数据库迁移..."
-npx prisma migrate deploy --schema=prisma/schema.prisma
+./node_modules/.bin/prisma migrate deploy --schema=prisma/schema.prisma
 
 echo "🚀 启动应用..."
-exec pnpm start
+exec ./node_modules/.bin/next start --port "${PORT:-8001}"
