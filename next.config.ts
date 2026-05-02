@@ -11,23 +11,6 @@ const nextConfig: NextConfig = {
       "node_modules/quickjs-emscripten/**/*",
     ],
   },
-  outputFileTracingExcludes: {
-    "/*": [
-      "backups/**/*",
-      "temp/**/*",
-      "logs/**/*",
-      "docs/**/*",
-      "FC/**/*",
-      "prisma/backups/**/*",
-      "prisma/dev.db",
-      "test.json",
-      "test-system-prompt.ts",
-      "dev.log",
-      "AGENTS.md",
-      "CLAUDE.md",
-      "*.tsbuildinfo",
-    ],
-  },
   allowedDevOrigins: ["*"],
   async headers() {
     return [
