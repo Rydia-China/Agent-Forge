@@ -96,6 +96,15 @@ docker compose -f docker-compose.prod.yml up -d app
 
 registry 部署会先提交远端后台任务，再用短 SSH 连接轮询 `deploy-runs/<tag>-<stamp>/status`。这样 GitHub runner 到生产服务器的单条 SSH 连接断开时，服务器上的拉取任务不会被杀掉。
 
+远端 `deploy.log` 会把部署拆成独立阶段：
+
+- `phase=pull`：从 `REGISTRY_PULL_IMAGE` 拉取镜像。
+- `phase=tag`：把远端镜像标记为 `agent-forge:latest`。
+- `phase=start`：停止旧 app 容器并启动新 app 容器。
+- `phase=healthcheck`：等待 `agent-forge-app-1` 健康检查通过。
+
+每个阶段都会记录 `event=start` / `event=finish` 和 `duration_seconds`，用于区分 CDN/OSS 下载慢、Docker 本地解包慢、容器启动慢。
+
 ## Local Equivalent
 
 GitHub Actions 调用的是同一个脚本的 CI 安全模式：

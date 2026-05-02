@@ -442,24 +442,69 @@ RUN_DIR="\$2"
 TAG="\$3"
 HEAD_SHA="\$4"
 REGISTRY_IMAGE="\$5"
+CURRENT_PHASE=init
 
-trap 'code=\$?; echo failure > "\$RUN_DIR/status"; echo "failed exit_code=\$code" >> "\$RUN_DIR/deploy.log"; exit "\$code"' ERR
+timestamp() {
+  date -u +%Y-%m-%dT%H:%M:%SZ
+}
+
+log_phase() {
+  local phase="\$1"
+  local event="\$2"
+  local detail="\${3:-}"
+  if [[ -n "\$detail" ]]; then
+    echo "ts=\$(timestamp) phase=\$phase event=\$event \$detail"
+  else
+    echo "ts=\$(timestamp) phase=\$phase event=\$event"
+  fi
+}
+
+trap 'code=\$?; echo failure > "\$RUN_DIR/status"; echo "ts=\$(timestamp) phase=\$CURRENT_PHASE event=failure exit_code=\$code" >> "\$RUN_DIR/deploy.log"; exit "\$code"' ERR
 
 cd "\$PROJECT_DIR"
 echo running > "\$RUN_DIR/status"
 {
-  echo "started_at=\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  log_phase deploy start "tag=\$TAG image=\$REGISTRY_IMAGE:\$TAG commit=\$HEAD_SHA"
+
+  CURRENT_PHASE=pull
+  echo pulling > "\$RUN_DIR/status"
+  pull_started_at=\$(date +%s)
+  log_phase pull start "image=\$REGISTRY_IMAGE:\$TAG"
   docker pull "\$REGISTRY_IMAGE:\$TAG"
+  pull_finished_at=\$(date +%s)
+  log_phase pull finish "duration_seconds=\$((pull_finished_at - pull_started_at))"
+
+  CURRENT_PHASE=tag
+  echo tagging > "\$RUN_DIR/status"
+  tag_started_at=\$(date +%s)
+  log_phase tag start "source=\$REGISTRY_IMAGE:\$TAG target=agent-forge:latest"
   docker tag "\$REGISTRY_IMAGE:\$TAG" agent-forge:latest
+  docker image inspect agent-forge:latest --format 'image_id={{.Id}} created={{.Created}} size={{.Size}}'
+  tag_finished_at=\$(date +%s)
+  log_phase tag finish "duration_seconds=\$((tag_finished_at - tag_started_at))"
+
+  CURRENT_PHASE=release
   cat > release.txt <<RELEASE
 tag=\$TAG
 commit=\$HEAD_SHA
 image=\$REGISTRY_IMAGE:\$TAG
-deployed_at=\$(date -u +%Y-%m-%dT%H:%M:%SZ)
+deployed_at=\$(timestamp)
 RELEASE
+
+  CURRENT_PHASE=start
+  echo starting > "\$RUN_DIR/status"
+  start_started_at=\$(date +%s)
+  log_phase start start "compose_file=docker-compose.prod.yml service=app"
   docker compose -f docker-compose.prod.yml stop app
   docker compose -f docker-compose.prod.yml rm -f app
   docker compose -f docker-compose.prod.yml up -d app
+  start_finished_at=\$(date +%s)
+  log_phase start finish "duration_seconds=\$((start_finished_at - start_started_at))"
+
+  CURRENT_PHASE=healthcheck
+  echo healthchecking > "\$RUN_DIR/status"
+  health_started_at=\$(date +%s)
+  log_phase healthcheck start "container=agent-forge-app-1"
   for i in \$(seq 1 40); do
     status=\$(docker inspect -f "{{.State.Health.Status}}" agent-forge-app-1 2>/dev/null || echo missing)
     echo "health=\$status attempt=\$i"
@@ -468,7 +513,9 @@ RELEASE
   done
   final_status=\$(docker inspect -f "{{.State.Health.Status}}" agent-forge-app-1 2>/dev/null || echo missing)
   [ "\$final_status" = healthy ]
-  echo "finished_at=\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  health_finished_at=\$(date +%s)
+  log_phase healthcheck finish "duration_seconds=\$((health_finished_at - health_started_at))"
+  log_phase deploy finish
 } >> "\$RUN_DIR/deploy.log" 2>&1
 echo success > "\$RUN_DIR/status"
 REMOTE_SCRIPT
