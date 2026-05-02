@@ -12,6 +12,14 @@
 pnpm deploy:prod -- --mode sync-env
 ```
 
+## Database Migrations
+
+生产数据库 schema 只通过 Git 中的 `prisma/migrations` 演进。新增或修改 schema 时，先在开发库生成并验证 migration，再提交 `prisma/schema.prisma` 和对应 `prisma/migrations/.../migration.sql`。
+
+生产部署只执行 `prisma migrate deploy`。不要在生产路径使用 `prisma db push`，也不要用 `--accept-data-loss` 自动确认破坏性变更。
+
+如果历史上已经通过 `db push` 手工同步过结构，可能出现“表已存在但 `_prisma_migrations` 没有对应 applied 记录”的断层。处理方式是先核对生产表结构与 migration SQL 完全一致，再用 `prisma migrate resolve --applied <migration_name>` 补齐该数据库自己的迁移账本；这不是替代 Git migration，只是修复单个数据库的历史记录。
+
 ## Branches
 
 - `main`：正式代码主线
