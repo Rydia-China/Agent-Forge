@@ -2,10 +2,11 @@
 
 本仓库的 GitHub Actions 部署只负责应用镜像发布：在 GitHub runner 上构建 linux/amd64 Docker 镜像，推送到私有 Docker Registry 的 origin 入口，然后通过 SSH 通知服务器从 CDN pull 入口拉取并重建 app 容器。
 
-它不会同步生产数据库表，也不会覆盖服务器 `.env`。数据库/Skills 同步继续使用本地手动命令：
+它不会在 GitHub runner 或宿主机上直接修改生产数据库，也不会覆盖服务器 `.env`。
+生产数据库结构由镜像内的 `prisma/migrations` 管理，app 容器启动时会先执行 `prisma migrate deploy`，再启动服务。
+服务器 `.env` 仍使用本地手动命令同步：
 
 ```bash
-pnpm deploy:prod -- --mode sync-tables
 pnpm deploy:prod -- --mode sync-env
 ```
 
