@@ -6,8 +6,6 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/*": [
       "src/generated/prisma/**/*",
-      "node_modules/@prisma/**/*",
-      "node_modules/prisma/**/*",
       "node_modules/sharp/**/*",
       "node_modules/ali-oss/**/*",
       "node_modules/quickjs-emscripten/**/*",
