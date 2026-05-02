@@ -419,11 +419,11 @@ mkdir -p "\$RUN_DIR"
 cat > "\$RUN_DIR/deploy.sh" <<'REMOTE_SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
-PROJECT_DIR="$1"
-RUN_DIR="$2"
-TAG="$3"
-HEAD_SHA="$4"
-REGISTRY_IMAGE="$5"
+PROJECT_DIR="\$1"
+RUN_DIR="\$2"
+TAG="\$3"
+HEAD_SHA="\$4"
+REGISTRY_IMAGE="\$5"
 
 trap 'code=\$?; echo failure > "\$RUN_DIR/status"; echo "failed exit_code=\$code" >> "\$RUN_DIR/deploy.log"; exit "\$code"' ERR
 
