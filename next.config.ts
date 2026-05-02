@@ -1,21 +1,5 @@
 import type { NextConfig } from "next";
 
-const traceExcludes = [
-  "./backups/**/*",
-  "./temp/**/*",
-  "./logs/**/*",
-  "./docs/**/*",
-  "./FC/**/*",
-  "./prisma/backups/**/*",
-  "./prisma/dev.db",
-  "./test.json",
-  "./test-system-prompt.ts",
-  "./dev.log",
-  "./AGENTS.md",
-  "./CLAUDE.md",
-  "./*.tsbuildinfo",
-];
-
 const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["ali-oss"],
@@ -28,8 +12,21 @@ const nextConfig: NextConfig = {
     ],
   },
   outputFileTracingExcludes: {
-    "/*": traceExcludes,
-    "/instrumentation": traceExcludes,
+    "/*": [
+      "backups/**/*",
+      "temp/**/*",
+      "logs/**/*",
+      "docs/**/*",
+      "FC/**/*",
+      "prisma/backups/**/*",
+      "prisma/dev.db",
+      "test.json",
+      "test-system-prompt.ts",
+      "dev.log",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "*.tsbuildinfo",
+    ],
   },
   allowedDevOrigins: ["*"],
   async headers() {
