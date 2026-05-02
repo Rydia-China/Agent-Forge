@@ -9,6 +9,9 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 RUN mkdir -p public && pnpm exec prisma generate && pnpm run build
+RUN mkdir -p /standalone-prisma/node_modules && \
+    cp -R -L node_modules/prisma /standalone-prisma/node_modules/prisma && \
+    cp -R -L node_modules/@prisma /standalone-prisma/node_modules/@prisma
 
 # Stage 2: 生产运行时
 FROM node:20-alpine AS runner
@@ -17,16 +20,15 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=8001
+ENV HOSTNAME=0.0.0.0
 
-RUN corepack enable pnpm
-
-COPY --from=builder /app/package.json /app/pnpm-lock.yaml ./
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.ts ./
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
+COPY --from=builder /app/prisma/migrations ./prisma/migrations
 COPY --from=builder /app/src/generated ./src/generated
+COPY --from=builder /standalone-prisma/node_modules ./node_modules
 
 COPY scripts/docker-entrypoint.sh ./scripts/
 RUN chmod +x scripts/docker-entrypoint.sh

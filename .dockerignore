@@ -10,3 +10,10 @@ docker-compose*.yml
 Dockerfile*
 .dockerignore
 docs
+temp
+prisma/dev.db
+prisma/backups
+dev.pid
+test.json
+test-system-prompt.ts
+.agent-worktrees
