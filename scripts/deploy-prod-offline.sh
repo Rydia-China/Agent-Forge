@@ -416,14 +416,14 @@ start_remote_registry_deploy() {
 set -euo pipefail
 RUN_DIR="$run_dir"
 mkdir -p "\$RUN_DIR"
-cat > "\$RUN_DIR/deploy.sh" <<REMOTE_SCRIPT
+cat > "\$RUN_DIR/deploy.sh" <<'REMOTE_SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
-PROJECT_DIR="$PROJECT_DIR"
-RUN_DIR="$run_dir"
-TAG="$TAG"
-HEAD_SHA="$HEAD_SHA"
-REGISTRY_IMAGE="$REGISTRY_IMAGE"
+PROJECT_DIR="$1"
+RUN_DIR="$2"
+TAG="$3"
+HEAD_SHA="$4"
+REGISTRY_IMAGE="$5"
 
 trap 'code=\$?; echo failure > "\$RUN_DIR/status"; echo "failed exit_code=\$code" >> "\$RUN_DIR/deploy.log"; exit "\$code"' ERR
 
@@ -456,7 +456,7 @@ echo success > "\$RUN_DIR/status"
 REMOTE_SCRIPT
 chmod +x "\$RUN_DIR/deploy.sh"
 echo running > "\$RUN_DIR/status"
-nohup bash "\$RUN_DIR/deploy.sh" >/dev/null 2>&1 < /dev/null &
+nohup bash "\$RUN_DIR/deploy.sh" "$PROJECT_DIR" "\$RUN_DIR" "$TAG" "$HEAD_SHA" "$REGISTRY_IMAGE" >/dev/null 2>&1 < /dev/null &
 echo \$! > "\$RUN_DIR/pid"
 echo "run_dir=\$RUN_DIR"
 echo "pid=\$(cat "\$RUN_DIR/pid")"
