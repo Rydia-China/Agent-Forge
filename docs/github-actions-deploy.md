@@ -1,6 +1,6 @@
 # GitHub Actions Registry Deploy
 
-本仓库的 GitHub Actions 部署只负责应用镜像发布：在 GitHub runner 上构建 linux/amd64 Docker 镜像，推送到私有 Docker Registry，然后通过 SSH 通知服务器 `docker pull` 并重建 app 容器。
+本仓库的 GitHub Actions 部署只负责应用镜像发布：在 GitHub runner 上构建 linux/amd64 Docker 镜像，推送到私有 Docker Registry 的 origin 入口，然后通过 SSH 通知服务器从 CDN pull 入口拉取并重建 app 容器。
 
 它不会同步生产数据库表，也不会覆盖服务器 `.env`。数据库/Skills 同步继续使用本地手动命令：
 
@@ -57,9 +57,15 @@ SSH_HOST=agent.mob-ai.cn
 SSH_USER=root
 PROJECT_DIR=/var/www/agent-forge
 PUBLIC_HOST=agent.mob-ai.cn
-REGISTRY_IMAGE=47.86.106.145.sslip.io/agent-forge
+REGISTRY_PUSH_IMAGE=registry-origin.mob-ai.cn/agent-forge
+REGISTRY_PULL_IMAGE=registry.mob-ai.cn/agent-forge
 REGISTRY_USERNAME=agent_forge
 ```
+
+`REGISTRY_IMAGE` 是旧配置兼容项，新部署不需要再配置。新部署应显式配置：
+
+- `REGISTRY_PUSH_IMAGE`：GitHub runner push 使用，必须走 origin，不经过 CDN。
+- `REGISTRY_PULL_IMAGE`：服务器 pull 使用，走 CDN 和 OSS-backed registry。
 
 Secrets:
 
@@ -82,13 +88,13 @@ REGISTRY_PASSWORD=<private registry password>
 GitHub Actions 不在服务器上构建镜像，只执行：
 
 ```bash
-docker login 47.86.106.145.sslip.io
-docker pull 47.86.106.145.sslip.io/agent-forge:<tag>
-docker tag 47.86.106.145.sslip.io/agent-forge:<tag> agent-forge:latest
+docker login registry.mob-ai.cn
+docker pull registry.mob-ai.cn/agent-forge:<tag>
+docker tag registry.mob-ai.cn/agent-forge:<tag> agent-forge:latest
 docker compose -f docker-compose.prod.yml up -d app
 ```
 
-生产服务器上的 `docker pull` 可能较慢，因此 registry 部署会先提交远端后台任务，再用短 SSH 连接轮询 `deploy-runs/<tag>-<stamp>/status`。这样 GitHub runner 到生产服务器的单条 SSH 连接断开时，服务器上的拉取任务不会被杀掉。
+registry 部署会先提交远端后台任务，再用短 SSH 连接轮询 `deploy-runs/<tag>-<stamp>/status`。这样 GitHub runner 到生产服务器的单条 SSH 连接断开时，服务器上的拉取任务不会被杀掉。
 
 ## Local Equivalent
 
@@ -103,7 +109,8 @@ pnpm deploy:prod -- \
   --skip-remote-pullback \
   --server root@agent.mob-ai.cn \
   --project-dir /var/www/agent-forge \
-  --registry-image 47.86.106.145.sslip.io/agent-forge \
+  --registry-push-image registry-origin.mob-ai.cn/agent-forge \
+  --registry-pull-image registry.mob-ai.cn/agent-forge \
   --public-host agent.mob-ai.cn
 ```
 
