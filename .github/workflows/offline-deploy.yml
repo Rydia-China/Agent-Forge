@@ -1,4 +1,4 @@
-name: Offline Deploy
+name: Registry Deploy
 
 on:
   push:
@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: offline-deploy-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target || github.ref_name }}
+  group: registry-deploy-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
