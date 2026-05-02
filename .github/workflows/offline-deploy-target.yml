@@ -1,4 +1,4 @@
-name: Offline Deploy Target
+name: Registry Deploy Target
 
 on:
   workflow_call:
@@ -60,12 +60,15 @@ jobs:
 
           echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy offline image package
+      - name: Build, push, and deploy registry image
         env:
           SSH_USER: ${{ vars.SSH_USER }}
           SSH_HOST: ${{ vars.SSH_HOST }}
           PROJECT_DIR: ${{ vars.PROJECT_DIR }}
           PUBLIC_HOST: ${{ vars.PUBLIC_HOST }}
+          REGISTRY_IMAGE: ${{ vars.REGISTRY_IMAGE }}
+          REGISTRY_USERNAME: ${{ vars.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
         run: |
           set -euo pipefail
@@ -73,13 +76,17 @@ jobs:
           test -n "$SSH_HOST"
           test -n "$PROJECT_DIR"
           test -n "$PUBLIC_HOST"
+          test -n "$REGISTRY_IMAGE"
+          test -n "$REGISTRY_USERNAME"
+          test -n "$REGISTRY_PASSWORD"
 
           pnpm deploy:prod -- \
-            --mode image-deploy \
+            --mode registry-deploy \
             --tag "$IMAGE_TAG" \
             --skip-git-tag-check \
             --skip-table-sync \
             --skip-remote-pullback \
             --server "${SSH_USER}@${SSH_HOST}" \
             --project-dir "$PROJECT_DIR" \
+            --registry-image "$REGISTRY_IMAGE" \
             --public-host "$PUBLIC_HOST"

@@ -8,6 +8,7 @@ CODE_DIR="/var/www/agent-forge/source"
 REPO_URL="$(git config --get remote.origin.url || true)"
 TAG=""
 MODE="deploy"
+REGISTRY_IMAGE=""
 RETAG="false"
 SKIP_GIT_TAG_CHECK="false"
 BACKUP_STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -40,6 +41,7 @@ Required for modes deploy/build:
 Modes:
   --mode deploy               Full offline package release flow. Default.
   --mode image-deploy         CI-safe image package deploy. Does not sync .env or DB tables.
+  --mode registry-deploy      CI-safe registry deploy. Builds and pushes image, then server pulls it.
   --mode backup               Backup local and remote state only.
   --mode build                Build local linux/amd64 image package only; does not upload or restart app.
   --mode sync-env             Backup and overwrite remote .env, then recreate app.
@@ -54,6 +56,7 @@ Options:
   --project-dir <path>        Remote runtime directory. Default: /var/www/agent-forge
   --code-dir <path>           Remote Git source directory. Default: /var/www/agent-forge/source
   --repo-url <url>            Git URL server pulls from. Default: local origin URL
+  --registry-image <image>    Registry image path for registry-deploy, e.g. registry.example.com/agent-forge
   --backup-stamp <stamp>      Backup folder suffix. Default: current timestamp
   --local-db-container <name> Local Postgres container. Default: agent-forge-db-dev
   --tables <a,b,c>            Comma-separated tables to sync. Default: Skill,StylePreset,ApiUsageCounter
@@ -63,6 +66,7 @@ Options:
 
 Authentication:
   Set SSHPASS for password SSH, or configure normal ssh/scp key authentication.
+  Set REGISTRY_USERNAME and REGISTRY_PASSWORD for registry-deploy.
 USAGE
 }
 
@@ -150,6 +154,10 @@ while [[ $# -gt 0 ]]; do
       REPO_URL="${2:-}"
       shift 2
       ;;
+    --registry-image)
+      REGISTRY_IMAGE="${2:-}"
+      shift 2
+      ;;
     --backup-stamp)
       BACKUP_STAMP="${2:-}"
       shift 2
@@ -185,7 +193,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$MODE" in
-  deploy|image-deploy|backup|build|sync-env|sync-tables|verify) ;;
+  deploy|image-deploy|registry-deploy|backup|build|sync-env|sync-tables|verify) ;;
   *) die "Unknown mode: $MODE" ;;
 esac
 
@@ -208,7 +216,7 @@ require_cmd curl
 HEAD_SHA="$(git rev-parse HEAD)"
 VERIFY_HOST="${PUBLIC_HOST:-${SERVER#*@}}"
 
-if [[ "$MODE" == "deploy" || "$MODE" == "image-deploy" || "$MODE" == "build" ]]; then
+if [[ "$MODE" == "deploy" || "$MODE" == "image-deploy" || "$MODE" == "registry-deploy" || "$MODE" == "build" ]]; then
   [[ -n "$TAG" ]] || { usage; die "--tag is required for mode $MODE"; }
   if [[ "$RETAG" == "true" ]]; then
     log "Updating local tag $TAG to current HEAD $HEAD_SHA"
@@ -220,7 +228,14 @@ if [[ "$MODE" == "deploy" || "$MODE" == "image-deploy" || "$MODE" == "build" ]];
   fi
 fi
 
-if [[ "$MODE" == "deploy" || "$MODE" == "image-deploy" || "$MODE" == "build" ]]; then
+if [[ "$MODE" == "registry-deploy" ]]; then
+  [[ -n "$REGISTRY_IMAGE" ]] || die "--registry-image is required for registry-deploy"
+  [[ "$REGISTRY_IMAGE" == */* ]] || die "--registry-image must include a registry host"
+  [[ -n "${REGISTRY_USERNAME:-}" ]] || die "REGISTRY_USERNAME is required for registry-deploy"
+  [[ -n "${REGISTRY_PASSWORD:-}" ]] || die "REGISTRY_PASSWORD is required for registry-deploy"
+fi
+
+if [[ "$MODE" == "deploy" || "$MODE" == "image-deploy" || "$MODE" == "registry-deploy" || "$MODE" == "build" ]]; then
   [[ -z "$(git status --short)" ]] || die "Working tree is not clean"
 fi
 
@@ -317,6 +332,22 @@ package_image() {
   ls -lh "$IMAGE_ARCHIVE"
 }
 
+build_push_registry_image() {
+  [[ -n "$TAG" ]] || die "--tag is required to build registry image"
+  [[ -n "$REGISTRY_IMAGE" ]] || die "--registry-image is required"
+  local registry_host="${REGISTRY_IMAGE%%/*}"
+  log "Logging in to registry $registry_host"
+  printf '%s' "$REGISTRY_PASSWORD" | docker login "$registry_host" -u "$REGISTRY_USERNAME" --password-stdin >/dev/null
+
+  log "Building and pushing linux/amd64 image $REGISTRY_IMAGE:$TAG"
+  docker buildx build \
+    --platform linux/amd64 \
+    -t "$REGISTRY_IMAGE:$TAG" \
+    -t "$REGISTRY_IMAGE:latest" \
+    -f Dockerfile . \
+    --push
+}
+
 server_load_image_package() {
   [[ -f "$IMAGE_ARCHIVE" ]] || die "Image archive not found: $IMAGE_ARCHIVE"
   log "Uploading image package and runtime config"
@@ -337,6 +368,32 @@ image=agent-forge:$TAG
 deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 RELEASE
 REMOTE_LOAD
+}
+
+server_pull_registry_image() {
+  [[ -n "$REGISTRY_IMAGE" ]] || die "--registry-image is required"
+  local registry_host="${REGISTRY_IMAGE%%/*}"
+  log "Uploading runtime config"
+  ssh_remote "mkdir -p '${PROJECT_DIR}'"
+  scp_to_remote docker-compose.prod.yml "${PROJECT_DIR}/docker-compose.prod.yml"
+  scp_to_remote nginx.conf "${PROJECT_DIR}/nginx.conf"
+
+  log "Logging in to registry on server"
+  printf '%s' "$REGISTRY_PASSWORD" | ssh_remote "docker login '$registry_host' -u '$REGISTRY_USERNAME' --password-stdin >/dev/null"
+
+  log "Pulling registry image on server"
+  ssh_remote "bash -s" <<REMOTE_PULL
+set -euo pipefail
+cd "$PROJECT_DIR"
+docker pull "$REGISTRY_IMAGE:$TAG"
+docker tag "$REGISTRY_IMAGE:$TAG" agent-forge:latest
+cat > release.txt <<RELEASE
+tag=$TAG
+commit=$HEAD_SHA
+image=$REGISTRY_IMAGE:$TAG
+deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+RELEASE
+REMOTE_PULL
 }
 
 recreate_app() {
@@ -451,6 +508,16 @@ case "$MODE" in
     remote_backup
     package_image
     server_load_image_package
+    recreate_app
+    wait_for_app_health
+    SKIP_TABLE_SYNC="true"
+    verify_deploy
+    cleanup_tmp
+    ;;
+  registry-deploy)
+    remote_backup
+    build_push_registry_image
+    server_pull_registry_image
     recreate_app
     wait_for_app_health
     SKIP_TABLE_SYNC="true"
