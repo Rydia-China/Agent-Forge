@@ -23,6 +23,8 @@ SKIP_REMOTE_PULLBACK="false"
 
 BASE_SSH_OPTS=(
   -o StrictHostKeyChecking=accept-new
+  -o ServerAliveInterval=30
+  -o ServerAliveCountMax=6
 )
 
 PASSWORD_SSH_OPTS=(
@@ -396,6 +398,94 @@ RELEASE
 REMOTE_PULL
 }
 
+start_remote_registry_deploy() {
+  [[ -n "$REGISTRY_IMAGE" ]] || die "--registry-image is required"
+  local registry_host="${REGISTRY_IMAGE%%/*}"
+  local run_dir="${PROJECT_DIR}/deploy-runs/${STAMP_NAME}"
+
+  log "Uploading runtime config"
+  ssh_remote "mkdir -p '${PROJECT_DIR}'"
+  scp_to_remote docker-compose.prod.yml "${PROJECT_DIR}/docker-compose.prod.yml"
+  scp_to_remote nginx.conf "${PROJECT_DIR}/nginx.conf"
+
+  log "Logging in to registry on server"
+  printf '%s' "$REGISTRY_PASSWORD" | ssh_remote "docker login '$registry_host' -u '$REGISTRY_USERNAME' --password-stdin >/dev/null"
+
+  log "Starting remote registry deploy task"
+  ssh_remote "bash -s" <<REMOTE_START
+set -euo pipefail
+RUN_DIR="$run_dir"
+mkdir -p "\$RUN_DIR"
+cat > "\$RUN_DIR/deploy.sh" <<REMOTE_SCRIPT
+#!/usr/bin/env bash
+set -euo pipefail
+PROJECT_DIR="$PROJECT_DIR"
+RUN_DIR="$run_dir"
+TAG="$TAG"
+HEAD_SHA="$HEAD_SHA"
+REGISTRY_IMAGE="$REGISTRY_IMAGE"
+
+trap 'code=\$?; echo failure > "\$RUN_DIR/status"; echo "failed exit_code=\$code" >> "\$RUN_DIR/deploy.log"; exit "\$code"' ERR
+
+cd "\$PROJECT_DIR"
+echo running > "\$RUN_DIR/status"
+{
+  echo "started_at=\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  docker pull "\$REGISTRY_IMAGE:\$TAG"
+  docker tag "\$REGISTRY_IMAGE:\$TAG" agent-forge:latest
+  cat > release.txt <<RELEASE
+tag=\$TAG
+commit=\$HEAD_SHA
+image=\$REGISTRY_IMAGE:\$TAG
+deployed_at=\$(date -u +%Y-%m-%dT%H:%M:%SZ)
+RELEASE
+  docker compose -f docker-compose.prod.yml stop app
+  docker compose -f docker-compose.prod.yml rm -f app
+  docker compose -f docker-compose.prod.yml up -d app
+  for i in \$(seq 1 40); do
+    status=\$(docker inspect -f "{{.State.Health.Status}}" agent-forge-app-1 2>/dev/null || echo missing)
+    echo "health=\$status attempt=\$i"
+    [ "\$status" = healthy ] && break
+    sleep 3
+  done
+  final_status=\$(docker inspect -f "{{.State.Health.Status}}" agent-forge-app-1 2>/dev/null || echo missing)
+  [ "\$final_status" = healthy ]
+  echo "finished_at=\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} >> "\$RUN_DIR/deploy.log" 2>&1
+echo success > "\$RUN_DIR/status"
+REMOTE_SCRIPT
+chmod +x "\$RUN_DIR/deploy.sh"
+echo running > "\$RUN_DIR/status"
+nohup bash "\$RUN_DIR/deploy.sh" >/dev/null 2>&1 < /dev/null &
+echo \$! > "\$RUN_DIR/pid"
+echo "run_dir=\$RUN_DIR"
+echo "pid=\$(cat "\$RUN_DIR/pid")"
+REMOTE_START
+}
+
+wait_for_remote_registry_deploy() {
+  local run_dir="${PROJECT_DIR}/deploy-runs/${STAMP_NAME}"
+  log "Polling remote registry deploy task"
+  for i in $(seq 1 180); do
+    local status
+    status="$(ssh_remote "cat '$run_dir/status' 2>/dev/null || echo missing" || echo ssh_unavailable)"
+    echo "remote_deploy_status=$status attempt=$i"
+    case "$status" in
+      success)
+        ssh_remote "tail -n 80 '$run_dir/deploy.log' || true"
+        return 0
+        ;;
+      failure)
+        ssh_remote "tail -n 160 '$run_dir/deploy.log' || true"
+        return 1
+        ;;
+    esac
+    sleep 10
+  done
+  ssh_remote "tail -n 160 '$run_dir/deploy.log' || true"
+  die "Timed out waiting for remote registry deploy task"
+}
+
 recreate_app() {
   log "Recreating app from loaded image"
   ssh_remote "bash -s" <<REMOTE_DEPLOY
@@ -517,9 +607,8 @@ case "$MODE" in
   registry-deploy)
     remote_backup
     build_push_registry_image
-    server_pull_registry_image
-    recreate_app
-    wait_for_app_health
+    start_remote_registry_deploy
+    wait_for_remote_registry_deploy
     SKIP_TABLE_SYNC="true"
     verify_deploy
     cleanup_tmp

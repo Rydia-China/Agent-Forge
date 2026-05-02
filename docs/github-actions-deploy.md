@@ -88,6 +88,8 @@ docker tag 47.86.106.145.sslip.io/agent-forge:<tag> agent-forge:latest
 docker compose -f docker-compose.prod.yml up -d app
 ```
 
+生产服务器上的 `docker pull` 可能较慢，因此 registry 部署会先提交远端后台任务，再用短 SSH 连接轮询 `deploy-runs/<tag>-<stamp>/status`。这样 GitHub runner 到生产服务器的单条 SSH 连接断开时，服务器上的拉取任务不会被杀掉。
+
 ## Local Equivalent
 
 GitHub Actions 调用的是同一个脚本的 CI 安全模式：
