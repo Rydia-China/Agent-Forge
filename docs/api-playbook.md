@@ -52,6 +52,8 @@ curl -X POST http://localhost:8001/api/external/video/generate \
   -d '{"prompt":"a cinematic shot of a city at sunset","duration":5,"ratio":"9:16","resolution":"720P"}'
 ```
 
+该接口对外保持同步响应；服务端调用 FC 时先提交异步任务，等待 4 分钟后每 30 秒用短请求轮询结果，避免 FC HTTP 长连接被中间层截断。
+
 HappyHorse 视频生成：
 
 ```bash
