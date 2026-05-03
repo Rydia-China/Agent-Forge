@@ -11,7 +11,8 @@ const FcEnvelopeSchema = z.object({
 });
 
 const UrlResultSchema = z.string().url();
-const ASYNC_VIDEO_POLL_INTERVAL_MS = 5000;
+const ASYNC_VIDEO_INITIAL_POLL_DELAY_MS = 240000;
+const ASYNC_VIDEO_POLL_INTERVAL_MS = 30000;
 const ASYNC_VIDEO_POLL_TIMEOUT_MS = 900000;
 const FC_SHORT_REQUEST_TIMEOUT_MS = 295000;
 
@@ -213,8 +214,9 @@ async function pollFcGenerateVideoTask(
   const deadline = Date.now() + ASYNC_VIDEO_POLL_TIMEOUT_MS;
   let lastStatus = "submitted";
 
+  await delay(ASYNC_VIDEO_INITIAL_POLL_DELAY_MS);
+
   while (Date.now() < deadline) {
-    await delay(ASYNC_VIDEO_POLL_INTERVAL_MS);
     const result = await queryFcGenerateVideoTask(url, token, taskId);
     lastStatus = result.status;
 
@@ -227,6 +229,7 @@ async function pollFcGenerateVideoTask(
     if (isTerminalFailedVideoStatus(result.status)) {
       throw new Error(`Video generation task ${taskId} failed with status ${result.status}`);
     }
+    await delay(ASYNC_VIDEO_POLL_INTERVAL_MS);
   }
 
   throw new Error(`Video generation task ${taskId} timed out, last status: ${lastStatus}`);
