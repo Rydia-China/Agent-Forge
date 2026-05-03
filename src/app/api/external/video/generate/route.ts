@@ -7,11 +7,13 @@ import {
 } from "@/lib/services/external-video-api-service";
 
 const GenerateVideoRequestSchema = z.object({
+  action: z.literal("generate").optional(),
   prompt: z.string().min(1),
   sourceImageUrl: z.string().url().optional(),
   styleName: z.string().min(1).optional(),
   referenceImageUrls: z.array(z.string().url()).optional(),
   sourceVideoUrls: z.array(z.string().url()).optional(),
+  continuationTailSeconds: z.number().min(1).max(15).optional(),
   duration: z.number().min(1).max(15).optional(),
   ratio: z.enum(["16:9", "9:16", "1:1", "4:3", "3:4"]).optional(),
   resolution: z.enum(["1080P", "720P"]).optional(),
