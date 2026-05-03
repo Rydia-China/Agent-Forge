@@ -10,28 +10,30 @@ const getGoogleGenAI = async () => {
   return GoogleGenAI
 }
 
-const DEFAULT_GEMINI_MODEL = 'google/gemini-3-pro-image-preview'
+const DEFAULT_GEMINI_MODEL = 'gemini-3-pro-image-preview'
 
-const resolveGeminiModel = (model) => {
-  const requestedModel = typeof model === 'string' ? model.trim() : ''
-  if (!requestedModel || requestedModel.toLowerCase() === 'gemini') {
-    return process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
-  }
-  return requestedModel
+const resolveGeminiModel = () => {
+  const configuredModel = process.env.GEMINI_MODEL?.trim()
+  return configuredModel || DEFAULT_GEMINI_MODEL
 }
+
+const isStringArray = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string')
 
 const downloadImageAsBase64 = async (url) => {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 30000)
 
-  const response = await fetch(url, {
-    signal: controller.signal,
-    headers: {
-      'User-Agent': 'Mozilla/5.0'
-    }
-  })
-
-  clearTimeout(timeoutId)
+  let response
+  try {
+    response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0'
+      }
+    })
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (!response.ok) {
     throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`)
@@ -69,27 +71,18 @@ const uploadToOSS = async (buffer, filename, folder = 'image') => {
   return url
 }
 
-const generateImage = async (prompt, baseURL, apiKey, model, referenceImageUrls) => {
-  const baseUrl = baseURL.replace('/api/v1', '/api/vertex-ai')
-
+const generateImage = async (prompt, apiKey, model, referenceImageUrls) => {
   const GenAI = await getGoogleGenAI()
   const client = new GenAI({
-    apiKey: apiKey,
-    vertexai: true,
-    httpOptions: {
-      apiVersion: 'v1',
-      baseUrl: baseUrl
-    }
+    apiKey
   })
 
   const contents = []
 
-  // 添加文本提示词
   if (prompt) {
     contents.push({ text: prompt })
   }
 
-  // 下载参考图片并转base64
   if (referenceImageUrls && referenceImageUrls.length > 0) {
     console.log('Downloading reference images:', referenceImageUrls.length)
     for (let i = 0; i < referenceImageUrls.length; i++) {
@@ -106,13 +99,9 @@ const generateImage = async (prompt, baseURL, apiKey, model, referenceImageUrls)
     }
   }
 
-  if (contents.length === 0) {
-    contents.push({ text: prompt })
-  }
-
   console.log('Calling Google GenAI API...')
   const response = await client.models.generateContent({
-    model: model || 'google/gemini-3-pro-image-preview',
+    model: model || DEFAULT_GEMINI_MODEL,
     contents: contents,
     config: {
       responseModalities: ["TEXT", "IMAGE"],
@@ -144,7 +133,7 @@ const generateImage = async (prompt, baseURL, apiKey, model, referenceImageUrls)
 }
 
 // 阿里云FC HTTP触发器入口
-exports.handler = async (event, context) => {
+exports.handler = async (event) => {
   // 设置CORS响应头
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -163,13 +152,6 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // 打印两个参数
-    console.log('=== event ===' )
-    console.log('event type:', typeof event, 'isBuffer:', Buffer.isBuffer(event))
-    console.log('event keys:', Object.keys(event || {}).slice(0, 20))
-    console.log('=== context ===')
-    console.log('context:', JSON.stringify(context, null, 2))
-    
     let body
     let httpEvent = event
     
@@ -188,7 +170,7 @@ exports.handler = async (event, context) => {
       console.log('Decoded from array-like:', decoded.substring(0, 500))
       httpEvent = JSON.parse(decoded)
     }
-    
+
     // 标准的 HTTP 触发器参数解析
     if (httpEvent.body) {
       const bodyStr = httpEvent.isBase64Encoded 
@@ -202,13 +184,18 @@ exports.handler = async (event, context) => {
     } else {
       body = httpEvent.queryStringParameters || httpEvent
     }
-    
-    console.log('Parsed request body:', JSON.stringify(body))
 
-    const { prompt, referenceImageUrls, refUrls, model: bodyModel } = body
-    const effectiveReferenceImageUrls = referenceImageUrls || refUrls
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'Request body must be a JSON object' })
+      }
+    }
 
-    if (!prompt || prompt.trim() === '') {
+    const { prompt, referenceImageUrls } = body
+
+    if (typeof prompt !== 'string' || prompt.trim() === '') {
       return {
         statusCode: 400,
         headers: corsHeaders,
@@ -216,25 +203,32 @@ exports.handler = async (event, context) => {
       }
     }
 
-    const baseURL = process.env.GEMINI_BASE_URL
-    const apiKey = process.env.GEMINI_API_KEY
-    const model = resolveGeminiModel(bodyModel || process.env.GEMINI_MODEL)
-
-    if (!baseURL || !apiKey) {
+    if (referenceImageUrls !== undefined && !isStringArray(referenceImageUrls)) {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: 'Missing API configuration in environment variables' })
+        body: JSON.stringify({ error: 'referenceImageUrls must be an array of strings' })
+      }
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY
+    const model = resolveGeminiModel()
+
+    if (!apiKey) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: 'GEMINI_API_KEY must be configured in environment variables' })
       }
     }
 
     console.log('Image generation request:', {
       model,
       promptLength: prompt.length,
-      referenceImageCount: effectiveReferenceImageUrls?.length || 0
+      referenceImageCount: referenceImageUrls?.length || 0
     })
 
-    const result = await generateImage(prompt, baseURL, apiKey, model, effectiveReferenceImageUrls)
+    const result = await generateImage(prompt.trim(), apiKey, model, referenceImageUrls)
 
     return {
       statusCode: 200,

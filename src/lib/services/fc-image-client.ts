@@ -4,7 +4,7 @@
  */
 
 const DEFAULT_IMAGE_MODEL = "gemini";
-const DEFAULT_GEMINI_IMAGE_MODEL = "google/gemini-3-pro-image-preview";
+const DEFAULT_GEMINI_IMAGE_MODEL = "gemini-3-pro-image-preview";
 
 type ImageProvider = "gpt" | "gemini";
 
@@ -25,9 +25,7 @@ function resolveImageModel(model?: string): { provider: ImageProvider; model: st
 
   if (
     normalizedModel === "gemini" ||
-    normalizedModel.startsWith("gemini-") ||
-    normalizedModel.startsWith("google/gemini-") ||
-    normalizedModel.includes("/gemini-")
+    normalizedModel.startsWith("gemini-")
   ) {
     return {
       provider: "gemini",
@@ -37,7 +35,7 @@ function resolveImageModel(model?: string): { provider: ImageProvider; model: st
 
   throw new Error(
     `Unsupported image generation model "${effectiveModel}". ` +
-    `Use "gpt", "gpt-*", "gemini", "gemini-*", or "google/gemini-*".`
+    `Use "gpt", "gpt-*", "gemini", or "gemini-*".`
   );
 }
 
@@ -69,14 +67,16 @@ export async function callFcGenerateImage(
     throw new Error(
       `FC endpoint not configured for model "${resolvedModel.model}". ` +
       `Check FC_GENERATE_IMAGE_GPT_URL/TOKEN (for gpt) or ` +
-      `FC_GENERATE_IMAGE_URL/TOKEN (for gemini/google/gemini-* models) in .env`
+      `FC_GENERATE_IMAGE_URL/TOKEN (for gemini/gemini-* models) in .env`
     );
   }
 
   const payload: Record<string, unknown> = {
     prompt,
-    model: resolvedModel.model,
   };
+  if (resolvedModel.provider === "gpt") {
+    payload.model = resolvedModel.model;
+  }
   if (refUrls && refUrls.length > 0) {
     payload.referenceImageUrls = refUrls;
   }
