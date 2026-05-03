@@ -103,7 +103,8 @@ resources:
         OSS_BUCKET: ${env(OSS_BUCKET)}
         OSS_ACCESS_KEY_ID: ${env(OSS_ACCESS_KEY_ID)}
         OSS_ACCESS_KEY_SECRET: ${env(OSS_ACCESS_KEY_SECRET)}
-        GOOGLE_API_KEY: ${env(GOOGLE_API_KEY)}
+        GEMINI_API_KEY: ${env(GEMINI_API_KEY)}
+        GEMINI_MODEL: ${env(GEMINI_MODEL)}
 ```
 
 ### 3. 配置环境变量
@@ -120,13 +121,16 @@ OSS_ACCESS_KEY_ID=
 OSS_ACCESS_KEY_SECRET=
 
 # Google Gemini API
-GOOGLE_API_KEY=
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3-pro-image-preview
 EOF
 
 # 复制并填写实际配置
 cp .env.example .env
 vim .env
 ```
+
+`GEMINI_MODEL` 是 FC 部署级固定参数；需要支持多个 Gemini 图片模型时，使用同一份代码部署多个 FC，并为每个部署配置不同的 `GEMINI_MODEL`。
 
 ### 4. 本地开发和测试
 
