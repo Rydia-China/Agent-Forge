@@ -20,6 +20,11 @@ const ImageGenerationResponseSchema = z.object({
   result: z.string().url().optional(),
 }).passthrough();
 
+type ImageReference = {
+  type: "image";
+  url: string;
+};
+
 function resolveImageModel(model?: string): string {
   const requestedModel = model?.trim();
   const effectiveModel = requestedModel && requestedModel.length > 0
@@ -84,6 +89,11 @@ function imageUrlFromResponse(data: unknown): string {
   return parsed.output?.url ?? parsed.images?.[0]?.url ?? parsed.result ?? "";
 }
 
+function imageReferencesFromUrls(urls: string[] | undefined): ImageReference[] | undefined {
+  if (!urls || urls.length === 0) return undefined;
+  return urls.map((url) => ({ type: "image", url }));
+}
+
 export async function callFcGenerateImage(
   prompt: string,
   refUrls?: string[],
@@ -103,11 +113,12 @@ export async function callFcGenerateImage(
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), IMAGE_GENERATION_TIMEOUT_MS);
+  const references = imageReferencesFromUrls(refUrls);
   const body = {
     model: resolvedModel,
     input: {
       prompt,
-      ...(refUrls && refUrls.length > 0 ? { referenceImageUrls: refUrls } : {}),
+      ...(references ? { references } : {}),
     },
   };
 
