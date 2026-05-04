@@ -4,7 +4,7 @@
 /* ------------------------------------------------------------------ */
 
 export interface ModelOption {
-  /** Model ID sent to the LLM provider (e.g. "anthropic/claude-sonnet-4.6"). */
+  /** Model ID sent to the LLM provider (e.g. "claude-sonnet-4-6"). */
   id: string;
   /** Short display label for the UI. */
   label: string;
@@ -21,9 +21,14 @@ export interface ModelOption {
  * of the IDs below.
  */
 export const MODEL_OPTIONS: ModelOption[] = [
-  { id: "deepseek/deepseek-v4-pro", label: "DeepSeek V4 Pro", default: true },
-  { id: "anthropic/claude-opus-4.6", label: "Claude Opus 4.6" },
-  { id: "anthropic/claude-opus-4.7", label: "Claude Opus 4.7" },
+  { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro", default: true },
+  { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash" },
+  { id: "claude-opus-4-6", label: "Claude Opus 4.6" },
+  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+  { id: "claude-opus-4-6:free", label: "Claude Opus 4.6 Free" },
+  { id: "claude-sonnet-4-6:free", label: "Claude Sonnet 4.6 Free" },
+  { id: "claude-opus-4-7:free", label: "Claude Opus 4.7 Free" },
+  { id: "gpt-5.5:free", label: "GPT 5.5 Free" },
 ];
 
 /* ---- Derived helpers (do not edit) ---- */

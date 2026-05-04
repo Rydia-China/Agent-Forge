@@ -28,8 +28,8 @@ const REVIEWER_SKILLS = [
   ...VIDEO_STANDARD_SKILLS,
 ] as const;
 
-const PROMPT_WRITER_MODEL = "anthropic/claude-opus-4.6";
-const PROMPT_REVIEWER_MODEL = "anthropic/claude-opus-4.7";
+const PROMPT_WRITER_MODEL = "claude-opus-4-6";
+const PROMPT_REVIEWER_MODEL = "claude-opus-4-6";
 
 const PromptSchema = z.object({
   key: z.string().min(1),

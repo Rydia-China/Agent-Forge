@@ -291,7 +291,7 @@ DATABASE_URL=postgresql://...      # System database
 BUSINESS_DATABASE_URL=postgresql://... # Business data
 LLM_API_KEY=...                    # LLM provider key
 LLM_BASE_URL=https://...           # LLM API endpoint
-LLM_DEFAULT_MODEL=deepseek/deepseek-v4-pro  # Optional default controller model
+LLM_DEFAULT_MODEL=deepseek-v4-pro  # Optional default controller model
 LLM_THINKING_MODE=disabled         # enabled | disabled | provider-default
 \`\`\`
 
@@ -621,7 +621,7 @@ DATABASE_URL=postgresql://...      # 系统数据库
 BUSINESS_DATABASE_URL=postgresql://... # 业务数据
 LLM_API_KEY=...                    # LLM provider key
 LLM_BASE_URL=https://...           # LLM API endpoint
-LLM_DEFAULT_MODEL=deepseek/deepseek-v4-pro  # Optional default controller model
+LLM_DEFAULT_MODEL=deepseek-v4-pro  # Optional default controller model
 LLM_THINKING_MODE=disabled         # enabled | disabled | provider-default`}</code>
             </pre>
             <Paragraph className="mt-4">
