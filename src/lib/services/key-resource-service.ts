@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import type { KeyResource, Prisma as PrismaTypes } from "@/generated/prisma";
 import { compileTemplate } from "@/lib/mcp/static/langfuse-helpers";
-import { callFcGenerateImage } from "./fc-image-client";
+import { callImageGenerationApi } from "./image-api-client";
 import {
   compressImageUrlLossless,
   type ImageCompressionResult,
@@ -477,8 +477,8 @@ export async function generateImage(
     },
   });
 
-  // 3. Call FC
-  const imageUrl = await callFcGenerateImage(prompt, refUrls, model);
+  // 3. Call image generation API
+  const imageUrl = await callImageGenerationApi(prompt, refUrls, model);
   const compression = await compressGeneratedImageData(imageUrl, key);
 
   // 4. Update version url + bump currentVersion
@@ -598,7 +598,7 @@ export async function regenerate(
   }
   const refUrls = curVer?.refUrls ?? derived?.refUrls ?? [];
 
-  const imageUrl = await callFcGenerateImage(prompt, refUrls.length > 0 ? refUrls : undefined);
+  const imageUrl = await callImageGenerationApi(prompt, refUrls.length > 0 ? refUrls : undefined);
   const compression = await compressGeneratedImageData(imageUrl, resource.key);
 
   // Create a NEW version instead of overwriting the current one.
