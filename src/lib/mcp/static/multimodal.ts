@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Tool, CallToolResult } from "@modelcontextprotocol/sdk/types";
 import type { McpProvider } from "../types";
-import { callFcGenerateImage } from "../../services/fc-image-client";
+import { callImageGenerationApi } from "../../services/image-api-client";
 
 function text(t: string): CallToolResult {
   return { content: [{ type: "text", text: t }] };
@@ -248,7 +248,7 @@ export const multimodalMcp: McpProvider = {
         const results = await Promise.allSettled(
           items.map(async (item, i) => {
             try {
-              const imageUrl = await callFcGenerateImage(
+              const imageUrl = await callImageGenerationApi(
                 item.prompt,
                 item.referenceImageUrls,
                 item.model,
