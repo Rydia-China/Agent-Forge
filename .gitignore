@@ -59,6 +59,9 @@ agent-forge.tar.gz
 # database backups
 /backups/
 
+# local SQLite indexes
+/db/
+
 # runtime logs
 logs/
 dev.log
